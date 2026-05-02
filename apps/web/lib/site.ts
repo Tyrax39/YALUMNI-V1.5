@@ -1,33 +1,32 @@
 export const primaryNav = [
-  { label: "Dashboard", href: "/dashboard" },
-  { label: "Directory", href: "/dashboard#directory" },
-  { label: "Communities", href: "/dashboard#communities" },
-  { label: "Events", href: "/dashboard#events" },
-  { label: "Admin", href: "/admin" }
+  { label: "Directory", href: "#directory" },
+  { label: "Chapters", href: "#chapters" },
+  { label: "Opportunities", href: "#opportunities" },
+  { label: "Elections", href: "#trust" }
 ] as const;
 
 export const platformStats = [
-  { label: "MVP modules", value: "8" },
-  { label: "Core roles", value: "7" },
-  { label: "Pilot focus", value: "Verified alumni" }
+  { label: "Verified alumni", value: "50k+" },
+  { label: "Countries represented", value: "49" },
+  { label: "Active initiatives", value: "500+" },
+  { label: "Grant funding facilitated", value: "$12M" }
 ] as const;
 
 export const capabilityCards = [
   {
-    title: "Verified alumni identity",
-    body: "Onboarding, profile completion, affiliation proof, and admin or chapter verification workflows."
+    title: "Verified networking",
+    body: "Connect with a pre-vetted database of leaders where every profile is tied to a trusted alumni verification workflow."
   },
   {
-    title: "Alumni discovery",
-    body: "Search by country, program, cohort, sector, skills, interests, and availability while respecting privacy controls."
+    title: "Social impact initiatives",
+    body: "Launch or scale community projects, recruit collaborators, track milestones, and publish measurable progress."
   },
   {
-    title: "Communities and action",
-    body: "Country chapters, sector groups, events, initiatives, opportunities, feed posts, and direct messages."
+    title: "Resource library",
+    body: "Share grants, toolkits, training resources, reports, and leadership knowledge across chapters and cohorts."
   },
   {
-    title: "Governance-ready foundation",
-    body: "Audit logs, role scopes, contribution ledgers, voter roll controls, and moderation queues planned from day one."
+    title: "Democratic governance",
+    body: "Run chapter elections, contribution campaigns, transparent ledgers, and audit-ready governance workflows."
   }
 ] as const;
-

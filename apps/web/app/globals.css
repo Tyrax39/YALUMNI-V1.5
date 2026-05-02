@@ -19,11 +19,15 @@
 
 html {
   min-height: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
   background: var(--background);
 }
 
 body {
   min-height: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
   margin: 0;
   color: var(--foreground);
   background: var(--background);
@@ -55,4 +59,3 @@ select {
 .focus-ring:focus-visible {
   outline-color: var(--accent);
 }
-

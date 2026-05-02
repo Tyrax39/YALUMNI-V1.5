@@ -16,8 +16,8 @@ export default function AdminPage() {
           <Link className="focus-ring rounded-lg" href="/">
             <Image
               alt="YALUMNI"
-              className="h-10 w-auto"
-              height={40}
+              className="block h-auto w-[132px] object-contain sm:w-[156px]"
+              height={34}
               priority
               src="/brand/yalumni-logo-horizontal.svg"
               width={156}

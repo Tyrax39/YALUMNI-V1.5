@@ -21,11 +21,10 @@ export function ButtonLink({
 }: ButtonLinkProps) {
   return (
     <Link
-      className={`focus-ring inline-flex min-h-11 items-center justify-center rounded-lg px-5 py-3 text-sm font-semibold transition ${variants[variant]}`}
+      className={`focus-ring inline-flex min-h-11 shrink-0 items-center justify-center whitespace-nowrap rounded-lg px-5 py-3 text-sm font-semibold transition ${variants[variant]}`}
       href={href}
     >
       {children}
     </Link>
   );
 }
-
