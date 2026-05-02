@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+
+# Build outputs
+.next/
+out/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Local files
+*.log
+.DS_Store
+Thumbs.db
+
+# Python packaging
+*.egg-info/
