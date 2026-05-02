@@ -11,16 +11,16 @@ Base path:
 ```text
 GET /health
 GET /api/v1/system/status
-```
-
-## Phase 2: Auth
-
-```text
 POST /api/v1/auth/register
 POST /api/v1/auth/login
 POST /api/v1/auth/refresh
 POST /api/v1/auth/logout
 GET  /api/v1/auth/me
+```
+
+## Phase 2: Auth
+
+```text
 POST /api/v1/auth/password/forgot
 POST /api/v1/auth/password/reset
 POST /api/v1/auth/email/verify
@@ -112,4 +112,3 @@ GET  /api/v1/admin/audit-logs
 - Explicit permission dependencies for protected routes.
 - Structured errors with request IDs.
 - No hidden profile fields in API responses.
-

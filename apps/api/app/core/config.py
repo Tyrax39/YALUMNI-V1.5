@@ -14,7 +14,10 @@ class Settings(BaseSettings):
     jwt_access_token_minutes: int = 15
     jwt_refresh_token_days: int = 30
     password_hash_scheme: str = "argon2id"
-    cors_origins: str = "http://localhost:3000"
+    cors_origins: str = (
+        "http://localhost:3000,http://127.0.0.1:3000,"
+        "http://localhost:3010,http://127.0.0.1:3010"
+    )
     sentry_dsn: str | None = None
 
     model_config = SettingsConfigDict(
@@ -31,4 +34,3 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
-

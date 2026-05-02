@@ -5,6 +5,9 @@ from sqlalchemy import engine_from_config, pool
 from alembic import context
 from app.core.config import get_settings
 from app.core.database import Base
+from app.modules.auth import models as auth_models
+
+_ = auth_models
 
 config = context.config
 
@@ -47,4 +50,3 @@ if context.is_offline_mode():
     run_migrations_offline()
 else:
     run_migrations_online()
-

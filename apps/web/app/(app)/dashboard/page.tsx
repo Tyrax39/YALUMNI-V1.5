@@ -1,6 +1,8 @@
 import Link from "next/link";
 import Image from "next/image";
 
+import { SessionCard } from "@/components/auth/session-card";
+
 const modules = [
   ["Verification", "Pending review queue and profile completion"],
   ["Directory", "Search by program, country, cohort, sector, and skills"],
@@ -48,13 +50,7 @@ export default function DashboardPage() {
               messages, events, and admin operations.
             </p>
           </div>
-          <aside className="rounded-lg border border-border bg-white p-5 shadow-soft">
-            <p className="text-sm font-semibold text-muted">Foundation status</p>
-            <p className="mt-2 font-display text-2xl font-bold text-primary">Phase 1</p>
-            <p className="mt-2 text-sm leading-6 text-muted">
-              Ready for auth, profile, verification, and directory implementation.
-            </p>
-          </aside>
+          <SessionCard />
         </div>
         <div className="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {modules.map(([title, body]) => (

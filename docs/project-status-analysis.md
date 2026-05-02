@@ -284,6 +284,34 @@ High-value migration sources:
 - Privacy leakage in directory/search is a major risk.
 - Realtime messaging must avoid IDOR and cross-conversation leaks.
 
+## Current V1.5 Implementation Update: 2026-05-02 Auth Slice
+
+Completed after the foundation:
+
+- Native public landing page implementation replaced the temporary landing reference screenshot.
+- API identity tables were added for `users`, `sessions`, `roles`, `role_assignments`, and `security_events`.
+- Auth endpoints were added for registration, login, token refresh, logout, and current user lookup.
+- Password hashing, JWT access tokens, hashed rotating refresh tokens, and security event logging now exist.
+- The web login and registration pages now submit to the API and store local development tokens.
+- The member dashboard now reads the access token and calls `/api/v1/auth/me`.
+- API tests cover registration, duplicate registration, login, current user lookup, refresh rotation, logout, invalid login, and missing bearer token denial.
+
+Current plan position:
+
+- Phase 1 is functionally complete for local foundation work, with remaining hardening around one-command Docker ergonomics and pre-commit hooks.
+- Phase 2 has started and is roughly 35% complete.
+- Overall 24-week MVP implementation is roughly 8% complete. This is a foundation-plus-auth estimate, not a production readiness claim.
+
+Remaining Phase 2 gaps:
+
+- Email verification flow.
+- Password reset flow.
+- Admin 2FA requirement or placeholder policy.
+- Persistent frontend auth storage strategy using secure cookies instead of local development storage.
+- Route guards and role-aware admin access.
+- Session/device management UI.
+- Rate limits for login and password reset.
+
 ## Immediate Next Implementations
 
 The next engineering task after this foundation should be auth and identity:
@@ -299,4 +327,3 @@ The next engineering task after this foundation should be auth and identity:
 - Tests for register, login, protected route denial, and token refresh.
 
 After auth lands, move directly into alumni profile and verification. That sequence gives the platform a trustworthy spine before social, community, payment, or election features are added.
-

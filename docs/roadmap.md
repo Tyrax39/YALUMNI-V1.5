@@ -2,7 +2,7 @@
 
 ## Phase 1: Foundation
 
-Status: started.
+Status: implemented foundation, CI passing.
 
 - Monorepo.
 - FastAPI health/status.
@@ -13,13 +13,15 @@ Status: started.
 
 ## Phase 2: Identity
 
-- User/session models.
-- JWT access and refresh tokens.
-- Register/login/logout.
+Status: started.
+
+- User/session models. Implemented.
+- JWT access and refresh tokens. Implemented.
+- Register/login/logout. Implemented.
 - Email verification.
 - Password reset.
-- Role baseline.
-- Protected web route behavior.
+- Role baseline. Started with global `UNVERIFIED_USER` assignment.
+- Protected web route behavior. Started with API-backed dashboard session panel.
 
 ## Phase 3: Alumni Profiles And Verification
 
@@ -78,4 +80,3 @@ Status: started.
 - Elections and audit reports.
 - Chapter analytics.
 - Impact reporting.
-
