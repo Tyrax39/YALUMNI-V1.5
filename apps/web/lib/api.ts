@@ -36,6 +36,27 @@ export type DevTokenResponse = {
   dev_token: string | null;
 };
 
+export type AuthSessionInfo = {
+  id: string;
+  ip_address: string | null;
+  user_agent: string | null;
+  created_at: string;
+  expires_at: string;
+  revoked_at: string | null;
+  is_current: boolean;
+  is_active: boolean;
+};
+
+export type AuthSessionsResponse = {
+  sessions: AuthSessionInfo[];
+};
+
+export type SessionRevocationResponse = {
+  message: string;
+  revoked_session_id: string;
+  revoked_current_session: boolean;
+};
+
 export type AdminSecurityEvent = {
   id: string;
   event_type: string;
@@ -135,10 +156,37 @@ export function getMe(accessToken: string): Promise<AuthUser> {
   });
 }
 
+function authHeaders(accessToken: string, refreshToken?: string | null) {
+  return {
+    Authorization: `Bearer ${accessToken}`,
+    ...(refreshToken ? { "X-Refresh-Token": refreshToken } : {})
+  };
+}
+
 export function logout(refreshToken: string): Promise<void> {
   return apiFetch<void>("/api/v1/auth/logout", {
     body: JSON.stringify({ refresh_token: refreshToken }),
     method: "POST"
+  });
+}
+
+export function getSessions(
+  accessToken: string,
+  refreshToken?: string | null
+): Promise<AuthSessionsResponse> {
+  return apiFetch<AuthSessionsResponse>("/api/v1/auth/sessions", {
+    headers: authHeaders(accessToken, refreshToken)
+  });
+}
+
+export function revokeSession(
+  accessToken: string,
+  sessionId: string,
+  refreshToken?: string | null
+): Promise<SessionRevocationResponse> {
+  return apiFetch<SessionRevocationResponse>(`/api/v1/auth/sessions/${sessionId}`, {
+    headers: authHeaders(accessToken, refreshToken),
+    method: "DELETE"
   });
 }
 
@@ -165,17 +213,13 @@ export function verifyEmail(token: string): Promise<AuthUser> {
 
 export function bootstrapLocalAdmin(accessToken: string): Promise<AuthUser> {
   return apiFetch<AuthUser>("/api/v1/auth/dev/bootstrap-admin", {
-    headers: {
-      Authorization: `Bearer ${accessToken}`
-    },
+    headers: authHeaders(accessToken),
     method: "POST"
   });
 }
 
 export function getAdminOverview(accessToken: string): Promise<AdminOverview> {
   return apiFetch<AdminOverview>("/api/v1/auth/admin/overview", {
-    headers: {
-      Authorization: `Bearer ${accessToken}`
-    }
+    headers: authHeaders(accessToken)
   });
 }

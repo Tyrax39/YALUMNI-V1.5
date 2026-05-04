@@ -14,12 +14,14 @@ type SessionState =
 type SessionCardProps = {
   accessToken?: string;
   initialUser?: AuthUser;
+  onSessionEnd?: () => void;
   onUserChange?: (user: AuthUser) => void;
 };
 
 export function SessionCard({
   accessToken: providedAccessToken,
   initialUser,
+  onSessionEnd,
   onUserChange
 }: SessionCardProps) {
   const [session, setSession] = useState<SessionState>(
@@ -77,6 +79,7 @@ export function SessionCard({
     window.localStorage.removeItem("yalumni.accessToken");
     window.localStorage.removeItem("yalumni.refreshToken");
     window.localStorage.removeItem("yalumni.user");
+    onSessionEnd?.();
     setSession({ status: "anonymous" });
   }
 

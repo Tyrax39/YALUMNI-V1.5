@@ -5,6 +5,7 @@ import Link from "next/link";
 
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { SessionCard } from "@/components/auth/session-card";
+import { SessionManagementPanel } from "@/components/auth/session-management-panel";
 import { adminRoles } from "@/lib/api";
 
 const modules = [
@@ -43,7 +44,7 @@ export function DashboardWorkspace() {
         description="The member workspace is only available after a valid session check."
         title="Member workspace"
       >
-        {({ accessToken, setUser, user }) => {
+        {({ accessToken, clearSession, refreshToken, setUser, user }) => {
           const hasAdminRole = user.roles.some((role) => adminRoles.includes(role));
 
           return (
@@ -68,8 +69,18 @@ export function DashboardWorkspace() {
                     </p>
                   ) : null}
                 </div>
-                <SessionCard accessToken={accessToken} initialUser={user} onUserChange={setUser} />
+                <SessionCard
+                  accessToken={accessToken}
+                  initialUser={user}
+                  onSessionEnd={clearSession}
+                  onUserChange={setUser}
+                />
               </div>
+              <SessionManagementPanel
+                accessToken={accessToken}
+                onCurrentSessionRevoked={clearSession}
+                refreshToken={refreshToken}
+              />
               <div className="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {modules.map(([title, body]) => (
                   <article className="rounded-lg border border-border bg-white p-5" key={title}>

@@ -66,6 +66,27 @@ class DevTokenResponse(BaseModel):
     dev_token: str | None = None
 
 
+class AuthSessionInfo(BaseModel):
+    id: uuid.UUID
+    ip_address: str | None
+    user_agent: str | None
+    created_at: datetime
+    expires_at: datetime
+    revoked_at: datetime | None
+    is_current: bool
+    is_active: bool
+
+
+class AuthSessionsResponse(BaseModel):
+    sessions: list[AuthSessionInfo]
+
+
+class SessionRevocationResponse(BaseModel):
+    message: str
+    revoked_session_id: uuid.UUID
+    revoked_current_session: bool
+
+
 class AdminSecurityEvent(BaseModel):
     id: uuid.UUID
     event_type: str

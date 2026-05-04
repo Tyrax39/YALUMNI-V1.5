@@ -64,4 +64,5 @@ Users must control visibility of:
 - Add role guard dependency. Done.
 - Add security event table. Done.
 - Add role-protected admin overview. Done.
+- Add session/device management. Done for refresh-token sessions.
 - Add tests for auth denial and basic IDOR prevention.

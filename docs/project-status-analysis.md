@@ -367,11 +367,36 @@ Remaining Phase 2 gaps:
 - Real email provider integration and branded templates.
 - Production-safe admin seeding procedure outside local development.
 
+## Current V1.5 Implementation Update: 2026-05-04 Session Management Slice
+
+Completed after access control:
+
+- Current-user session listing endpoint was added.
+- Session revocation endpoint was added with ownership checks.
+- Current session detection now works in local development by comparing the stored refresh token through an explicit request header.
+- Revoking the current session invalidates refresh-token rotation and clears the dashboard session state.
+- Dashboard now includes a sessions and devices panel with active/revoked status, IP, device summary, created time, expiry time, and revoke actions.
+- Dashboard sign-out now updates the protected route parent state instead of only clearing local storage.
+- API tests cover session listing, current-session marking, non-current revocation, current-session revocation, refresh denial after revocation, and missing-session denial.
+
+Current plan position:
+
+- Phase 1 remains functionally complete for local foundation.
+- Phase 2 is now roughly 80% complete.
+- Overall 24-week MVP implementation is roughly 14% complete.
+
+Remaining Phase 2 gaps:
+
+- Secure HttpOnly cookie auth strategy and SSR/middleware enforcement.
+- Admin 2FA requirement or placeholder policy.
+- Rate limiting for login, password reset, and admin-sensitive actions.
+- Real email provider integration and branded templates.
+- Production-safe admin seeding procedure outside local development.
+
 ## Immediate Next Implementations
 
 The next engineering task should finish identity hardening and then start alumni profiles:
 
-- Add session/device management API and member UI.
 - Decide secure-cookie auth migration and middleware strategy.
 - Add privileged-role 2FA policy placeholder before deeper admin work.
 - Start alumni profile model, profile edit API, and profile completion UI.

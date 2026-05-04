@@ -8,11 +8,13 @@ import { ApiError, AuthUser, bootstrapLocalAdmin, getMe } from "@/lib/api";
 type AuthState =
   | { status: "loading" }
   | { status: "anonymous" }
-  | { status: "authenticated"; accessToken: string; user: AuthUser }
+  | { status: "authenticated"; accessToken: string; refreshToken: string | null; user: AuthUser }
   | { status: "error"; message: string };
 
 export type ProtectedRouteContext = {
   accessToken: string;
+  clearSession: () => void;
+  refreshToken: string | null;
   setUser: (user: AuthUser) => void;
   user: AuthUser;
 };
@@ -44,6 +46,7 @@ export function ProtectedRoute({
 
   useEffect(() => {
     const accessToken = window.localStorage.getItem("yalumni.accessToken");
+    const refreshToken = window.localStorage.getItem("yalumni.refreshToken");
     if (!accessToken) {
       queueMicrotask(() => setState({ status: "anonymous" }));
       return;
@@ -52,7 +55,7 @@ export function ProtectedRoute({
     getMe(accessToken)
       .then((user) => {
         window.localStorage.setItem("yalumni.user", JSON.stringify(user));
-        setState({ status: "authenticated", accessToken, user });
+        setState({ status: "authenticated", accessToken, refreshToken, user });
       })
       .catch((caught) => {
         clearStoredAuth();
@@ -81,6 +84,11 @@ export function ProtectedRoute({
 
     window.localStorage.setItem("yalumni.user", JSON.stringify(user));
     setState({ ...state, user });
+  }
+
+  function clearSession() {
+    clearStoredAuth();
+    setState({ status: "anonymous" });
   }
 
   async function handleBootstrapAdmin() {
@@ -169,7 +177,17 @@ export function ProtectedRoute({
     );
   }
 
-  return <>{children({ accessToken: state.accessToken, setUser, user: state.user })}</>;
+  return (
+    <>
+      {children({
+        accessToken: state.accessToken,
+        clearSession,
+        refreshToken: state.refreshToken,
+        setUser,
+        user: state.user
+      })}
+    </>
+  );
 }
 
 function GuardPanel({

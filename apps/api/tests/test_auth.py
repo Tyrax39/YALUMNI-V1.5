@@ -59,6 +59,13 @@ def auth_headers(access_token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {access_token}"}
 
 
+def session_headers(access_token: str, refresh_token: str) -> dict[str, str]:
+    return {
+        "Authorization": f"Bearer {access_token}",
+        "X-Refresh-Token": refresh_token,
+    }
+
+
 def test_register_login_me_refresh_and_logout(client: TestClient) -> None:
     registered = register_user(client)
 
@@ -221,3 +228,59 @@ def test_admin_overview_requires_role_and_local_bootstrap_grants_access(
     assert overview["admin_users"] == 1
     assert overview["pending_verification_users"] == 1
     assert overview["latest_security_events"][0]["event_type"] == "auth.dev_admin_bootstrapped"
+
+
+def test_session_listing_and_revocation_marks_current_session(client: TestClient) -> None:
+    registered = register_user(client, email="sessions@example.com")
+    login_response = client.post(
+        "/api/v1/auth/login",
+        json={"email": "sessions@example.com", "password": "SecurePass123!"},
+    )
+    assert login_response.status_code == 200
+    logged_in = login_response.json()
+    headers = session_headers(logged_in["access_token"], logged_in["refresh_token"])
+
+    sessions_response = client.get("/api/v1/auth/sessions", headers=headers)
+    assert sessions_response.status_code == 200
+    sessions = sessions_response.json()["sessions"]
+    assert len(sessions) == 2
+
+    current_session = next(session for session in sessions if session["is_current"])
+    other_session = next(session for session in sessions if not session["is_current"])
+    assert current_session["is_active"] is True
+    assert other_session["is_active"] is True
+
+    revoke_other = client.delete(
+        f"/api/v1/auth/sessions/{other_session['id']}",
+        headers=headers,
+    )
+    assert revoke_other.status_code == 200
+    assert revoke_other.json()["revoked_current_session"] is False
+
+    sessions_after_revoke = client.get("/api/v1/auth/sessions", headers=headers)
+    revoked_other = next(
+        session
+        for session in sessions_after_revoke.json()["sessions"]
+        if session["id"] == other_session["id"]
+    )
+    assert revoked_other["is_active"] is False
+    assert revoked_other["revoked_at"] is not None
+
+    revoke_current = client.delete(
+        f"/api/v1/auth/sessions/{current_session['id']}",
+        headers=headers,
+    )
+    assert revoke_current.status_code == 200
+    assert revoke_current.json()["revoked_current_session"] is True
+
+    refresh_after_current_revoke = client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": logged_in["refresh_token"]},
+    )
+    assert refresh_after_current_revoke.status_code == 401
+
+    missing_session = client.delete(
+        "/api/v1/auth/sessions/00000000-0000-0000-0000-000000000000",
+        headers=auth_headers(registered["access_token"]),
+    )
+    assert missing_session.status_code == 404

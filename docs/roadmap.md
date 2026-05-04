@@ -23,7 +23,7 @@ Status: started.
 - Role baseline. Started with global `UNVERIFIED_USER` plus local `SUPER_ADMIN` bootstrap.
 - Protected web route behavior. Implemented client-side dashboard/admin guards for current token storage.
 - Role-aware admin overview. Implemented API guard and web console summary.
-- Session/device management.
+- Session/device management. Implemented API and dashboard UI for refresh-token sessions.
 - Secure cookie auth hardening.
 - Admin 2FA requirement.
 

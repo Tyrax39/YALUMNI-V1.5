@@ -1,7 +1,8 @@
+import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
 from sqlalchemy import distinct, func, select
 from sqlalchemy.orm import Session
 
@@ -28,6 +29,8 @@ from app.modules.auth.models import (
 from app.modules.auth.schemas import (
     AdminOverview,
     AuthResponse,
+    AuthSessionInfo,
+    AuthSessionsResponse,
     AuthUser,
     DevTokenResponse,
     ForgotPasswordRequest,
@@ -36,6 +39,7 @@ from app.modules.auth.schemas import (
     RefreshRequest,
     RegisterRequest,
     ResetPasswordRequest,
+    SessionRevocationResponse,
     VerifyEmailRequest,
 )
 
@@ -65,6 +69,22 @@ def _serialize_user(user: User) -> AuthUser:
         status=user.status,
         email_verified_at=user.email_verified_at,
         roles=_role_names(user),
+    )
+
+
+def _serialize_session(
+    session: AuthSession,
+    current_refresh_token_hash: str | None = None,
+) -> AuthSessionInfo:
+    return AuthSessionInfo(
+        id=session.id,
+        ip_address=session.ip_address,
+        user_agent=session.user_agent,
+        created_at=session.created_at,
+        expires_at=session.expires_at,
+        revoked_at=session.revoked_at,
+        is_current=current_refresh_token_hash == session.refresh_token_hash,
+        is_active=session.revoked_at is None and not _is_expired(session.expires_at),
     )
 
 
@@ -286,6 +306,62 @@ def logout(
 @router.get("/me", response_model=AuthUser)
 def me(current_user: Annotated[User, Depends(get_current_user)]) -> AuthUser:
     return _serialize_user(current_user)
+
+
+@router.get("/sessions", response_model=AuthSessionsResponse)
+def list_sessions(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+    x_refresh_token: Annotated[str | None, Header(alias="X-Refresh-Token")] = None,
+) -> AuthSessionsResponse:
+    current_refresh_token_hash = hash_token(x_refresh_token) if x_refresh_token else None
+    sessions = db.scalars(
+        select(AuthSession)
+        .where(AuthSession.user_id == current_user.id)
+        .order_by(AuthSession.created_at.desc())
+    ).all()
+
+    return AuthSessionsResponse(
+        sessions=[
+            _serialize_session(session, current_refresh_token_hash)
+            for session in sessions
+        ]
+    )
+
+
+@router.delete("/sessions/{session_id}", response_model=SessionRevocationResponse)
+def revoke_session(
+    session_id: uuid.UUID,
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+    x_refresh_token: Annotated[str | None, Header(alias="X-Refresh-Token")] = None,
+) -> SessionRevocationResponse:
+    session = db.scalar(
+        select(AuthSession).where(
+            AuthSession.id == session_id,
+            AuthSession.user_id == current_user.id,
+        )
+    )
+    if session is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Session not found",
+        )
+
+    revoked_current_session = (
+        bool(x_refresh_token) and session.refresh_token_hash == hash_token(x_refresh_token)
+    )
+    if session.revoked_at is None:
+        session.revoked_at = utcnow()
+        _create_security_event(db, request, current_user, "auth.session_revoked")
+        db.commit()
+
+    return SessionRevocationResponse(
+        message="Session revoked.",
+        revoked_session_id=session.id,
+        revoked_current_session=revoked_current_session,
+    )
 
 
 @router.post("/dev/bootstrap-admin", response_model=AuthUser)
