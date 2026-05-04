@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.core.database import Base, get_db_session
+from app.core.rate_limit import clear_rate_limits
 from app.main import app
 from app.modules.auth import models as auth_models
 
@@ -15,6 +16,7 @@ _ = auth_models
 
 @pytest.fixture
 def client() -> Generator[TestClient]:
+    clear_rate_limits()
     engine = create_engine(
         "sqlite+pysqlite:///:memory:",
         connect_args={"check_same_thread": False},
@@ -37,6 +39,7 @@ def client() -> Generator[TestClient]:
 
     app.dependency_overrides.clear()
     Base.metadata.drop_all(bind=engine)
+    clear_rate_limits()
 
 
 def register_user(client: TestClient, email: str = "amara@example.com") -> dict:
@@ -143,6 +146,22 @@ def test_invalid_login_and_missing_bearer_token_are_rejected(client: TestClient)
     assert me_response.status_code == 401
 
 
+def test_login_rate_limit_returns_429_after_repeated_attempts(client: TestClient) -> None:
+    for _ in range(5):
+        response = client.post(
+            "/api/v1/auth/login",
+            json={"email": "limited@example.com", "password": "wrong-password"},
+        )
+        assert response.status_code == 401
+
+    limited_response = client.post(
+        "/api/v1/auth/login",
+        json={"email": "limited@example.com", "password": "wrong-password"},
+    )
+    assert limited_response.status_code == 429
+    assert limited_response.headers["Retry-After"]
+
+
 def test_email_verification_marks_user_verified_and_rejects_reuse(client: TestClient) -> None:
     registered = register_user(client, email="verify@example.com")
     verification_token = registered["dev_email_verification_token"]
@@ -207,6 +226,23 @@ def test_password_forgot_does_not_disclose_unknown_email(client: TestClient) -> 
     assert forgot_response.json()["dev_token"] is None
 
 
+def test_password_reset_rate_limit_returns_429_after_repeated_requests(
+    client: TestClient,
+) -> None:
+    for _ in range(5):
+        response = client.post(
+            "/api/v1/auth/password/forgot",
+            json={"email": "limited-reset@example.com"},
+        )
+        assert response.status_code == 200
+
+    limited_response = client.post(
+        "/api/v1/auth/password/forgot",
+        json={"email": "limited-reset@example.com"},
+    )
+    assert limited_response.status_code == 429
+
+
 def test_admin_overview_requires_role_and_local_bootstrap_grants_access(
     client: TestClient,
 ) -> None:
@@ -228,6 +264,18 @@ def test_admin_overview_requires_role_and_local_bootstrap_grants_access(
     assert overview["admin_users"] == 1
     assert overview["pending_verification_users"] == 1
     assert overview["latest_security_events"][0]["event_type"] == "auth.dev_admin_bootstrapped"
+
+
+def test_local_admin_bootstrap_rate_limit_returns_429(client: TestClient) -> None:
+    registered = register_user(client, email="admin-limited@example.com")
+    headers = auth_headers(registered["access_token"])
+
+    for _ in range(10):
+        response = client.post("/api/v1/auth/dev/bootstrap-admin", headers=headers)
+        assert response.status_code == 200
+
+    limited_response = client.post("/api/v1/auth/dev/bootstrap-admin", headers=headers)
+    assert limited_response.status_code == 429
 
 
 def test_session_listing_and_revocation_marks_current_session(client: TestClient) -> None:

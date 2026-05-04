@@ -15,6 +15,12 @@ class Settings(BaseSettings):
     jwt_refresh_token_days: int = 30
     email_verification_token_hours: int = 24
     password_reset_token_minutes: int = 30
+    login_rate_limit_attempts: int = 5
+    login_rate_limit_window_seconds: int = 300
+    password_reset_rate_limit_attempts: int = 5
+    password_reset_rate_limit_window_seconds: int = 900
+    admin_action_rate_limit_attempts: int = 10
+    admin_action_rate_limit_window_seconds: int = 300
     password_hash_scheme: str = "argon2id"
     cors_origins: str = (
         "http://localhost:3000,http://127.0.0.1:3000,"

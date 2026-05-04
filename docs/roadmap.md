@@ -24,6 +24,7 @@ Status: started.
 - Protected web route behavior. Implemented client-side dashboard/admin guards for current token storage.
 - Role-aware admin overview. Implemented API guard and web console summary.
 - Session/device management. Implemented API and dashboard UI for refresh-token sessions.
+- Login/reset/admin action rate limiting. Implemented in-process API guard for MVP hardening.
 - Secure cookie auth hardening.
 - Admin 2FA requirement.
 

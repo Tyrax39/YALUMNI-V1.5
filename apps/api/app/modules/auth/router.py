@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.database import get_db_session
 from app.core.permissions import ADMIN_ROLE_NAMES, GlobalRole
+from app.core.rate_limit import RateLimitRule, enforce_rate_limit
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -53,6 +54,43 @@ def _request_context(request: Request) -> tuple[str | None, str | None]:
     if user_agent and len(user_agent) > 255:
         user_agent = user_agent[:255]
     return ip_address, user_agent
+
+
+def _client_key(request: Request) -> str:
+    return request.client.host if request.client else "unknown"
+
+
+def _enforce_login_rate_limit(request: Request, email: str) -> None:
+    settings = get_settings()
+    enforce_rate_limit(
+        f"auth:login:{_client_key(request)}:{email}",
+        RateLimitRule(
+            attempts=settings.login_rate_limit_attempts,
+            window_seconds=settings.login_rate_limit_window_seconds,
+        ),
+    )
+
+
+def _enforce_password_reset_rate_limit(request: Request, identifier: str) -> None:
+    settings = get_settings()
+    enforce_rate_limit(
+        f"auth:password-reset:{_client_key(request)}:{identifier}",
+        RateLimitRule(
+            attempts=settings.password_reset_rate_limit_attempts,
+            window_seconds=settings.password_reset_rate_limit_window_seconds,
+        ),
+    )
+
+
+def _enforce_admin_action_rate_limit(request: Request, user: User, action: str) -> None:
+    settings = get_settings()
+    enforce_rate_limit(
+        f"auth:admin-action:{action}:{_client_key(request)}:{user.id}",
+        RateLimitRule(
+            attempts=settings.admin_action_rate_limit_attempts,
+            window_seconds=settings.admin_action_rate_limit_window_seconds,
+        ),
+    )
 
 
 def _role_names(user: User) -> list[str]:
@@ -248,6 +286,7 @@ def login(
     request: Request,
     db: Annotated[Session, Depends(get_db_session)],
 ) -> AuthResponse:
+    _enforce_login_rate_limit(request, payload.email)
     user = db.scalar(select(User).where(User.email == payload.email))
     if not user or not verify_password(payload.password, user.password_hash):
         _create_security_event(db, request, user, "auth.login_failed")
@@ -370,6 +409,7 @@ def bootstrap_local_admin(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db_session)],
 ) -> AuthUser:
+    _enforce_admin_action_rate_limit(request, current_user, "dev-bootstrap-admin")
     if not _is_local_environment():
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -452,6 +492,7 @@ def forgot_password(
     request: Request,
     db: Annotated[Session, Depends(get_db_session)],
 ) -> DevTokenResponse:
+    _enforce_password_reset_rate_limit(request, payload.email)
     settings = get_settings()
     user = db.scalar(select(User).where(User.email == payload.email))
     dev_token: str | None = None
@@ -482,6 +523,7 @@ def reset_password(
     request: Request,
     db: Annotated[Session, Depends(get_db_session)],
 ) -> DevTokenResponse:
+    _enforce_password_reset_rate_limit(request, payload.token)
     account_token = _get_valid_account_token(db, payload.token, "password_reset")
     user = account_token.user
     user.password_hash = hash_password(payload.new_password)

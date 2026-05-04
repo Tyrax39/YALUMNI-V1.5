@@ -65,4 +65,5 @@ Users must control visibility of:
 - Add security event table. Done.
 - Add role-protected admin overview. Done.
 - Add session/device management. Done for refresh-token sessions.
+- Add auth rate limits. Done in-process for login, password reset, and local admin bootstrap.
 - Add tests for auth denial and basic IDOR prevention.

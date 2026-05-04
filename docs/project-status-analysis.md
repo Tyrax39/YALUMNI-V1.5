@@ -393,6 +393,32 @@ Remaining Phase 2 gaps:
 - Real email provider integration and branded templates.
 - Production-safe admin seeding procedure outside local development.
 
+## Current V1.5 Implementation Update: 2026-05-04 Rate Limiting Slice
+
+Completed after session management:
+
+- In-process windowed rate limiter was added for local/MVP auth hardening.
+- Login attempts are now rate-limited by client and normalized email.
+- Password reset request and reset-completion attempts are now rate-limited by client and email/token.
+- Local admin bootstrap is now rate-limited by client, user, and action.
+- Rate-limit responses return HTTP 429 with `Retry-After`.
+- Rate-limit settings were added to the environment template.
+- API tests cover login throttling, password-reset throttling, and local admin bootstrap throttling.
+
+Current plan position:
+
+- Phase 1 remains functionally complete for local foundation.
+- Phase 2 is now roughly 85% complete.
+- Overall 24-week MVP implementation is roughly 15% complete.
+
+Remaining Phase 2 gaps:
+
+- Secure HttpOnly cookie auth strategy and SSR/middleware enforcement.
+- Admin 2FA requirement or placeholder policy.
+- Real email provider integration and branded templates.
+- Production-safe admin seeding procedure outside local development.
+- Redis-backed distributed rate limiting for multi-instance production deployments.
+
 ## Immediate Next Implementations
 
 The next engineering task should finish identity hardening and then start alumni profiles:
