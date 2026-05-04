@@ -538,6 +538,7 @@ Next possible implementation slices:
 Completed after verification workflow:
 
 - A protected platform owner seed/invariant was added for the configured owner email.
+- The canonical owner email is now configurable with optional owner aliases for typo-safe continuity.
 - The owner account is restored to active, email-verified, `SUPER_ADMIN`, all admin roles, and `ALUMNI_MEMBER` whenever the seed or auth guards touch the account.
 - Owner login can recreate the protected account when it has been deleted while the API still has `PLATFORM_OWNER_PASSWORD` configured.
 - The owner password is supplied through `PLATFORM_OWNER_PASSWORD`; it is not committed to the repository or rendered in public UI.

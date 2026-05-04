@@ -8,6 +8,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.core.database import Base, get_db_session
 from app.core.rate_limit import clear_rate_limits
+from app.core.security import hash_password
 from app.main import app
 from app.modules.alumni import models as alumni_models
 from app.modules.auth import models as auth_models
@@ -163,8 +164,18 @@ def test_platform_owner_seed_restores_god_mode_roles() -> None:
     testing_session_local = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     db = testing_session_local()
     try:
+        legacy_owner = auth_models.User(
+            email="tshiva@yalumni.org",
+            display_name="Legacy Owner",
+            password_hash=hash_password("LegacyOwnerPass123!"),
+            status="SUSPENDED",
+        )
+        db.add(legacy_owner)
+        db.commit()
+
         owner = ensure_platform_owner(db, "OwnerTestPass123!")
-        assert owner.email == "tshiva@yalumni.org"
+        assert owner.id == legacy_owner.id
+        assert owner.email == "t.shiva@yalumni.org"
         assert owner.display_name == "Patient0"
         assert owner.email_verified_at is not None
         assert {assignment.role.name for assignment in owner.role_assignments} == set(
@@ -191,7 +202,7 @@ def test_platform_owner_seed_restores_god_mode_roles() -> None:
 
         recreated = ensure_platform_owner(db, "OwnerTestPass123!")
         assert recreated.id != owner_id
-        assert recreated.email == "tshiva@yalumni.org"
+        assert recreated.email == "t.shiva@yalumni.org"
         assert {assignment.role.name for assignment in recreated.role_assignments} == set(
             PLATFORM_OWNER_ROLES
         )
@@ -263,6 +274,7 @@ def test_platform_owner_login_restores_admin_access(client: TestClient) -> None:
     )
     assert login_response.status_code == 200
     logged_in = login_response.json()
+    assert logged_in["user"]["email"] == "t.shiva@yalumni.org"
     assert logged_in["user"]["display_name"] == "Patient0"
     assert "SUPER_ADMIN" in logged_in["user"]["roles"]
     assert "ALUMNI_MEMBER" in logged_in["user"]["roles"]

@@ -293,7 +293,7 @@ def login(
 ) -> AuthResponse:
     _enforce_login_rate_limit(request, payload.email)
     user = db.scalar(select(User).where(User.email == payload.email))
-    if user is None and is_platform_owner_email(payload.email):
+    if is_platform_owner_email(payload.email):
         settings = get_settings()
         if settings.platform_owner_password:
             user = ensure_platform_owner(db, settings.platform_owner_password)

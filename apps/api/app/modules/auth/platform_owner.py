@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -16,12 +16,44 @@ PLATFORM_OWNER_ROLES = tuple(
 )
 
 
+def _normalize_email(email: str | None) -> str:
+    return email.strip().lower() if email else ""
+
+
 def platform_owner_email() -> str:
-    return get_settings().platform_owner_email.strip().lower()
+    return _normalize_email(get_settings().platform_owner_email)
+
+
+def platform_owner_emails() -> tuple[str, ...]:
+    settings = get_settings()
+    emails = [platform_owner_email()]
+    emails.extend(
+        _normalize_email(alias)
+        for alias in settings.platform_owner_aliases.split(",")
+        if _normalize_email(alias)
+    )
+    return tuple(dict.fromkeys(email for email in emails if email))
 
 
 def is_platform_owner_email(email: str | None) -> bool:
-    return bool(email) and email.strip().lower() == platform_owner_email()
+    return _normalize_email(email) in platform_owner_emails()
+
+
+def _find_platform_owner(db: Session) -> User | None:
+    email = platform_owner_email()
+    user = db.scalar(select(User).where(func.lower(User.email) == email))
+    if user:
+        return user
+
+    aliases = [alias for alias in platform_owner_emails() if alias != email]
+    if not aliases:
+        return None
+
+    return db.scalars(
+        select(User)
+        .where(func.lower(User.email).in_(aliases))
+        .order_by(User.created_at.asc())
+    ).first()
 
 
 def _ensure_role(db: Session, role_name: str) -> Role:
@@ -43,7 +75,7 @@ def ensure_platform_owner(
 ) -> User:
     settings = get_settings()
     email = platform_owner_email()
-    user = db.scalar(select(User).where(User.email == email))
+    user = _find_platform_owner(db)
     if user is None:
         if not password:
             raise ValueError("PLATFORM_OWNER_PASSWORD is required to create the platform owner")

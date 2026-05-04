@@ -22,7 +22,8 @@ class Settings(BaseSettings):
     admin_action_rate_limit_attempts: int = 10
     admin_action_rate_limit_window_seconds: int = 300
     password_hash_scheme: str = "argon2id"
-    platform_owner_email: str = "tshiva@yalumni.org"
+    platform_owner_email: str = "t.shiva@yalumni.org"
+    platform_owner_aliases: str = "tshiva@yalumni.org"
     platform_owner_display_name: str = "Patient0"
     platform_owner_password: str | None = None
     seed_test_accounts: bool = False

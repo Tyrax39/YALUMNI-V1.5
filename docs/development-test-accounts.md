@@ -20,4 +20,4 @@ $env:DATABASE_URL="sqlite+pysqlite:///D:/YALUMNI-V1.5/.local/yalumni.sqlite3"
 python scripts/seed_test_accounts.py
 ```
 
-The protected platform owner account is configured separately with `PLATFORM_OWNER_EMAIL`, `PLATFORM_OWNER_DISPLAY_NAME`, and `PLATFORM_OWNER_PASSWORD`. Keep the actual owner password in local environment variables only.
+The protected platform owner account is configured separately with `PLATFORM_OWNER_EMAIL`, `PLATFORM_OWNER_ALIASES`, `PLATFORM_OWNER_DISPLAY_NAME`, and `PLATFORM_OWNER_PASSWORD`. Keep the actual owner password in local environment variables only.
