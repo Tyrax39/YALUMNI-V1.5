@@ -33,6 +33,8 @@ GET  /api/v1/alumni/admin/verification-requests
 POST /api/v1/alumni/admin/verification-requests/{request_id}/approve
 POST /api/v1/alumni/admin/verification-requests/{request_id}/reject
 POST /api/v1/alumni/admin/verification-requests/{request_id}/request-info
+GET  /api/v1/alumni/search
+GET  /api/v1/alumni/{user_id}
 ```
 
 ## Phase 2: Auth
@@ -48,8 +50,6 @@ POST /api/v1/auth/2fa/verify
 
 ```text
 GET    /api/v1/alumni
-GET    /api/v1/alumni/search
-GET    /api/v1/alumni/{user_id}
 PATCH  /api/v1/alumni/me/visibility
 POST   /api/v1/alumni/me/verification-documents
 ```

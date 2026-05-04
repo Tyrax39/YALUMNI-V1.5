@@ -170,6 +170,34 @@ export type VerificationRequestPayload = {
 
 export type VerificationReviewAction = "approve" | "reject" | "request-info";
 
+export type AlumniDirectoryProgram = {
+  program_name: string;
+  cohort_year: number | null;
+  country: string | null;
+  city: string | null;
+  status: string;
+};
+
+export type AlumniDirectoryProfile = {
+  user_id: string;
+  display_name: string;
+  email: string | null;
+  headline: string | null;
+  country: string | null;
+  city: string | null;
+  sector: string | null;
+  organization: string | null;
+  job_title: string | null;
+  skills: string[];
+  program_affiliations: AlumniDirectoryProgram[];
+  profile_completed_at: string | null;
+};
+
+export type AlumniDirectorySearchResponse = {
+  profiles: AlumniDirectoryProfile[];
+  total: number;
+};
+
 export const adminRoles: readonly string[] = [
   "SUPER_ADMIN",
   "PLATFORM_ADMIN",
@@ -391,6 +419,30 @@ export function reviewVerificationRequest(
       body: JSON.stringify({ reviewer_note: reviewerNote ?? null }),
       headers: authHeaders(accessToken),
       method: "POST"
+    }
+  );
+}
+
+export function searchAlumniDirectory(
+  accessToken: string,
+  params: { country?: string; q?: string; sector?: string } = {}
+): Promise<AlumniDirectorySearchResponse> {
+  const searchParams = new URLSearchParams();
+  if (params.q) {
+    searchParams.set("q", params.q);
+  }
+  if (params.country) {
+    searchParams.set("country", params.country);
+  }
+  if (params.sector) {
+    searchParams.set("sector", params.sector);
+  }
+
+  const query = searchParams.toString();
+  return apiFetch<AlumniDirectorySearchResponse>(
+    `/api/v1/alumni/search${query ? `?${query}` : ""}`,
+    {
+      headers: authHeaders(accessToken)
     }
   );
 }

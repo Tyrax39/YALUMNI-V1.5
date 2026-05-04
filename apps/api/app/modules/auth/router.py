@@ -27,6 +27,11 @@ from app.modules.auth.models import (
     SecurityEvent,
     User,
 )
+from app.modules.auth.platform_owner import (
+    ensure_platform_owner,
+    is_platform_owner_email,
+    restore_platform_owner_if_needed,
+)
 from app.modules.auth.schemas import (
     AdminOverview,
     AuthResponse,
@@ -288,6 +293,10 @@ def login(
 ) -> AuthResponse:
     _enforce_login_rate_limit(request, payload.email)
     user = db.scalar(select(User).where(User.email == payload.email))
+    if user is None and is_platform_owner_email(payload.email):
+        settings = get_settings()
+        if settings.platform_owner_password:
+            user = ensure_platform_owner(db, settings.platform_owner_password)
     if not user or not verify_password(payload.password, user.password_hash):
         _create_security_event(db, request, user, "auth.login_failed")
         db.commit()
@@ -297,8 +306,17 @@ def login(
         )
 
     if user.status != "ACTIVE":
+        if is_platform_owner_email(user.email):
+            user = restore_platform_owner_if_needed(db, user)
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Account is not active",
+            )
+    if user.status != "ACTIVE":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is not active")
 
+    user = restore_platform_owner_if_needed(db, user)
     return _issue_auth_response(db, request, user, "auth.login_succeeded")
 
 

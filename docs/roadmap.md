@@ -16,6 +16,8 @@ Status: implemented foundation, CI passing.
 Status: mostly implemented for MVP-local identity, with production hardening still open.
 
 - User/session models. Implemented.
+- Protected platform owner seed and role restoration. Implemented.
+- Local-only development test-account seeds. Implemented.
 - JWT access and refresh tokens. Implemented.
 - Register/login/logout. Implemented.
 - Email verification. Implemented API and local web flow.
@@ -43,10 +45,11 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
 
 ## Phase 4: Directory And Search
 
-- Alumni listing.
-- Search and filters.
-- Profile detail.
-- Privacy-aware serializers.
+- Alumni listing. Implemented for verified members.
+- Search and filters. Started with query/country/sector filters.
+- Profile detail. Implemented for verified member profiles.
+- Privacy-aware serializers. Started using profile visibility settings.
+- Dashboard directory search UI. Implemented.
 - Saved searches later.
 
 ## Phase 5: Communities

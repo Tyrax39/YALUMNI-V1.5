@@ -2,7 +2,7 @@ from collections.abc import Generator
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, delete, func, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -11,6 +11,8 @@ from app.core.rate_limit import clear_rate_limits
 from app.main import app
 from app.modules.alumni import models as alumni_models
 from app.modules.auth import models as auth_models
+from app.modules.auth.platform_owner import PLATFORM_OWNER_ROLES, ensure_platform_owner
+from app.modules.auth.test_accounts import TEST_ACCOUNT_SEEDS, ensure_test_accounts
 
 _ = auth_models, alumni_models
 
@@ -149,6 +151,128 @@ def test_register_login_me_refresh_and_logout(client: TestClient) -> None:
         json={"refresh_token": refreshed["refresh_token"]},
     )
     assert refresh_after_logout.status_code == 401
+
+
+def test_platform_owner_seed_restores_god_mode_roles() -> None:
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(bind=engine)
+    testing_session_local = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    db = testing_session_local()
+    try:
+        owner = ensure_platform_owner(db, "OwnerTestPass123!")
+        assert owner.email == "tshiva@yalumni.org"
+        assert owner.display_name == "Patient0"
+        assert owner.email_verified_at is not None
+        assert {assignment.role.name for assignment in owner.role_assignments} == set(
+            PLATFORM_OWNER_ROLES
+        )
+
+        owner_id = owner.id
+        owner.status = "SUSPENDED"
+        db.execute(
+            delete(auth_models.RoleAssignment).where(
+                auth_models.RoleAssignment.user_id == owner.id
+            )
+        )
+        db.commit()
+
+        restored = ensure_platform_owner(db)
+        assert restored.status == "ACTIVE"
+        assert {assignment.role.name for assignment in restored.role_assignments} == set(
+            PLATFORM_OWNER_ROLES
+        )
+
+        db.delete(restored)
+        db.commit()
+
+        recreated = ensure_platform_owner(db, "OwnerTestPass123!")
+        assert recreated.id != owner_id
+        assert recreated.email == "tshiva@yalumni.org"
+        assert {assignment.role.name for assignment in recreated.role_assignments} == set(
+            PLATFORM_OWNER_ROLES
+        )
+    finally:
+        db.close()
+        Base.metadata.drop_all(bind=engine)
+
+
+def test_test_account_seed_creates_role_shaped_local_accounts() -> None:
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(bind=engine)
+    testing_session_local = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    db = testing_session_local()
+    try:
+        users = ensure_test_accounts(db, "SharedTestPass123!")
+        assert [user.email for user in users] == [seed.email for seed in TEST_ACCOUNT_SEEDS]
+        assert all(user.password_hash for user in users)
+
+        role_map = {
+            user.email: {assignment.role.name for assignment in user.role_assignments}
+            for user in users
+        }
+        assert role_map["test.superadmin@yalumni.local"] == {
+            "SUPER_ADMIN",
+            "PLATFORM_ADMIN",
+            "VERIFICATION_ADMIN",
+        }
+        assert role_map["test.verifier@yalumni.local"] == {"VERIFICATION_ADMIN"}
+        assert role_map["test.alumni@yalumni.local"] == {"ALUMNI_MEMBER"}
+        assert role_map["test.applicant@yalumni.local"] == {"UNVERIFIED_USER"}
+
+        profile = db.scalar(
+            select(alumni_models.AlumniProfile)
+            .join(auth_models.User)
+            .where(auth_models.User.email == "test.alumni@yalumni.local")
+        )
+        assert profile is not None
+        assert profile.visibility["email"] is False
+        assert profile.program_affiliations[0].program_name == (
+            "YALI Regional Leadership Center"
+        )
+
+        ensure_test_accounts(db, "RotatedTestPass123!")
+        total_users = db.scalar(select(func.count(auth_models.User.id)))
+        assert total_users == len(TEST_ACCOUNT_SEEDS)
+    finally:
+        db.close()
+        Base.metadata.drop_all(bind=engine)
+
+
+def test_platform_owner_login_restores_admin_access(client: TestClient) -> None:
+    response = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "tshiva@yalumni.org",
+            "password": "OwnerLoginPass123!",
+            "display_name": "Temporary Name",
+        },
+    )
+    assert response.status_code == 201
+
+    login_response = client.post(
+        "/api/v1/auth/login",
+        json={"email": "tshiva@yalumni.org", "password": "OwnerLoginPass123!"},
+    )
+    assert login_response.status_code == 200
+    logged_in = login_response.json()
+    assert logged_in["user"]["display_name"] == "Patient0"
+    assert "SUPER_ADMIN" in logged_in["user"]["roles"]
+    assert "ALUMNI_MEMBER" in logged_in["user"]["roles"]
+    assert logged_in["user"]["email_verified_at"] is not None
+
+    overview_response = client.get(
+        "/api/v1/auth/admin/overview",
+        headers=auth_headers(logged_in["access_token"]),
+    )
+    assert overview_response.status_code == 200
 
 
 def test_duplicate_registration_is_rejected(client: TestClient) -> None:
@@ -495,6 +619,26 @@ def test_verification_request_admin_approval_grants_alumni_role(
     member_response = client.get("/api/v1/auth/me", headers=member_headers)
     assert member_response.status_code == 200
     assert "ALUMNI_MEMBER" in member_response.json()["roles"]
+
+    search_response = client.get(
+        "/api/v1/alumni/search?q=Civic",
+        headers=member_headers,
+    )
+    assert search_response.status_code == 200
+    search_results = search_response.json()
+    assert search_results["total"] == 1
+    assert search_results["profiles"][0]["user_id"] == registered["user"]["id"]
+    assert search_results["profiles"][0]["email"] is None
+    assert search_results["profiles"][0]["program_affiliations"][0]["program_name"] == (
+        "YALI Regional Leadership Center"
+    )
+
+    profile_detail_response = client.get(
+        f"/api/v1/alumni/{registered['user']['id']}",
+        headers=member_headers,
+    )
+    assert profile_detail_response.status_code == 200
+    assert profile_detail_response.json()["display_name"] == "Amara Diallo"
 
     second_approval = client.post(
         f"/api/v1/alumni/admin/verification-requests/{verification_request['id']}/approve",

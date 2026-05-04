@@ -2,7 +2,7 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.core.database import get_db_session
@@ -10,6 +10,9 @@ from app.core.permissions import GlobalRole
 from app.core.security import utcnow
 from app.modules.alumni.models import AlumniProfile, ProgramAffiliation, VerificationRequest
 from app.modules.alumni.schemas import (
+    AlumniDirectoryProfileResponse,
+    AlumniDirectoryProgramResponse,
+    AlumniDirectorySearchResponse,
     AlumniProfileResponse,
     AlumniProfileUpdate,
     ProgramAffiliationCreate,
@@ -115,6 +118,38 @@ def _serialize_verification_request(
         reviewed_at=verification_request.reviewed_at,
         created_at=verification_request.created_at,
         updated_at=verification_request.updated_at,
+    )
+
+
+def _serialize_directory_profile(profile: AlumniProfile) -> AlumniDirectoryProfileResponse:
+    visibility = {
+        **DEFAULT_VISIBILITY,
+        **(profile.visibility or {}),
+    }
+    return AlumniDirectoryProfileResponse(
+        user_id=profile.user_id,
+        display_name=profile.user.display_name,
+        email=profile.user.email if visibility["email"] else None,
+        headline=profile.headline,
+        country=profile.country if visibility["location"] else None,
+        city=profile.city if visibility["location"] else None,
+        sector=profile.sector,
+        organization=profile.organization if visibility["organization"] else None,
+        job_title=profile.job_title if visibility["organization"] else None,
+        skills=profile.skills if visibility["skills"] else [],
+        program_affiliations=[
+            AlumniDirectoryProgramResponse(
+                program_name=affiliation.program_name,
+                cohort_year=affiliation.cohort_year,
+                country=affiliation.country,
+                city=affiliation.city,
+                status=affiliation.status,
+            )
+            for affiliation in profile.program_affiliations
+        ]
+        if visibility["program"]
+        else [],
+        profile_completed_at=profile.profile_completed_at,
     )
 
 
@@ -321,6 +356,79 @@ def delete_my_program_affiliation(
     db.commit()
     profile = db.scalar(_get_profile_query(current_user)) or profile
     return _serialize_profile(profile)
+
+
+def _directory_base_query():
+    return (
+        select(AlumniProfile)
+        .join(User, AlumniProfile.user_id == User.id)
+        .join(RoleAssignment, RoleAssignment.user_id == User.id)
+        .join(Role, RoleAssignment.role_id == Role.id)
+        .options(
+            selectinload(AlumniProfile.program_affiliations),
+            joinedload(AlumniProfile.user),
+        )
+        .where(
+            User.status == "ACTIVE",
+            Role.name == GlobalRole.ALUMNI_MEMBER.value,
+        )
+    )
+
+
+@router.get("/search", response_model=AlumniDirectorySearchResponse)
+def search_alumni_directory(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+    q: Annotated[str | None, Query(max_length=120)] = None,
+    country: Annotated[str | None, Query(max_length=80)] = None,
+    sector: Annotated[str | None, Query(max_length=120)] = None,
+    limit: Annotated[int, Query(ge=1, le=50)] = 20,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> AlumniDirectorySearchResponse:
+    _ = current_user
+    query = _directory_base_query()
+
+    if q:
+        search_term = f"%{q.strip()}%"
+        query = query.where(
+            or_(
+                User.display_name.ilike(search_term),
+                AlumniProfile.headline.ilike(search_term),
+                AlumniProfile.organization.ilike(search_term),
+                AlumniProfile.sector.ilike(search_term),
+            )
+        )
+    if country:
+        query = query.where(AlumniProfile.country.ilike(country.strip()))
+    if sector:
+        query = query.where(AlumniProfile.sector.ilike(sector.strip()))
+
+    count_query = select(func.count()).select_from(query.subquery())
+    total = db.scalar(count_query) or 0
+    profiles = db.scalars(
+        query.order_by(User.display_name.asc()).offset(offset).limit(limit)
+    ).all()
+    return AlumniDirectorySearchResponse(
+        profiles=[_serialize_directory_profile(profile) for profile in profiles],
+        total=total,
+    )
+
+
+@router.get("/{user_id}", response_model=AlumniDirectoryProfileResponse)
+def get_alumni_directory_profile(
+    user_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> AlumniDirectoryProfileResponse:
+    _ = current_user
+    profile = db.scalar(_directory_base_query().where(AlumniProfile.user_id == user_id))
+    if profile is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Alumni profile not found",
+        )
+
+    return _serialize_directory_profile(profile)
 
 
 @router.get("/me/verification-requests", response_model=VerificationRequestListResponse)

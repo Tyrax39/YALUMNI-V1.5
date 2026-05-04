@@ -10,6 +10,7 @@ from app.core.database import get_db_session
 from app.core.permissions import has_any_role
 from app.core.security import decode_access_token
 from app.modules.auth.models import User
+from app.modules.auth.platform_owner import restore_platform_owner_if_needed
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
@@ -31,7 +32,11 @@ def get_current_user(
         raise unauthorized from exc
 
     user = db.scalar(select(User).where(User.id == user_id))
-    if user is None or user.status != "ACTIVE":
+    if user is None:
+        raise unauthorized
+
+    user = restore_platform_owner_if_needed(db, user)
+    if user.status != "ACTIVE":
         raise unauthorized
 
     return user

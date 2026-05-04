@@ -532,3 +532,64 @@ Next possible implementation slices:
 - Profile photo upload and media pipeline foundation.
 - Dedicated admin audit log viewer.
 - Admin 2FA policy placeholder and enforcement gate.
+
+## Current V1.5 Implementation Update: 2026-05-04 Platform Owner And Directory Slice
+
+Completed after verification workflow:
+
+- A protected platform owner seed/invariant was added for the configured owner email.
+- The owner account is restored to active, email-verified, `SUPER_ADMIN`, all admin roles, and `ALUMNI_MEMBER` whenever the seed or auth guards touch the account.
+- Owner login can recreate the protected account when it has been deleted while the API still has `PLATFORM_OWNER_PASSWORD` configured.
+- The owner password is supplied through `PLATFORM_OWNER_PASSWORD`; it is not committed to the repository or rendered in public UI.
+- Local SQLite was seeded with the provided platform owner credentials.
+- Local-only development test accounts were added for super admin, verification admin, moderator, verified alumni, and unverified applicant QA.
+- A seeded verified alumni profile/program affiliation gives the dashboard directory search a stable local QA result.
+- Verified alumni directory search API was added at `/api/v1/alumni/search`.
+- Verified alumni profile detail API was added at `/api/v1/alumni/{user_id}`.
+- Directory serializers now respect profile visibility settings for email, location, organization, skills, and program affiliations.
+- Dashboard now includes a verified alumni directory search panel with query, country, and sector filters.
+- API tests cover owner restoration/recreation, local test-account seeding, and directory search/detail after approval.
+
+Current plan position:
+
+- Phase 1 remains functionally complete for local foundation.
+- Phase 2 is now roughly 89% complete because the permanent owner seed/restoration guard and local test-account seed are implemented.
+- Phase 3 remains roughly 34% complete.
+- Phase 4 has started and is roughly 18% complete.
+- Overall 24-week MVP implementation is roughly 22% complete.
+
+Implemented now:
+
+- Native landing page.
+- Monorepo foundation, CI, docs, Docker Compose.
+- FastAPI health/status and request middleware.
+- Identity auth, refresh sessions, account recovery, email verification, protected platform owner, role-gated admin overview, session management, and MVP-local rate limiting.
+- Local-only test-account seeding for role and directory QA.
+- Protected dashboard/admin route behavior.
+- Alumni current-user profile model/API/UI.
+- Program affiliation model/API/UI.
+- Verification request submission, member status history, admin queue, review actions, and alumni-member role grant.
+- Verified member directory search and profile detail with privacy-aware serializers.
+
+Main gaps now:
+
+- Auth still uses local-storage bearer tokens in the web app; production should move to HttpOnly cookies and SSR/middleware guards.
+- Admin 2FA is still not implemented.
+- Real email provider/templates are not wired.
+- Verification document upload, object storage, and evidence review attachments are not implemented.
+- Directory search is database-backed MVP search, not Meilisearch/OpenSearch.
+- Public profile pages, saved searches, pagination UI, and advanced filters are not implemented.
+- Test accounts are local/dev seed data only; there is no production-safe demo identity lifecycle yet.
+- Profile photo upload is not implemented.
+- Skills are stored as MVP JSON rather than normalized skill tables.
+- Dedicated audit log viewer is not implemented; audit data currently lands in `security_events`.
+- Redis-backed rate limiting and background jobs are not wired yet.
+
+Next possible implementation slices:
+
+- Verification document upload metadata plus object-storage abstraction.
+- Profile photo upload and media pipeline foundation.
+- Secure cookie auth migration and route middleware.
+- Directory pagination/advanced filters and profile detail page.
+- Dedicated admin audit log viewer.
+- Admin 2FA policy placeholder and enforcement gate.

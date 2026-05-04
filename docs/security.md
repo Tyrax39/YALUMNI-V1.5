@@ -62,6 +62,8 @@ Users must control visibility of:
 - Add refresh token rotation. Done.
 - Add `current_user` dependency. Done.
 - Add role guard dependency. Done.
+- Add protected platform owner seed and role restoration. Done without committing a password.
+- Add local-only seeded test accounts for QA role coverage. Done; production use should keep `SEED_TEST_ACCOUNTS=false`.
 - Add security event table. Done.
 - Add role-protected admin overview. Done.
 - Add session/device management. Done for refresh-token sessions.

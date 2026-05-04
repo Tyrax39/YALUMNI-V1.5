@@ -1,19 +1,43 @@
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
+from app.core.database import SessionLocal
 from app.core.logging import RequestIdMiddleware, configure_logging
 from app.modules.alumni.router import router as alumni_router
+from app.modules.auth.platform_owner import ensure_platform_owner
 from app.modules.auth.router import router as auth_router
+from app.modules.auth.test_accounts import ensure_test_accounts, test_accounts_allowed
 from app.modules.system.router import router as system_router
 
 settings = get_settings()
 configure_logging()
 
+
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    if settings.platform_owner_password:
+        db = SessionLocal()
+        try:
+            ensure_platform_owner(db, settings.platform_owner_password)
+            if settings.seed_test_accounts:
+                if not test_accounts_allowed(settings.app_env):
+                    raise RuntimeError("SEED_TEST_ACCOUNTS is only allowed in local/test envs")
+                ensure_test_accounts(db, settings.test_accounts_password)
+        finally:
+            db.close()
+
+    yield
+
+
 app = FastAPI(
     title=settings.app_name,
     version="0.1.0",
     description="API foundation for the YALI Alumni Platform rebuild.",
+    lifespan=lifespan,
 )
 
 app.add_middleware(

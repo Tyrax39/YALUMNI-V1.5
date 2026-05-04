@@ -154,3 +154,31 @@ class VerificationRequestResponse(BaseModel):
 
 class VerificationRequestListResponse(BaseModel):
     requests: list[VerificationRequestResponse]
+
+
+class AlumniDirectoryProgramResponse(BaseModel):
+    program_name: str
+    cohort_year: int | None
+    country: str | None
+    city: str | None
+    status: str
+
+
+class AlumniDirectoryProfileResponse(BaseModel):
+    user_id: uuid.UUID
+    display_name: str
+    email: str | None
+    headline: str | None
+    country: str | None
+    city: str | None
+    sector: str | None
+    organization: str | None
+    job_title: str | None
+    skills: list[str]
+    program_affiliations: list[AlumniDirectoryProgramResponse]
+    profile_completed_at: datetime | None
+
+
+class AlumniDirectorySearchResponse(BaseModel):
+    profiles: list[AlumniDirectoryProfileResponse]
+    total: int
