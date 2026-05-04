@@ -17,14 +17,25 @@ from app.core.security import (
     verify_password,
 )
 from app.modules.auth.dependencies import get_current_user
-from app.modules.auth.models import AuthSession, Role, RoleAssignment, SecurityEvent, User
+from app.modules.auth.models import (
+    AccountToken,
+    AuthSession,
+    Role,
+    RoleAssignment,
+    SecurityEvent,
+    User,
+)
 from app.modules.auth.schemas import (
     AuthResponse,
     AuthUser,
+    DevTokenResponse,
+    ForgotPasswordRequest,
     LoginRequest,
     LogoutRequest,
     RefreshRequest,
     RegisterRequest,
+    ResetPasswordRequest,
+    VerifyEmailRequest,
 )
 
 router = APIRouter()
@@ -83,10 +94,52 @@ def _create_security_event(
     )
 
 
+def _is_local_environment() -> bool:
+    return get_settings().app_env.lower() in {"local", "development", "dev", "test"}
+
+
 def _is_expired(expires_at: datetime) -> bool:
     if expires_at.tzinfo is None:
         expires_at = expires_at.replace(tzinfo=UTC)
     return expires_at <= utcnow()
+
+
+def _create_account_token(
+    db: Session,
+    user: User,
+    purpose: str,
+    expires_at: datetime,
+) -> str:
+    token = create_refresh_token()
+    db.add(
+        AccountToken(
+            user_id=user.id,
+            token_hash=hash_token(token),
+            purpose=purpose,
+            expires_at=expires_at,
+        )
+    )
+    return token
+
+
+def _get_valid_account_token(db: Session, token: str, purpose: str) -> AccountToken:
+    account_token = db.scalar(
+        select(AccountToken).where(
+            AccountToken.token_hash == hash_token(token),
+            AccountToken.purpose == purpose,
+        )
+    )
+    if (
+        not account_token
+        or account_token.consumed_at
+        or _is_expired(account_token.expires_at)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired token",
+        )
+
+    return account_token
 
 
 def _issue_auth_response(
@@ -94,6 +147,7 @@ def _issue_auth_response(
     request: Request,
     user: User,
     event_type: str,
+    dev_email_verification_token: str | None = None,
 ) -> AuthResponse:
     settings = get_settings()
     refresh_token = create_refresh_token()
@@ -118,6 +172,7 @@ def _issue_auth_response(
         refresh_token=refresh_token,
         expires_in=settings.jwt_access_token_minutes * 60,
         user=_serialize_user(user),
+        dev_email_verification_token=dev_email_verification_token,
     )
 
 
@@ -148,7 +203,21 @@ def register(
     db.add(RoleAssignment(user_id=user.id, role_id=role.id))
     db.flush()
 
-    return _issue_auth_response(db, request, user, "auth.registered")
+    settings = get_settings()
+    verification_token = _create_account_token(
+        db,
+        user,
+        "email_verification",
+        utcnow() + timedelta(hours=settings.email_verification_token_hours),
+    )
+
+    return _issue_auth_response(
+        db,
+        request,
+        user,
+        "auth.registered",
+        dev_email_verification_token=verification_token if _is_local_environment() else None,
+    )
 
 
 @router.post("/login", response_model=AuthResponse)
@@ -215,3 +284,75 @@ def logout(
 @router.get("/me", response_model=AuthUser)
 def me(current_user: Annotated[User, Depends(get_current_user)]) -> AuthUser:
     return _serialize_user(current_user)
+
+
+@router.post("/password/forgot", response_model=DevTokenResponse)
+def forgot_password(
+    payload: ForgotPasswordRequest,
+    request: Request,
+    db: Annotated[Session, Depends(get_db_session)],
+) -> DevTokenResponse:
+    settings = get_settings()
+    user = db.scalar(select(User).where(User.email == payload.email))
+    dev_token: str | None = None
+
+    if user and user.status == "ACTIVE":
+        token = _create_account_token(
+            db,
+            user,
+            "password_reset",
+            utcnow() + timedelta(minutes=settings.password_reset_token_minutes),
+        )
+        _create_security_event(db, request, user, "auth.password_reset_requested")
+        dev_token = token if _is_local_environment() else None
+
+    db.commit()
+    return DevTokenResponse(
+        message=(
+            "If an active account exists for that email, "
+            "password reset instructions were sent."
+        ),
+        dev_token=dev_token,
+    )
+
+
+@router.post("/password/reset", response_model=DevTokenResponse)
+def reset_password(
+    payload: ResetPasswordRequest,
+    request: Request,
+    db: Annotated[Session, Depends(get_db_session)],
+) -> DevTokenResponse:
+    account_token = _get_valid_account_token(db, payload.token, "password_reset")
+    user = account_token.user
+    user.password_hash = hash_password(payload.new_password)
+    account_token.consumed_at = utcnow()
+
+    active_sessions = db.scalars(
+        select(AuthSession).where(
+            AuthSession.user_id == user.id,
+            AuthSession.revoked_at.is_(None),
+        )
+    )
+    for session in active_sessions:
+        session.revoked_at = utcnow()
+
+    _create_security_event(db, request, user, "auth.password_reset_completed")
+    db.commit()
+    return DevTokenResponse(message="Password reset completed.")
+
+
+@router.post("/email/verify", response_model=AuthUser)
+def verify_email(
+    payload: VerifyEmailRequest,
+    request: Request,
+    db: Annotated[Session, Depends(get_db_session)],
+) -> AuthUser:
+    account_token = _get_valid_account_token(db, payload.token, "email_verification")
+    user = account_token.user
+    if user.email_verified_at is None:
+        user.email_verified_at = utcnow()
+    account_token.consumed_at = utcnow()
+    _create_security_event(db, request, user, "auth.email_verified")
+    db.commit()
+    db.refresh(user)
+    return _serialize_user(user)

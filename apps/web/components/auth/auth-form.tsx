@@ -24,6 +24,12 @@ function storeAuth(response: AuthResponse) {
   window.localStorage.setItem("yalumni.accessToken", response.access_token);
   window.localStorage.setItem("yalumni.refreshToken", response.refresh_token);
   window.localStorage.setItem("yalumni.user", JSON.stringify(response.user));
+  if (response.dev_email_verification_token) {
+    window.localStorage.setItem(
+      "yalumni.emailVerificationToken",
+      response.dev_email_verification_token
+    );
+  }
 }
 
 export function AuthForm({ mode }: AuthFormProps) {
@@ -153,6 +159,13 @@ export function AuthForm({ mode }: AuthFormProps) {
           {isRegister ? "Sign in" : "Create an account"}
         </Link>
       </p>
+      {!isRegister ? (
+        <p className="mt-3 text-center text-sm">
+          <Link className="font-semibold text-primary hover:underline" href="/forgot-password">
+            Forgot password?
+          </Link>
+        </p>
+      ) : null}
     </form>
   );
 }

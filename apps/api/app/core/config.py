@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     jwt_secret_key: str = "change-me"
     jwt_access_token_minutes: int = 15
     jwt_refresh_token_days: int = 30
+    email_verification_token_hours: int = 24
+    password_reset_token_minutes: int = 30
     password_hash_scheme: str = "argon2id"
     cors_origins: str = (
         "http://localhost:3000,http://127.0.0.1:3000,"

@@ -312,6 +312,34 @@ Remaining Phase 2 gaps:
 - Session/device management UI.
 - Rate limits for login and password reset.
 
+## Current V1.5 Implementation Update: 2026-05-04 Account Recovery Slice
+
+Completed after the auth foundation:
+
+- One-time account token storage was added through `account_tokens`.
+- Email verification endpoint and web confirmation panel were added.
+- Forgot-password and reset-password endpoints were added.
+- Local development reset and verification links are exposed only through dev-token responses until an email provider is wired.
+- Password reset now changes the password hash and revokes active sessions.
+- Login/register UI now links into the recovery and verification flows.
+- API tests cover email verification, token reuse prevention, password reset, old-password rejection, new-password login, and unknown-email privacy.
+
+Current plan position:
+
+- Phase 1 remains functionally complete for the local foundation.
+- Phase 2 is now roughly 60% complete.
+- Overall 24-week MVP implementation is roughly 11% complete.
+
+Remaining Phase 2 gaps:
+
+- Secure HttpOnly cookie auth strategy.
+- Full route guards for dashboard/admin surfaces.
+- Role-aware admin access and initial admin seeding.
+- Session/device management UI and API.
+- Admin 2FA requirement or placeholder policy.
+- Login/password-reset rate limiting.
+- Real email provider integration and branded email templates.
+
 ## Immediate Next Implementations
 
 The next engineering task after this foundation should be auth and identity:

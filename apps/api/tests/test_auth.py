@@ -130,3 +130,67 @@ def test_invalid_login_and_missing_bearer_token_are_rejected(client: TestClient)
 
     me_response = client.get("/api/v1/auth/me")
     assert me_response.status_code == 401
+
+
+def test_email_verification_marks_user_verified_and_rejects_reuse(client: TestClient) -> None:
+    registered = register_user(client, email="verify@example.com")
+    verification_token = registered["dev_email_verification_token"]
+
+    verify_response = client.post(
+        "/api/v1/auth/email/verify",
+        json={"token": verification_token},
+    )
+    assert verify_response.status_code == 200
+    assert verify_response.json()["email_verified_at"] is not None
+
+    reused_response = client.post(
+        "/api/v1/auth/email/verify",
+        json={"token": verification_token},
+    )
+    assert reused_response.status_code == 400
+
+
+def test_password_forgot_reset_and_login_with_new_password(client: TestClient) -> None:
+    register_user(client, email="reset@example.com")
+
+    forgot_response = client.post(
+        "/api/v1/auth/password/forgot",
+        json={"email": "reset@example.com"},
+    )
+    assert forgot_response.status_code == 200
+    reset_token = forgot_response.json()["dev_token"]
+    assert reset_token
+
+    reset_response = client.post(
+        "/api/v1/auth/password/reset",
+        json={"token": reset_token, "new_password": "NewSecurePass123!"},
+    )
+    assert reset_response.status_code == 200
+
+    old_login = client.post(
+        "/api/v1/auth/login",
+        json={"email": "reset@example.com", "password": "SecurePass123!"},
+    )
+    assert old_login.status_code == 401
+
+    new_login = client.post(
+        "/api/v1/auth/login",
+        json={"email": "reset@example.com", "password": "NewSecurePass123!"},
+    )
+    assert new_login.status_code == 200
+
+    reused_reset = client.post(
+        "/api/v1/auth/password/reset",
+        json={"token": reset_token, "new_password": "AnotherSecurePass123!"},
+    )
+    assert reused_reset.status_code == 400
+
+
+def test_password_forgot_does_not_disclose_unknown_email(client: TestClient) -> None:
+    forgot_response = client.post(
+        "/api/v1/auth/password/forgot",
+        json={"email": "missing@example.com"},
+    )
+
+    assert forgot_response.status_code == 200
+    assert forgot_response.json()["dev_token"] is None

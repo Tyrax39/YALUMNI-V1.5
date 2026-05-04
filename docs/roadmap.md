@@ -18,10 +18,13 @@ Status: started.
 - User/session models. Implemented.
 - JWT access and refresh tokens. Implemented.
 - Register/login/logout. Implemented.
-- Email verification.
-- Password reset.
+- Email verification. Implemented API and local web flow.
+- Password reset. Implemented API and local web flow.
 - Role baseline. Started with global `UNVERIFIED_USER` assignment.
 - Protected web route behavior. Started with API-backed dashboard session panel.
+- Session/device management.
+- Secure cookie auth hardening.
+- Admin 2FA requirement.
 
 ## Phase 3: Alumni Profiles And Verification
 

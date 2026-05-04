@@ -43,6 +43,29 @@ class LogoutRequest(BaseModel):
     refresh_token: str = Field(min_length=32)
 
 
+class ForgotPasswordRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=320)
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        return value.strip().lower()
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(min_length=32)
+    new_password: str = Field(min_length=10, max_length=128)
+
+
+class VerifyEmailRequest(BaseModel):
+    token: str = Field(min_length=32)
+
+
+class DevTokenResponse(BaseModel):
+    message: str
+    dev_token: str | None = None
+
+
 class AuthUser(BaseModel):
     id: uuid.UUID
     email: str
@@ -62,3 +85,4 @@ class AuthResponse(BaseModel):
     token_type: str = "bearer"
     expires_in: int
     user: AuthUser
+    dev_email_verification_token: str | None = None

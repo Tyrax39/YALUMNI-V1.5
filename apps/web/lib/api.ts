@@ -15,6 +15,7 @@ export type AuthResponse = {
   token_type: "bearer";
   expires_in: number;
   user: AuthUser;
+  dev_email_verification_token: string | null;
 };
 
 export type RegisterPayload = {
@@ -30,7 +31,12 @@ export type LoginPayload = {
   password: string;
 };
 
-const fallbackApiBaseUrl = "http://127.0.0.1:8001";
+export type DevTokenResponse = {
+  message: string;
+  dev_token: string | null;
+};
+
+const fallbackApiBaseUrl = "http://127.0.0.1:8002";
 
 export const apiBaseUrl =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ?? fallbackApiBaseUrl;
@@ -106,6 +112,27 @@ export function getMe(accessToken: string): Promise<AuthUser> {
 export function logout(refreshToken: string): Promise<void> {
   return apiFetch<void>("/api/v1/auth/logout", {
     body: JSON.stringify({ refresh_token: refreshToken }),
+    method: "POST"
+  });
+}
+
+export function forgotPassword(email: string): Promise<DevTokenResponse> {
+  return apiFetch<DevTokenResponse>("/api/v1/auth/password/forgot", {
+    body: JSON.stringify({ email }),
+    method: "POST"
+  });
+}
+
+export function resetPassword(token: string, newPassword: string): Promise<DevTokenResponse> {
+  return apiFetch<DevTokenResponse>("/api/v1/auth/password/reset", {
+    body: JSON.stringify({ new_password: newPassword, token }),
+    method: "POST"
+  });
+}
+
+export function verifyEmail(token: string): Promise<AuthUser> {
+  return apiFetch<AuthUser>("/api/v1/auth/email/verify", {
+    body: JSON.stringify({ token }),
     method: "POST"
   });
 }

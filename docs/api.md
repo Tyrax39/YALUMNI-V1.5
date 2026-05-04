@@ -16,14 +16,20 @@ POST /api/v1/auth/login
 POST /api/v1/auth/refresh
 POST /api/v1/auth/logout
 GET  /api/v1/auth/me
+POST /api/v1/auth/password/forgot
+POST /api/v1/auth/password/reset
+POST /api/v1/auth/email/verify
 ```
 
 ## Phase 2: Auth
 
+Remaining auth endpoints:
+
 ```text
-POST /api/v1/auth/password/forgot
-POST /api/v1/auth/password/reset
-POST /api/v1/auth/email/verify
+POST /api/v1/auth/2fa/setup
+POST /api/v1/auth/2fa/verify
+GET  /api/v1/auth/sessions
+DELETE /api/v1/auth/sessions/{session_id}
 ```
 
 ## Phase 3: Alumni

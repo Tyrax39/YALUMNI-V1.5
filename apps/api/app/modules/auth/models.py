@@ -94,6 +94,23 @@ class AuthSession(Base, TimestampMixin):
     user: Mapped[User] = relationship(back_populates="sessions")
 
 
+class AccountToken(Base, TimestampMixin):
+    __tablename__ = "account_tokens"
+    __table_args__ = (
+        Index("ix_account_tokens_hash_purpose", "token_hash", "purpose"),
+        Index("ix_account_tokens_user_purpose", "user_id", "purpose"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    token_hash: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
+    purpose: Mapped[str] = mapped_column(String(60), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    user: Mapped[User] = relationship()
+
+
 class SecurityEvent(Base, TimestampMixin):
     __tablename__ = "security_events"
     __table_args__ = (Index("ix_security_events_user_created", "user_id", "created_at"),)
