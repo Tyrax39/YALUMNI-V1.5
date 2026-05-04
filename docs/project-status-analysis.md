@@ -533,6 +533,65 @@ Next possible implementation slices:
 - Dedicated admin audit log viewer.
 - Admin 2FA policy placeholder and enforcement gate.
 
+## Current V1.5 Implementation Update: 2026-05-05 Verification Evidence Slice
+
+Completed after platform owner and directory search:
+
+- Verification evidence SQLAlchemy model and Alembic migration `20260505_0005` were added.
+- Member upload API was added at `/api/v1/alumni/me/verification-requests/{request_id}/evidence`.
+- Evidence download API was added at `/api/v1/alumni/verification-requests/{request_id}/evidence/{evidence_id}/download`.
+- Upload validation now allows PDF, JPEG, PNG, and WebP evidence files with a configurable 5 MB MVP limit.
+- Local storage is configured through `VERIFICATION_UPLOAD_DIR`; this is an abstraction point for future private object storage.
+- Verification request responses now include attached evidence metadata.
+- Dashboard verification panel now lets members upload and view attached evidence metadata.
+- Admin verification queue now displays evidence counts and metadata and can open authenticated evidence files.
+- Evidence uploads to `MORE_INFO_REQUESTED` requests now re-queue the request for admin review.
+- API tests cover member evidence upload, invalid content-type rejection, member download, admin download, and the more-info requeue loop.
+
+Current plan position:
+
+- Phase 1 remains functionally complete for local foundation.
+- Phase 2 remains roughly 89% complete.
+- Phase 3 is now roughly 44% complete because evidence upload/review has started.
+- Phase 4 remains roughly 18% complete.
+- Overall 24-week MVP implementation is roughly 24% complete.
+
+Implemented now:
+
+- Native landing page.
+- Monorepo foundation, CI, docs, Docker Compose.
+- FastAPI health/status and request middleware.
+- Identity auth, refresh sessions, account recovery, email verification, protected platform owner, role-gated admin overview, session management, and MVP-local rate limiting.
+- Local-only test-account seeding for role and directory QA.
+- Protected dashboard/admin route behavior.
+- Alumni current-user profile model/API/UI.
+- Program affiliation model/API/UI.
+- Verification request submission, member status history, admin queue, review actions, alumni-member role grant, and local evidence upload/review.
+- Verified member directory search and profile detail with privacy-aware serializers.
+
+Main gaps now:
+
+- Auth still uses local-storage bearer tokens in the web app; production should move to HttpOnly cookies and SSR/middleware guards.
+- Admin 2FA is still not implemented.
+- Real email provider/templates are not wired.
+- Evidence storage is local-only; production object storage, malware scanning, signed URLs, and retention policy are still missing.
+- Directory search is database-backed MVP search, not Meilisearch/OpenSearch.
+- Public profile pages, saved searches, pagination UI, and advanced filters are not implemented.
+- Test accounts are local/dev seed data only; there is no production-safe demo identity lifecycle yet.
+- Profile photo upload is not implemented.
+- Skills are stored as MVP JSON rather than normalized skill tables.
+- Dedicated audit log viewer is not implemented; audit data currently lands in `security_events`.
+- Redis-backed rate limiting and background jobs are not wired yet.
+
+Next possible implementation slices:
+
+- Profile photo upload and media pipeline foundation.
+- Secure cookie auth migration and route middleware.
+- Directory pagination/advanced filters and profile detail page.
+- Dedicated admin audit log viewer.
+- Production object-storage adapter for verification evidence.
+- Admin 2FA policy placeholder and enforcement gate.
+
 ## Current V1.5 Implementation Update: 2026-05-04 Platform Owner And Directory Slice
 
 Completed after verification workflow:

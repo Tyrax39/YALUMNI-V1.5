@@ -157,6 +157,7 @@ export type VerificationRequest = {
   reviewed_at: string | null;
   created_at: string;
   updated_at: string;
+  evidence: VerificationEvidence[];
 };
 
 export type VerificationRequestListResponse = {
@@ -169,6 +170,17 @@ export type VerificationRequestPayload = {
 };
 
 export type VerificationReviewAction = "approve" | "reject" | "request-info";
+
+export type VerificationEvidence = {
+  id: string;
+  label: string | null;
+  file_name: string;
+  content_type: string;
+  file_size_bytes: number;
+  storage_provider: string;
+  uploaded_by_user_id: string | null;
+  created_at: string;
+};
 
 export type AlumniDirectoryProgram = {
   program_name: string;
@@ -239,10 +251,11 @@ async function readError(response: Response): Promise<string> {
 }
 
 async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const hasFormDataBody = typeof FormData !== "undefined" && init.body instanceof FormData;
   const response = await fetch(`${apiBaseUrl}${path}`, {
     ...init,
     headers: {
-      "Content-Type": "application/json",
+      ...(hasFormDataBody ? {} : { "Content-Type": "application/json" }),
       ...init.headers
     }
   });
@@ -421,6 +434,46 @@ export function reviewVerificationRequest(
       method: "POST"
     }
   );
+}
+
+export function uploadVerificationEvidence(
+  accessToken: string,
+  requestId: string,
+  payload: { file: File; label?: string | null }
+): Promise<VerificationEvidence> {
+  const formData = new FormData();
+  formData.set("file", payload.file);
+  if (payload.label) {
+    formData.set("label", payload.label);
+  }
+
+  return apiFetch<VerificationEvidence>(
+    `/api/v1/alumni/me/verification-requests/${requestId}/evidence`,
+    {
+      body: formData,
+      headers: authHeaders(accessToken),
+      method: "POST"
+    }
+  );
+}
+
+export async function downloadVerificationEvidence(
+  accessToken: string,
+  requestId: string,
+  evidenceId: string
+): Promise<Blob> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/v1/alumni/verification-requests/${requestId}/evidence/${evidenceId}/download`,
+    {
+      headers: authHeaders(accessToken)
+    }
+  );
+
+  if (!response.ok) {
+    throw new ApiError(await readError(response), response.status);
+  }
+
+  return response.blob();
 }
 
 export function searchAlumniDirectory(

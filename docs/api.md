@@ -29,6 +29,8 @@ POST /api/v1/alumni/me/program-affiliations
 DELETE /api/v1/alumni/me/program-affiliations/{affiliation_id}
 GET  /api/v1/alumni/me/verification-requests
 POST /api/v1/alumni/me/verification-requests
+POST /api/v1/alumni/me/verification-requests/{request_id}/evidence
+GET  /api/v1/alumni/verification-requests/{request_id}/evidence/{evidence_id}/download
 GET  /api/v1/alumni/admin/verification-requests
 POST /api/v1/alumni/admin/verification-requests/{request_id}/approve
 POST /api/v1/alumni/admin/verification-requests/{request_id}/reject
@@ -36,6 +38,10 @@ POST /api/v1/alumni/admin/verification-requests/{request_id}/request-info
 GET  /api/v1/alumni/search
 GET  /api/v1/alumni/{user_id}
 ```
+
+Evidence uploads accept PDF, JPEG, PNG, and WebP files. Uploading evidence to a
+`MORE_INFO_REQUESTED` verification request returns it to `PENDING_REVIEW` so
+admins can continue the review loop.
 
 ## Phase 2: Auth
 
@@ -51,7 +57,7 @@ POST /api/v1/auth/2fa/verify
 ```text
 GET    /api/v1/alumni
 PATCH  /api/v1/alumni/me/visibility
-POST   /api/v1/alumni/me/verification-documents
+POST   /api/v1/alumni/me/profile-photo
 ```
 
 ## Phase 4: Communities

@@ -16,6 +16,7 @@
 - Email verification before sensitive member features.
 - Optional 2FA for users, required for privileged roles.
 - Rate limits for login, password reset, search, messaging, and vote submission.
+- Verification evidence downloads require the submitting member or a privileged admin role.
 
 ## Privacy Requirements
 
@@ -68,4 +69,11 @@ Users must control visibility of:
 - Add role-protected admin overview. Done.
 - Add session/device management. Done for refresh-token sessions.
 - Add auth rate limits. Done in-process for login, password reset, and local admin bootstrap.
+- Add verification evidence upload/download authorization. Done for local MVP storage.
 - Add tests for auth denial and basic IDOR prevention.
+
+## File Storage Controls
+
+- Current verification evidence storage is local-only for MVP development.
+- Production should move verification files to private object storage.
+- Evidence URLs should be short-lived, permission checked, and never public bucket URLs.

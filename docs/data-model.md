@@ -30,7 +30,7 @@
 - `interests`
 - `alumni_interests`
 - `verification_requests` - implemented with profile snapshot, status, submitted note, reviewer note, reviewer, and review timestamp.
-- `verification_documents`
+- `verification_evidence` - implemented as request-scoped local evidence metadata for MVP uploads.
 
 ### Communities
 
@@ -155,7 +155,7 @@ Completed alumni profile basics:
 - `program_affiliations`
 - `verification_requests`
 
-Next add upload and audit depth:
+Next add production storage and audit depth:
 
-- `verification_documents`
+- Private object-storage adapter for `verification_evidence`
 - `audit_logs` or a scoped verification event table

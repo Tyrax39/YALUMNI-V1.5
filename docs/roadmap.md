@@ -40,7 +40,7 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
 - Verification request model and current-user submission. Implemented.
 - Admin verification queue and approve/reject/request-info actions. Implemented.
 - Audit events. Started through `security_events`.
-- Verification documents and uploads.
+- Verification documents and uploads. Started with local evidence storage and authenticated admin/member downloads.
 - Dedicated audit log viewer.
 
 ## Phase 4: Directory And Search

@@ -135,6 +135,17 @@ class VerificationReviewAction(BaseModel):
         return value or None
 
 
+class VerificationEvidenceResponse(BaseModel):
+    id: uuid.UUID
+    label: str | None
+    file_name: str
+    content_type: str
+    file_size_bytes: int
+    storage_provider: str
+    uploaded_by_user_id: uuid.UUID | None
+    created_at: datetime
+
+
 class VerificationRequestResponse(BaseModel):
     id: uuid.UUID
     profile_id: uuid.UUID
@@ -150,6 +161,7 @@ class VerificationRequestResponse(BaseModel):
     reviewed_at: datetime | None
     created_at: datetime
     updated_at: datetime
+    evidence: list[VerificationEvidenceResponse]
 
 
 class VerificationRequestListResponse(BaseModel):

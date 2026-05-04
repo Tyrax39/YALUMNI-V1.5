@@ -28,9 +28,11 @@ class Settings(BaseSettings):
     platform_owner_password: str | None = None
     seed_test_accounts: bool = False
     test_accounts_password: str = "YalumniTest@12345!"
+    verification_upload_dir: str = ".local/uploads/verification"
+    verification_upload_max_bytes: int = 5 * 1024 * 1024
+    verification_upload_allowed_types: str = "application/pdf,image/jpeg,image/png,image/webp"
     cors_origins: str = (
-        "http://localhost:3000,http://127.0.0.1:3000,"
-        "http://localhost:3010,http://127.0.0.1:3010"
+        "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3010,http://127.0.0.1:3010"
     )
     sentry_dsn: str | None = None
 

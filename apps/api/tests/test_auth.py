@@ -185,9 +185,7 @@ def test_platform_owner_seed_restores_god_mode_roles() -> None:
         owner_id = owner.id
         owner.status = "SUSPENDED"
         db.execute(
-            delete(auth_models.RoleAssignment).where(
-                auth_models.RoleAssignment.user_id == owner.id
-            )
+            delete(auth_models.RoleAssignment).where(auth_models.RoleAssignment.user_id == owner.id)
         )
         db.commit()
 
@@ -245,9 +243,7 @@ def test_test_account_seed_creates_role_shaped_local_accounts() -> None:
         )
         assert profile is not None
         assert profile.visibility["email"] is False
-        assert profile.program_affiliations[0].program_name == (
-            "YALI Regional Leadership Center"
-        )
+        assert profile.program_affiliations[0].program_name == ("YALI Regional Leadership Center")
 
         ensure_test_accounts(db, "RotatedTestPass123!")
         total_users = db.scalar(select(func.count(auth_models.User.id)))
@@ -591,6 +587,43 @@ def test_verification_request_admin_approval_grants_alumni_role(
     verification_request = submit_response.json()
     assert verification_request["status"] == "PENDING_REVIEW"
     assert verification_request["profile_snapshot"]["completion_percentage"] == 100
+    assert verification_request["evidence"] == []
+
+    evidence_response = client.post(
+        f"/api/v1/alumni/me/verification-requests/{verification_request['id']}/evidence",
+        headers=member_headers,
+        data={"label": "YALI certificate"},
+        files={
+            "file": (
+                "certificate.pdf",
+                b"%PDF-1.4\nYALUMNI verification evidence\n",
+                "application/pdf",
+            )
+        },
+    )
+    assert evidence_response.status_code == 201
+    evidence = evidence_response.json()
+    assert evidence["label"] == "YALI certificate"
+    assert evidence["file_name"] == "certificate.pdf"
+    assert evidence["content_type"] == "application/pdf"
+    assert evidence["file_size_bytes"] > 0
+
+    evidence_download = client.get(
+        (
+            f"/api/v1/alumni/verification-requests/{verification_request['id']}"
+            f"/evidence/{evidence['id']}/download"
+        ),
+        headers=member_headers,
+    )
+    assert evidence_download.status_code == 200
+    assert evidence_download.content.startswith(b"%PDF-1.4")
+
+    rejected_evidence = client.post(
+        f"/api/v1/alumni/me/verification-requests/{verification_request['id']}/evidence",
+        headers=member_headers,
+        files={"file": ("notes.txt", b"plain text", "text/plain")},
+    )
+    assert rejected_evidence.status_code == 415
 
     duplicate_response = client.post(
         "/api/v1/alumni/me/verification-requests",
@@ -617,6 +650,16 @@ def test_verification_request_admin_approval_grants_alumni_role(
     assert queue_response.status_code == 200
     queue = queue_response.json()["requests"]
     assert queue[0]["id"] == verification_request["id"]
+    assert queue[0]["evidence"][0]["label"] == "YALI certificate"
+
+    admin_evidence_download = client.get(
+        (
+            f"/api/v1/alumni/verification-requests/{verification_request['id']}"
+            f"/evidence/{evidence['id']}/download"
+        ),
+        headers=admin_headers,
+    )
+    assert admin_evidence_download.status_code == 200
 
     approve_response = client.post(
         f"/api/v1/alumni/admin/verification-requests/{verification_request['id']}/approve",
@@ -685,3 +728,35 @@ def test_verification_admin_can_request_more_information(client: TestClient) -> 
 
     assert info_response.status_code == 200
     assert info_response.json()["status"] == "MORE_INFO_REQUESTED"
+
+    evidence_response = client.post(
+        f"/api/v1/alumni/me/verification-requests/{verification_request['id']}/evidence",
+        headers=auth_headers(registered["access_token"]),
+        data={"label": "Updated cohort proof"},
+        files={
+            "file": (
+                "updated-cohort.pdf",
+                b"%PDF-1.4\nUpdated verification evidence\n",
+                "application/pdf",
+            )
+        },
+    )
+    assert evidence_response.status_code == 201
+
+    queue_response = client.get(
+        "/api/v1/alumni/admin/verification-requests",
+        headers=admin_headers,
+    )
+    assert queue_response.status_code == 200
+    queued_request = queue_response.json()["requests"][0]
+    assert queued_request["id"] == verification_request["id"]
+    assert queued_request["status"] == "PENDING_REVIEW"
+    assert queued_request["evidence"][0]["label"] == "Updated cohort proof"
+
+    approve_response = client.post(
+        f"/api/v1/alumni/admin/verification-requests/{verification_request['id']}/approve",
+        headers=admin_headers,
+        json={"reviewer_note": "Updated evidence is clear."},
+    )
+    assert approve_response.status_code == 200
+    assert approve_response.json()["status"] == "APPROVED"

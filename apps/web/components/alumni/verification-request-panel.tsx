@@ -8,6 +8,7 @@ import {
   getMyAlumniProfile,
   getMyVerificationRequests,
   submitVerificationRequest,
+  uploadVerificationEvidence,
   VerificationRequest
 } from "@/lib/api";
 
@@ -27,8 +28,12 @@ type VerificationState =
 export function VerificationRequestPanel({ accessToken }: VerificationRequestPanelProps) {
   const [state, setState] = useState<VerificationState>({ status: "loading" });
   const [submittedNote, setSubmittedNote] = useState("");
+  const [evidenceLabel, setEvidenceLabel] = useState("");
+  const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploadingEvidence, setIsUploadingEvidence] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [evidenceMessage, setEvidenceMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -65,6 +70,9 @@ export function VerificationRequestPanel({ accessToken }: VerificationRequestPan
   }, [state]);
 
   const hasPendingRequest = latestRequest?.status === "PENDING_REVIEW";
+  const canUploadEvidence =
+    latestRequest?.status === "PENDING_REVIEW" ||
+    latestRequest?.status === "MORE_INFO_REQUESTED";
   const canSubmit =
     state.status === "ready" &&
     state.profile.completion_percentage === 100 &&
@@ -99,6 +107,41 @@ export function VerificationRequestPanel({ accessToken }: VerificationRequestPan
       });
     } finally {
       setIsSubmitting(false);
+    }
+  }
+
+  async function handleEvidenceUpload(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (state.status !== "ready" || !latestRequest || !evidenceFile) {
+      return;
+    }
+
+    setIsUploadingEvidence(true);
+    setEvidenceMessage(null);
+    try {
+      const evidence = await uploadVerificationEvidence(accessToken, latestRequest.id, {
+        file: evidenceFile,
+        label: evidenceLabel
+      });
+      setState({
+        status: "ready",
+        profile: state.profile,
+        requests: state.requests.map((request) =>
+          request.id === latestRequest.id
+            ? { ...request, evidence: [evidence, ...request.evidence] }
+            : request
+        )
+      });
+      setEvidenceFile(null);
+      setEvidenceLabel("");
+      setEvidenceMessage("Evidence uploaded.");
+      event.currentTarget.reset();
+    } catch (caught) {
+      setEvidenceMessage(
+        caught instanceof ApiError ? caught.message : "Evidence file could not be uploaded."
+      );
+    } finally {
+      setIsUploadingEvidence(false);
     }
   }
 
@@ -161,7 +204,63 @@ export function VerificationRequestPanel({ accessToken }: VerificationRequestPan
                     {latestRequest.reviewer_note}
                   </p>
                 ) : null}
+                <EvidenceList evidence={latestRequest.evidence} />
               </article>
+            ) : null}
+
+            {latestRequest ? (
+              <form
+                className="grid gap-3 rounded-lg border border-border bg-surface p-4"
+                onSubmit={handleEvidenceUpload}
+              >
+                <div>
+                  <h3 className="font-display text-lg font-semibold text-ink">
+                    Verification evidence
+                  </h3>
+                  <p className="mt-1 text-sm leading-6 text-muted">
+                    Add a PDF or image that helps admins confirm your YALI program or chapter
+                    record.
+                  </p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-[0.85fr_1fr]">
+                  <label className="grid gap-2 text-sm font-semibold text-ink">
+                    Evidence label
+                    <input
+                      className="h-11 rounded-lg border border-border bg-white px-4 text-sm font-normal text-ink outline-none transition focus:border-primary"
+                      maxLength={120}
+                      onChange={(event) => setEvidenceLabel(event.target.value)}
+                      placeholder="Certificate, cohort letter, badge"
+                      value={evidenceLabel}
+                    />
+                  </label>
+                  <label className="grid gap-2 text-sm font-semibold text-ink">
+                    File
+                    <input
+                      accept="application/pdf,image/jpeg,image/png,image/webp"
+                      className="h-11 rounded-lg border border-border bg-white px-3 py-2 text-sm font-normal text-ink file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white"
+                      onChange={(event) => setEvidenceFile(event.target.files?.[0] ?? null)}
+                      type="file"
+                    />
+                  </label>
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    className="focus-ring rounded-lg bg-primary px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#003d7d] disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={!canUploadEvidence || !evidenceFile || isUploadingEvidence}
+                    type="submit"
+                  >
+                    {isUploadingEvidence ? "Uploading..." : "Upload evidence"}
+                  </button>
+                  <p className="text-sm font-semibold text-muted">
+                    {canUploadEvidence
+                      ? "PDF, JPEG, PNG, or WebP up to 5 MB."
+                      : "Evidence uploads are closed after final review."}
+                  </p>
+                  {evidenceMessage ? (
+                    <p className="text-sm font-semibold text-secondary">{evidenceMessage}</p>
+                  ) : null}
+                </div>
+              </form>
             ) : null}
 
             <form className="grid gap-3" onSubmit={handleSubmit}>
@@ -201,6 +300,32 @@ export function VerificationRequestPanel({ accessToken }: VerificationRequestPan
   );
 }
 
+function EvidenceList({ evidence }: { evidence: VerificationRequest["evidence"] }) {
+  if (evidence.length === 0) {
+    return (
+      <p className="mt-3 text-sm font-semibold text-muted">
+        No evidence files attached yet.
+      </p>
+    );
+  }
+
+  return (
+    <div className="mt-4 rounded-lg border border-border bg-white px-4 py-3">
+      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">
+        Attached evidence
+      </p>
+      <div className="mt-2 grid gap-2">
+        {evidence.map((item) => (
+          <div className="flex flex-wrap items-center justify-between gap-2 text-sm" key={item.id}>
+            <span className="font-semibold text-ink">{item.label || item.file_name}</span>
+            <span className="text-muted">{formatBytes(item.file_size_bytes)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function StatusMetric({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="rounded-lg border border-border bg-surface px-4 py-3">
@@ -208,6 +333,17 @@ function StatusMetric({ label, value }: { label: string; value: number | string 
       <p className="mt-1 font-display text-2xl font-bold text-primary">{value}</p>
     </div>
   );
+}
+
+function formatBytes(bytes: number) {
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+  if (bytes < 1024 * 1024) {
+    return `${Math.round(bytes / 1024)} KB`;
+  }
+
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function formatStatus(status?: string) {

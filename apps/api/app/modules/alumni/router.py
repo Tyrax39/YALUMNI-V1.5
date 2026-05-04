@@ -1,14 +1,30 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+    status,
+)
+from fastapi.responses import FileResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.core.database import get_db_session
-from app.core.permissions import GlobalRole
+from app.core.permissions import ADMIN_ROLE_NAMES, GlobalRole, has_any_role
 from app.core.security import utcnow
-from app.modules.alumni.models import AlumniProfile, ProgramAffiliation, VerificationRequest
+from app.modules.alumni.models import (
+    AlumniProfile,
+    ProgramAffiliation,
+    VerificationEvidence,
+    VerificationRequest,
+)
 from app.modules.alumni.schemas import (
     AlumniDirectoryProfileResponse,
     AlumniDirectoryProgramResponse,
@@ -16,11 +32,13 @@ from app.modules.alumni.schemas import (
     AlumniProfileResponse,
     AlumniProfileUpdate,
     ProgramAffiliationCreate,
+    VerificationEvidenceResponse,
     VerificationRequestCreate,
     VerificationRequestListResponse,
     VerificationRequestResponse,
     VerificationReviewAction,
 )
+from app.modules.alumni.storage import evidence_file_path, store_verification_file
 from app.modules.auth.dependencies import get_current_user, require_roles
 from app.modules.auth.models import Role, RoleAssignment, SecurityEvent, User
 
@@ -118,6 +136,25 @@ def _serialize_verification_request(
         reviewed_at=verification_request.reviewed_at,
         created_at=verification_request.created_at,
         updated_at=verification_request.updated_at,
+        evidence=[
+            _serialize_verification_evidence(evidence)
+            for evidence in verification_request.evidence_items
+        ],
+    )
+
+
+def _serialize_verification_evidence(
+    evidence: VerificationEvidence,
+) -> VerificationEvidenceResponse:
+    return VerificationEvidenceResponse(
+        id=evidence.id,
+        label=evidence.label,
+        file_name=evidence.file_name,
+        content_type=evidence.content_type,
+        file_size_bytes=evidence.file_size_bytes,
+        storage_provider=evidence.storage_provider,
+        uploaded_by_user_id=evidence.uploaded_by_user_id,
+        created_at=evidence.created_at,
     )
 
 
@@ -248,9 +285,8 @@ def _get_or_create_profile(db: Session, user: User) -> AlumniProfile:
 def _verification_request_options():
     return (
         joinedload(VerificationRequest.profile).joinedload(AlumniProfile.user),
-        joinedload(VerificationRequest.profile).selectinload(
-            AlumniProfile.program_affiliations
-        ),
+        joinedload(VerificationRequest.profile).selectinload(AlumniProfile.program_affiliations),
+        selectinload(VerificationRequest.evidence_items),
     )
 
 
@@ -264,6 +300,32 @@ def _get_verification_request_or_404(
         .where(VerificationRequest.id == verification_request_id)
     )
     if verification_request is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Verification request not found",
+        )
+
+    return verification_request
+
+
+def _user_role_names(user: User) -> set[str]:
+    return {assignment.role.name for assignment in user.role_assignments}
+
+
+def _can_access_verification_request(user: User, verification_request: VerificationRequest) -> bool:
+    return verification_request.profile.user_id == user.id or has_any_role(
+        _user_role_names(user),
+        ADMIN_ROLE_NAMES,
+    )
+
+
+def _get_accessible_verification_request_or_404(
+    db: Session,
+    verification_request_id: uuid.UUID,
+    user: User,
+) -> VerificationRequest:
+    verification_request = _get_verification_request_or_404(db, verification_request_id)
+    if not _can_access_verification_request(user, verification_request):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Verification request not found",
@@ -405,9 +467,7 @@ def search_alumni_directory(
 
     count_query = select(func.count()).select_from(query.subquery())
     total = db.scalar(count_query) or 0
-    profiles = db.scalars(
-        query.order_by(User.display_name.asc()).offset(offset).limit(limit)
-    ).all()
+    profiles = db.scalars(query.order_by(User.display_name.asc()).offset(offset).limit(limit)).all()
     return AlumniDirectorySearchResponse(
         profiles=[_serialize_directory_profile(profile) for profile in profiles],
         total=total,
@@ -494,6 +554,104 @@ def submit_my_verification_request(
     db.commit()
     verification_request = _get_verification_request_or_404(db, verification_request.id)
     return _serialize_verification_request(verification_request)
+
+
+@router.post(
+    "/me/verification-requests/{verification_request_id}/evidence",
+    response_model=VerificationEvidenceResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_my_verification_evidence(
+    verification_request_id: uuid.UUID,
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+    evidence_file: Annotated[UploadFile, File(alias="file")],
+    label: Annotated[str | None, Form(max_length=120)] = None,
+) -> VerificationEvidenceResponse:
+    verification_request = _get_accessible_verification_request_or_404(
+        db,
+        verification_request_id,
+        current_user,
+    )
+    if verification_request.profile.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Verification request not found",
+        )
+    if verification_request.status not in {"PENDING_REVIEW", "MORE_INFO_REQUESTED"}:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Evidence can only be added to pending or more-info verification requests",
+        )
+
+    evidence_id = uuid.uuid4()
+    stored_file = await store_verification_file(
+        evidence_id=evidence_id,
+        upload=evidence_file,
+        verification_request_id=verification_request.id,
+    )
+    evidence = VerificationEvidence(
+        id=evidence_id,
+        verification_request_id=verification_request.id,
+        uploaded_by_user_id=current_user.id,
+        label=label.strip() if label else None,
+        file_name=stored_file.file_name,
+        content_type=stored_file.content_type,
+        file_size_bytes=stored_file.file_size_bytes,
+        storage_provider=stored_file.storage_provider,
+        storage_key=stored_file.storage_key,
+    )
+    db.add(evidence)
+    if verification_request.status == "MORE_INFO_REQUESTED":
+        verification_request.status = PENDING_VERIFICATION_STATUS
+        verification_request.reviewed_by_user_id = None
+        verification_request.reviewed_at = None
+    _create_security_event(db, request, current_user, "alumni.verification_evidence_uploaded")
+    db.commit()
+    db.refresh(evidence)
+    return _serialize_verification_evidence(evidence)
+
+
+@router.get(
+    "/verification-requests/{verification_request_id}/evidence/{evidence_id}/download",
+    response_class=FileResponse,
+)
+def download_verification_evidence(
+    verification_request_id: uuid.UUID,
+    evidence_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> FileResponse:
+    verification_request = _get_accessible_verification_request_or_404(
+        db,
+        verification_request_id,
+        current_user,
+    )
+    evidence = db.scalar(
+        select(VerificationEvidence).where(
+            VerificationEvidence.id == evidence_id,
+            VerificationEvidence.verification_request_id == verification_request.id,
+        )
+    )
+    if evidence is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Evidence file not found",
+        )
+
+    file_path = evidence_file_path(evidence.storage_key)
+    if not file_path.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Evidence file not found",
+        )
+
+    return FileResponse(
+        file_path,
+        filename=evidence.file_name,
+        media_type=evidence.content_type,
+    )
 
 
 @router.get("/admin/verification-requests", response_model=VerificationRequestListResponse)

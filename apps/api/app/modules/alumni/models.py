@@ -94,3 +94,39 @@ class VerificationRequest(Base, TimestampMixin):
 
     profile: Mapped[AlumniProfile] = relationship(back_populates="verification_requests")
     reviewed_by_user: Mapped[User | None] = relationship()
+    evidence_items: Mapped[list["VerificationEvidence"]] = relationship(
+        back_populates="verification_request",
+        cascade="all, delete-orphan",
+        order_by="VerificationEvidence.created_at.desc()",
+    )
+
+
+class VerificationEvidence(Base, TimestampMixin):
+    __tablename__ = "verification_evidence"
+    __table_args__ = (
+        Index(
+            "ix_verification_evidence_request_created",
+            "verification_request_id",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    verification_request_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("verification_requests.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    uploaded_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+    )
+    label: Mapped[str | None] = mapped_column(String(120))
+    file_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(120), nullable=False)
+    file_size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    storage_provider: Mapped[str] = mapped_column(String(40), default="LOCAL", nullable=False)
+    storage_key: Mapped[str] = mapped_column(String(500), nullable=False)
+
+    verification_request: Mapped[VerificationRequest] = relationship(
+        back_populates="evidence_items"
+    )
+    uploaded_by_user: Mapped[User | None] = relationship()

@@ -9,6 +9,7 @@ import {
   AdminOverview,
   adminRoles,
   ApiError,
+  downloadVerificationEvidence,
   getAdminOverview,
   getAdminVerificationRequests,
   reviewVerificationRequest,
@@ -261,6 +262,7 @@ function VerificationQueuePanel({ accessToken }: { accessToken: string }) {
           ) : null}
           {state.requests.map((request) => (
             <VerificationQueueRow
+              accessToken={accessToken}
               busyAction={busyAction}
               key={request.id}
               onReview={handleReview}
@@ -276,12 +278,14 @@ function VerificationQueuePanel({ accessToken }: { accessToken: string }) {
 }
 
 function VerificationQueueRow({
+  accessToken,
   busyAction,
   onReview,
   onReviewNoteChange,
   request,
   reviewNote
 }: {
+  accessToken: string;
   busyAction: string | null;
   onReview: (request: VerificationRequest, action: VerificationReviewAction) => void;
   onReviewNoteChange: (requestId: string, value: string) => void;
@@ -290,6 +294,25 @@ function VerificationQueueRow({
 }) {
   const snapshot = request.profile_snapshot;
   const programs = snapshot.program_affiliations ?? [];
+  const [openingEvidenceId, setOpeningEvidenceId] = useState<string | null>(null);
+  const [evidenceMessage, setEvidenceMessage] = useState<string | null>(null);
+
+  async function handleOpenEvidence(evidenceId: string) {
+    setOpeningEvidenceId(evidenceId);
+    setEvidenceMessage(null);
+    try {
+      const blob = await downloadVerificationEvidence(accessToken, request.id, evidenceId);
+      const url = window.URL.createObjectURL(blob);
+      window.open(url, "_blank", "noopener,noreferrer");
+      window.setTimeout(() => window.URL.revokeObjectURL(url), 30_000);
+    } catch (caught) {
+      setEvidenceMessage(
+        caught instanceof ApiError ? caught.message : "Evidence file could not be opened."
+      );
+    } finally {
+      setOpeningEvidenceId(null);
+    }
+  }
 
   return (
     <article className="grid gap-5 py-6 xl:grid-cols-[1fr_0.55fr]">
@@ -328,6 +351,48 @@ function VerificationQueueRow({
             {request.submitted_note}
           </p>
         ) : null}
+        <div className="mt-4 rounded-lg border border-border bg-surface px-4 py-3">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">
+                Evidence
+              </p>
+              <p className="mt-1 text-sm font-semibold text-ink">
+                {request.evidence.length} file{request.evidence.length === 1 ? "" : "s"} attached
+              </p>
+            </div>
+            {evidenceMessage ? (
+              <p className="text-sm font-semibold text-danger">{evidenceMessage}</p>
+            ) : null}
+          </div>
+          {request.evidence.length > 0 ? (
+            <div className="mt-3 grid gap-2">
+              {request.evidence.map((evidence) => (
+                <div
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-white px-3 py-2 text-sm"
+                  key={evidence.id}
+                >
+                  <div>
+                    <p className="font-semibold text-ink">
+                      {evidence.label || evidence.file_name}
+                    </p>
+                    <p className="mt-0.5 text-xs font-semibold text-muted">
+                      {evidence.content_type} · {formatBytes(evidence.file_size_bytes)}
+                    </p>
+                  </div>
+                  <button
+                    className="focus-ring rounded-lg border border-border px-3 py-2 text-xs font-semibold text-ink transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={Boolean(openingEvidenceId)}
+                    onClick={() => handleOpenEvidence(evidence.id)}
+                    type="button"
+                  >
+                    {openingEvidenceId === evidence.id ? "Opening..." : "Open"}
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </div>
       </div>
 
       <div className="grid gap-3">
@@ -422,6 +487,17 @@ function MetricCard({ label, value }: { label: string; value: number }) {
       <p className="mt-3 font-display text-3xl font-bold text-primary">{value}</p>
     </article>
   );
+}
+
+function formatBytes(bytes: number) {
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+  if (bytes < 1024 * 1024) {
+    return `${Math.round(bytes / 1024)} KB`;
+  }
+
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function formatStatus(status: string) {

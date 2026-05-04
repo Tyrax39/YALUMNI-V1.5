@@ -5,9 +5,10 @@ from sqlalchemy import engine_from_config, pool
 from alembic import context
 from app.core.config import get_settings
 from app.core.database import Base
+from app.modules.alumni import models as alumni_models
 from app.modules.auth import models as auth_models
 
-_ = auth_models
+_ = auth_models, alumni_models
 
 config = context.config
 
