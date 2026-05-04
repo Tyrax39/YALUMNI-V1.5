@@ -66,6 +66,25 @@ class DevTokenResponse(BaseModel):
     dev_token: str | None = None
 
 
+class AdminSecurityEvent(BaseModel):
+    id: uuid.UUID
+    event_type: str
+    user_id: uuid.UUID | None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AdminOverview(BaseModel):
+    total_users: int
+    verified_users: int
+    unverified_users: int
+    active_sessions: int
+    admin_users: int
+    pending_verification_users: int
+    latest_security_events: list[AdminSecurityEvent]
+
+
 class AuthUser(BaseModel):
     id: uuid.UUID
     email: str

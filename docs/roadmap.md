@@ -20,8 +20,9 @@ Status: started.
 - Register/login/logout. Implemented.
 - Email verification. Implemented API and local web flow.
 - Password reset. Implemented API and local web flow.
-- Role baseline. Started with global `UNVERIFIED_USER` assignment.
-- Protected web route behavior. Started with API-backed dashboard session panel.
+- Role baseline. Started with global `UNVERIFIED_USER` plus local `SUPER_ADMIN` bootstrap.
+- Protected web route behavior. Implemented client-side dashboard/admin guards for current token storage.
+- Role-aware admin overview. Implemented API guard and web console summary.
 - Session/device management.
 - Secure cookie auth hardening.
 - Admin 2FA requirement.

@@ -19,6 +19,8 @@ GET  /api/v1/auth/me
 POST /api/v1/auth/password/forgot
 POST /api/v1/auth/password/reset
 POST /api/v1/auth/email/verify
+POST /api/v1/auth/dev/bootstrap-admin
+GET  /api/v1/auth/admin/overview
 ```
 
 ## Phase 2: Auth
@@ -98,6 +100,8 @@ GET    /api/v1/events/{event_id}/registrations
 ```
 
 ## Admin
+
+Started through the role-protected auth admin overview endpoint. Planned dedicated admin module:
 
 ```text
 GET  /api/v1/admin/users

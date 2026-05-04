@@ -55,6 +55,10 @@ def register_user(client: TestClient, email: str = "amara@example.com") -> dict:
     return response.json()
 
 
+def auth_headers(access_token: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {access_token}"}
+
+
 def test_register_login_me_refresh_and_logout(client: TestClient) -> None:
     registered = register_user(client)
 
@@ -194,3 +198,26 @@ def test_password_forgot_does_not_disclose_unknown_email(client: TestClient) -> 
 
     assert forgot_response.status_code == 200
     assert forgot_response.json()["dev_token"] is None
+
+
+def test_admin_overview_requires_role_and_local_bootstrap_grants_access(
+    client: TestClient,
+) -> None:
+    registered = register_user(client, email="admin-seed@example.com")
+    headers = auth_headers(registered["access_token"])
+
+    rejected_overview = client.get("/api/v1/auth/admin/overview", headers=headers)
+    assert rejected_overview.status_code == 403
+
+    bootstrap_response = client.post("/api/v1/auth/dev/bootstrap-admin", headers=headers)
+    assert bootstrap_response.status_code == 200
+    bootstrapped_user = bootstrap_response.json()
+    assert "SUPER_ADMIN" in bootstrapped_user["roles"]
+
+    overview_response = client.get("/api/v1/auth/admin/overview", headers=headers)
+    assert overview_response.status_code == 200
+    overview = overview_response.json()
+    assert overview["total_users"] == 1
+    assert overview["admin_users"] == 1
+    assert overview["pending_verification_users"] == 1
+    assert overview["latest_security_events"][0]["event_type"] == "auth.dev_admin_bootstrapped"

@@ -58,10 +58,10 @@ Users must control visibility of:
 
 ## Immediate Security Work
 
-- Implement JWT utilities.
-- Add refresh token rotation.
-- Add `current_user` dependency.
-- Add role guard dependency.
-- Add security event table.
+- Implement JWT utilities. Done for local auth.
+- Add refresh token rotation. Done.
+- Add `current_user` dependency. Done.
+- Add role guard dependency. Done.
+- Add security event table. Done.
+- Add role-protected admin overview. Done.
 - Add tests for auth denial and basic IDOR prevention.
-

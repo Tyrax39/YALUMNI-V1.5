@@ -2,12 +2,12 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from sqlalchemy import select
+from sqlalchemy import distinct, func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.database import get_db_session
-from app.core.permissions import GlobalRole
+from app.core.permissions import ADMIN_ROLE_NAMES, GlobalRole
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -16,7 +16,7 @@ from app.core.security import (
     utcnow,
     verify_password,
 )
-from app.modules.auth.dependencies import get_current_user
+from app.modules.auth.dependencies import get_current_user, require_roles
 from app.modules.auth.models import (
     AccountToken,
     AuthSession,
@@ -26,6 +26,7 @@ from app.modules.auth.models import (
     User,
 )
 from app.modules.auth.schemas import (
+    AdminOverview,
     AuthResponse,
     AuthUser,
     DevTokenResponse,
@@ -39,6 +40,7 @@ from app.modules.auth.schemas import (
 )
 
 router = APIRouter()
+admin_user_dependency = require_roles(*ADMIN_ROLE_NAMES)
 
 
 def _request_context(request: Request) -> tuple[str | None, str | None]:
@@ -284,6 +286,88 @@ def logout(
 @router.get("/me", response_model=AuthUser)
 def me(current_user: Annotated[User, Depends(get_current_user)]) -> AuthUser:
     return _serialize_user(current_user)
+
+
+@router.post("/dev/bootstrap-admin", response_model=AuthUser)
+def bootstrap_local_admin(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> AuthUser:
+    if not _is_local_environment():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Local admin bootstrap is disabled outside local development",
+        )
+
+    role = _ensure_role(db, GlobalRole.SUPER_ADMIN.value)
+    assignment = db.scalar(
+        select(RoleAssignment).where(
+            RoleAssignment.user_id == current_user.id,
+            RoleAssignment.role_id == role.id,
+            RoleAssignment.scope_type == "GLOBAL",
+            RoleAssignment.scope_id.is_(None),
+        )
+    )
+    if assignment is None:
+        db.add(RoleAssignment(user_id=current_user.id, role_id=role.id))
+
+    _create_security_event(db, request, current_user, "auth.dev_admin_bootstrapped")
+    db.commit()
+    user = db.scalar(select(User).where(User.id == current_user.id))
+    return _serialize_user(user or current_user)
+
+
+@router.get("/admin/overview", response_model=AdminOverview)
+def admin_overview(
+    current_user: Annotated[User, Depends(admin_user_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> AdminOverview:
+    _ = current_user
+    now = utcnow()
+    total_users = db.scalar(select(func.count(User.id))) or 0
+    verified_users = (
+        db.scalar(select(func.count(User.id)).where(User.email_verified_at.is_not(None))) or 0
+    )
+    active_sessions = (
+        db.scalar(
+            select(func.count(AuthSession.id)).where(
+                AuthSession.revoked_at.is_(None),
+                AuthSession.expires_at > now,
+            )
+        )
+        or 0
+    )
+    admin_users = (
+        db.scalar(
+            select(func.count(distinct(RoleAssignment.user_id)))
+            .join(Role)
+            .where(Role.name.in_(ADMIN_ROLE_NAMES))
+        )
+        or 0
+    )
+    pending_verification_users = (
+        db.scalar(
+            select(func.count(User.id)).where(
+                User.status == "ACTIVE",
+                User.email_verified_at.is_(None),
+            )
+        )
+        or 0
+    )
+    latest_events = db.scalars(
+        select(SecurityEvent).order_by(SecurityEvent.created_at.desc()).limit(5)
+    ).all()
+
+    return AdminOverview(
+        total_users=total_users,
+        verified_users=verified_users,
+        unverified_users=total_users - verified_users,
+        active_sessions=active_sessions,
+        admin_users=admin_users,
+        pending_verification_users=pending_verification_users,
+        latest_security_events=list(latest_events),
+    )
 
 
 @router.post("/password/forgot", response_model=DevTokenResponse)

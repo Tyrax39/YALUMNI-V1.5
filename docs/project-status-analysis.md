@@ -340,18 +340,41 @@ Remaining Phase 2 gaps:
 - Login/password-reset rate limiting.
 - Real email provider integration and branded email templates.
 
+## Current V1.5 Implementation Update: 2026-05-04 Access Control Slice
+
+Completed after account recovery:
+
+- Reusable API role guard dependency was added for role-protected endpoints.
+- Local-only admin bootstrap endpoint was added so development users can seed `SUPER_ADMIN`.
+- Role-protected admin overview endpoint now returns user/session/admin/audit summary data.
+- Dashboard route now performs a client-side session gate before showing member workspace content.
+- Admin route now performs a client-side admin-role gate before showing privileged console data.
+- Admin console now loads live API overview metrics and recent security events.
+- API tests cover admin denial, local admin bootstrap, and successful protected admin overview access.
+
+Current plan position:
+
+- Phase 1 remains functionally complete for local foundation.
+- Phase 2 is now roughly 72% complete.
+- Overall 24-week MVP implementation is roughly 13% complete.
+
+Remaining Phase 2 gaps:
+
+- Secure HttpOnly cookie auth strategy and SSR/middleware enforcement.
+- Session/device management UI and API.
+- Admin 2FA requirement or placeholder policy.
+- Rate limiting for login, password reset, and admin-sensitive actions.
+- Real email provider integration and branded templates.
+- Production-safe admin seeding procedure outside local development.
+
 ## Immediate Next Implementations
 
-The next engineering task after this foundation should be auth and identity:
+The next engineering task should finish identity hardening and then start alumni profiles:
 
-- SQLAlchemy user/session/role models.
-- Alembic migration.
-- Register/login/refresh/logout endpoints.
-- Password hashing and JWT utilities.
-- `GET /api/v1/auth/me`.
-- Frontend login/register forms wired to API.
-- Protected dashboard shell.
-- Initial admin role guard.
-- Tests for register, login, protected route denial, and token refresh.
+- Add session/device management API and member UI.
+- Decide secure-cookie auth migration and middleware strategy.
+- Add privileged-role 2FA policy placeholder before deeper admin work.
+- Start alumni profile model, profile edit API, and profile completion UI.
+- Start verification request model and admin verification queue.
 
-After auth lands, move directly into alumni profile and verification. That sequence gives the platform a trustworthy spine before social, community, payment, or election features are added.
+After identity hardening lands, move directly into alumni profile and verification. That sequence gives the platform a trustworthy spine before social, community, payment, or election features are added.

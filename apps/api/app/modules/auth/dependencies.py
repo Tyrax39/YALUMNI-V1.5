@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db_session
+from app.core.permissions import has_any_role
 from app.core.security import decode_access_token
 from app.modules.auth.models import User
 
@@ -34,3 +35,20 @@ def get_current_user(
         raise unauthorized
 
     return user
+
+
+def _user_role_names(user: User) -> list[str]:
+    return [assignment.role.name for assignment in user.role_assignments]
+
+
+def require_roles(*allowed_roles: str):
+    def dependency(current_user: Annotated[User, Depends(get_current_user)]) -> User:
+        if not has_any_role(_user_role_names(current_user), allowed_roles):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have permission to access this resource",
+            )
+
+        return current_user
+
+    return dependency

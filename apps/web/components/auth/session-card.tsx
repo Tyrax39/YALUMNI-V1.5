@@ -11,17 +11,37 @@ type SessionState =
   | { status: "authenticated"; user: AuthUser }
   | { status: "error"; message: string };
 
-export function SessionCard() {
-  const [session, setSession] = useState<SessionState>({ status: "anonymous" });
+type SessionCardProps = {
+  accessToken?: string;
+  initialUser?: AuthUser;
+  onUserChange?: (user: AuthUser) => void;
+};
+
+export function SessionCard({
+  accessToken: providedAccessToken,
+  initialUser,
+  onUserChange
+}: SessionCardProps) {
+  const [session, setSession] = useState<SessionState>(
+    initialUser ? { status: "authenticated", user: initialUser } : { status: "anonymous" }
+  );
   const [verificationToken, setVerificationToken] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
 
   useEffect(() => {
-    const accessToken = window.localStorage.getItem("yalumni.accessToken");
+    const accessToken = providedAccessToken ?? window.localStorage.getItem("yalumni.accessToken");
     if (!accessToken) {
       return;
     }
     const storedVerificationToken = window.localStorage.getItem("yalumni.emailVerificationToken");
+
+    if (initialUser) {
+      queueMicrotask(() => {
+        setVerificationToken(storedVerificationToken);
+        setSession({ status: "authenticated", user: initialUser });
+      });
+      return;
+    }
 
     getMe(accessToken)
       .then((user) => {
@@ -29,7 +49,7 @@ export function SessionCard() {
         setSession({ status: "authenticated", user });
       })
       .catch(() => setSession({ status: "error", message: "Your session could not be verified." }));
-  }, []);
+  }, [initialUser, providedAccessToken]);
 
   async function handleVerifyEmail() {
     if (!verificationToken) {
@@ -41,6 +61,7 @@ export function SessionCard() {
       const user = await verifyEmail(verificationToken);
       window.localStorage.removeItem("yalumni.emailVerificationToken");
       window.localStorage.setItem("yalumni.user", JSON.stringify(user));
+      onUserChange?.(user);
       setVerificationToken(null);
       setSession({ status: "authenticated", user });
     } finally {

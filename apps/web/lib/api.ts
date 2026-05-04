@@ -36,6 +36,32 @@ export type DevTokenResponse = {
   dev_token: string | null;
 };
 
+export type AdminSecurityEvent = {
+  id: string;
+  event_type: string;
+  user_id: string | null;
+  created_at: string;
+};
+
+export type AdminOverview = {
+  total_users: number;
+  verified_users: number;
+  unverified_users: number;
+  active_sessions: number;
+  admin_users: number;
+  pending_verification_users: number;
+  latest_security_events: AdminSecurityEvent[];
+};
+
+export const adminRoles: readonly string[] = [
+  "SUPER_ADMIN",
+  "PLATFORM_ADMIN",
+  "VERIFICATION_ADMIN",
+  "MODERATOR",
+  "FINANCE_ADMIN",
+  "ELECTION_ADMIN"
+];
+
 const fallbackApiBaseUrl = "http://127.0.0.1:8002";
 
 export const apiBaseUrl =
@@ -134,5 +160,22 @@ export function verifyEmail(token: string): Promise<AuthUser> {
   return apiFetch<AuthUser>("/api/v1/auth/email/verify", {
     body: JSON.stringify({ token }),
     method: "POST"
+  });
+}
+
+export function bootstrapLocalAdmin(accessToken: string): Promise<AuthUser> {
+  return apiFetch<AuthUser>("/api/v1/auth/dev/bootstrap-admin", {
+    headers: {
+      Authorization: `Bearer ${accessToken}`
+    },
+    method: "POST"
+  });
+}
+
+export function getAdminOverview(accessToken: string): Promise<AdminOverview> {
+  return apiFetch<AdminOverview>("/api/v1/auth/admin/overview", {
+    headers: {
+      Authorization: `Bearer ${accessToken}`
+    }
   });
 }
