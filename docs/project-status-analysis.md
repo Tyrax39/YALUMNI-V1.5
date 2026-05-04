@@ -421,11 +421,61 @@ Remaining Phase 2 gaps:
 
 ## Immediate Next Implementations
 
-The next engineering task should finish identity hardening and then start alumni profiles:
+The next engineering task should deepen alumni verification while keeping identity hardening visible:
 
 - Decide secure-cookie auth migration and middleware strategy.
 - Add privileged-role 2FA policy placeholder before deeper admin work.
-- Start alumni profile model, profile edit API, and profile completion UI.
 - Start verification request model and admin verification queue.
+- Add public/private alumni profile serializers before directory search.
+- Add profile photo/object-storage strategy before document uploads.
 
-After identity hardening lands, move directly into alumni profile and verification. That sequence gives the platform a trustworthy spine before social, community, payment, or election features are added.
+After the verification workflow lands, move directly into alumni directory search. That sequence gives the platform a trustworthy spine before social, community, payment, or election features are added.
+
+## Current V1.5 Implementation Update: 2026-05-04 Alumni Profile Slice
+
+Completed after rate limiting:
+
+- Alumni profile and program affiliation SQLAlchemy models were added.
+- Alembic migration `20260504_0003` now creates `alumni_profiles` and `program_affiliations`.
+- Authenticated current-user alumni endpoints were added for reading/updating profile data and adding/removing program affiliations.
+- Profile completion percentage is calculated from headline, bio, country, sector, organization, role, skills, and program affiliation.
+- Dashboard now includes a real profile completion panel with editable alumni fields and a program affiliation form.
+- Web API client types were added for alumni profile and program affiliation responses.
+- API tests cover profile auto-creation, profile completion, skill normalization, visibility merge behavior, program affiliation completion, and unauthenticated denial.
+
+Current plan position:
+
+- Phase 1 remains functionally complete for local foundation.
+- Phase 2 remains roughly 85% complete; the remaining work is production hardening, not core MVP-local flow.
+- Phase 3 has started and is roughly 18% complete.
+- Overall 24-week MVP implementation is roughly 17% complete.
+
+Implemented now:
+
+- Native landing page.
+- Monorepo foundation, CI, docs, Docker Compose.
+- FastAPI health/status and request middleware.
+- Identity auth, refresh sessions, account recovery, email verification, role-gated admin overview, session management, and MVP-local rate limiting.
+- Protected dashboard/admin route behavior.
+- Alumni current-user profile model/API/UI.
+- Program affiliation model/API/UI.
+
+Main gaps now:
+
+- Auth still uses local-storage bearer tokens in the web app; production should move to HttpOnly cookies and SSR/middleware guards.
+- Admin 2FA is still not implemented.
+- Email verification and password reset still expose local dev tokens instead of a real provider and branded templates.
+- Alumni profile images, document uploads, and object storage are not implemented.
+- Verification requests, verification documents, and admin verification queue are not implemented.
+- Public alumni directory/search and privacy-aware profile serialization are not implemented.
+- Skills are stored as MVP JSON rather than normalized skill tables.
+- Redis-backed rate limiting and job queues are not wired yet.
+
+Next possible implementation slices:
+
+- Verification request schema/API plus dashboard request submission.
+- Admin verification queue with approve/reject/request-info actions.
+- Secure cookie auth migration and route middleware.
+- Public/private alumni profile serializers and directory search.
+- Profile photo upload and object storage abstraction.
+- Dedicated audit log viewer for admin verification activity.

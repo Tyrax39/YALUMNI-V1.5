@@ -1,0 +1,57 @@
+import uuid
+from datetime import datetime
+
+from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, Text, Uuid
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.core.database import Base
+from app.modules.auth.models import TimestampMixin, User
+
+
+class AlumniProfile(Base, TimestampMixin):
+    __tablename__ = "alumni_profiles"
+    __table_args__ = (Index("ix_alumni_profiles_country_sector", "country", "sector"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        unique=True,
+        nullable=False,
+    )
+    headline: Mapped[str | None] = mapped_column(String(180))
+    bio: Mapped[str | None] = mapped_column(Text)
+    country: Mapped[str | None] = mapped_column(String(80))
+    city: Mapped[str | None] = mapped_column(String(100))
+    sector: Mapped[str | None] = mapped_column(String(120))
+    organization: Mapped[str | None] = mapped_column(String(160))
+    job_title: Mapped[str | None] = mapped_column(String(160))
+    linkedin_url: Mapped[str | None] = mapped_column(String(255))
+    website_url: Mapped[str | None] = mapped_column(String(255))
+    skills: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    visibility: Mapped[dict[str, bool]] = mapped_column(JSON, default=dict, nullable=False)
+    profile_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    user: Mapped[User] = relationship()
+    program_affiliations: Mapped[list["ProgramAffiliation"]] = relationship(
+        back_populates="profile",
+        cascade="all, delete-orphan",
+        order_by="ProgramAffiliation.created_at.desc()",
+    )
+
+
+class ProgramAffiliation(Base, TimestampMixin):
+    __tablename__ = "program_affiliations"
+    __table_args__ = (Index("ix_program_affiliations_program_year", "program_name", "cohort_year"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    profile_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("alumni_profiles.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    program_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    cohort_year: Mapped[int | None] = mapped_column(Integer)
+    country: Mapped[str | None] = mapped_column(String(80))
+    city: Mapped[str | None] = mapped_column(String(100))
+    status: Mapped[str] = mapped_column(String(40), default="COMPLETED", nullable=False)
+
+    profile: Mapped[AlumniProfile] = relationship(back_populates="program_affiliations")

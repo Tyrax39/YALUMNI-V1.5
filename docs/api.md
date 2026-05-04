@@ -23,6 +23,10 @@ POST /api/v1/auth/password/reset
 POST /api/v1/auth/email/verify
 POST /api/v1/auth/dev/bootstrap-admin
 GET  /api/v1/auth/admin/overview
+GET  /api/v1/alumni/me/profile
+PATCH /api/v1/alumni/me/profile
+POST /api/v1/alumni/me/program-affiliations
+DELETE /api/v1/alumni/me/program-affiliations/{affiliation_id}
 ```
 
 ## Phase 2: Auth
@@ -40,10 +44,7 @@ POST /api/v1/auth/2fa/verify
 GET    /api/v1/alumni
 GET    /api/v1/alumni/search
 GET    /api/v1/alumni/{user_id}
-GET    /api/v1/alumni/me/profile
-PATCH  /api/v1/alumni/me/profile
 PATCH  /api/v1/alumni/me/visibility
-POST   /api/v1/alumni/me/program-affiliations
 POST   /api/v1/alumni/me/verification-requests
 GET    /api/v1/alumni/me/verification-requests
 ```

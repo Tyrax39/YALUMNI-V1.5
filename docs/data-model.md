@@ -22,9 +22,9 @@
 
 ### Alumni
 
-- `alumni_profiles`
-- `program_affiliations`
-- `profile_visibility_settings`
+- `alumni_profiles` - implemented with current-user profile fields, skills JSON, visibility JSON, and completion timestamp.
+- `program_affiliations` - implemented for YALI program/cohort attachment.
+- `profile_visibility_settings` - folded into `alumni_profiles.visibility` for the MVP, likely split later if rules become per-field/per-community.
 - `skills`
 - `alumni_skills`
 - `interests`
@@ -141,7 +141,7 @@ Community types:
 
 ## Immediate Modeling Task
 
-The first migration should create identity basics:
+Completed identity basics:
 
 - `users`
 - `sessions`
@@ -149,5 +149,13 @@ The first migration should create identity basics:
 - `role_assignments`
 - `security_events`
 
-Then add alumni profile, program affiliation, visibility, and verification tables.
+Completed alumni profile basics:
 
+- `alumni_profiles`
+- `program_affiliations`
+
+Next add verification workflow tables:
+
+- `verification_requests`
+- `verification_documents`
+- `audit_logs` or a scoped verification event table

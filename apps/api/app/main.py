@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
 from app.core.logging import RequestIdMiddleware, configure_logging
+from app.modules.alumni.router import router as alumni_router
 from app.modules.auth.router import router as auth_router
 from app.modules.system.router import router as system_router
 
@@ -36,3 +37,4 @@ def health_check() -> dict[str, str]:
 
 app.include_router(system_router, prefix="/api/v1/system", tags=["system"])
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["auth"])
+app.include_router(alumni_router, prefix="/api/v1/alumni", tags=["alumni"])

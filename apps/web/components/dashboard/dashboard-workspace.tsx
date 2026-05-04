@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 
+import { ProfilePanel } from "@/components/alumni/profile-panel";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { SessionCard } from "@/components/auth/session-card";
 import { SessionManagementPanel } from "@/components/auth/session-management-panel";
@@ -52,15 +53,14 @@ export function DashboardWorkspace() {
               <div className="grid gap-8 lg:grid-cols-[0.75fr_0.25fr]">
                 <div>
                   <p className="text-sm font-semibold uppercase tracking-[0.18em] text-secondary">
-                    Member app preview
+                    Member workspace
                   </p>
                   <h1 className="mt-4 font-display text-4xl font-bold text-ink">
-                    The authenticated workspace starts here.
+                    Welcome to your YALUMNI workspace.
                   </h1>
                   <p className="mt-4 max-w-3xl text-lg leading-8 text-muted">
-                    This dashboard shell establishes the route structure for the MVP: onboarding,
-                    verification, alumni discovery, communities, feed, messages, events, and admin
-                    operations.
+                    Manage your verified alumni identity, keep your program record current, and
+                    prepare for verification, discovery, communities, events, and governance tools.
                   </p>
                   {!hasAdminRole ? (
                     <p className="mt-5 max-w-2xl rounded-lg border border-border bg-white px-4 py-3 text-sm font-semibold text-muted">
@@ -76,6 +76,7 @@ export function DashboardWorkspace() {
                   onUserChange={setUser}
                 />
               </div>
+              <ProfilePanel accessToken={accessToken} />
               <SessionManagementPanel
                 accessToken={accessToken}
                 onCurrentSessionRevoked={clearSession}

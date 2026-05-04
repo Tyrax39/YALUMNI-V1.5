@@ -49,12 +49,14 @@ docker compose up --build
 - API health: http://localhost:8000/health
 - API docs: http://localhost:8000/docs
 
-## First Milestone
+## Current Milestone
 
-The first milestone is platform foundation:
+The current milestone is platform foundation plus the first identity and alumni profile slices:
 
 - FastAPI app with health endpoint and request ID middleware
-- Next.js app with landing, login, register, dashboard, and admin placeholders
+- Next.js app with native public landing, login, register, dashboard, and admin surfaces
+- Registration, login, refresh, logout, current-user lookup, email verification, password reset, role-gated admin overview, session management, and in-process rate limiting
+- Current-user alumni profile, program affiliation, visibility JSON settings, and dashboard profile completion panel
 - Docker Compose for PostgreSQL, Redis, API, and web
 - CI workflow for web build and API tests
 - Architecture, API, data model, security, migration, and project status docs
@@ -62,4 +64,3 @@ The first milestone is platform foundation:
 ## Important Launch Note
 
 The planning packet notes that official YALI terminology, URLs, brand permissions, logo usage, and public claims must be validated before public launch. This repository does not assume official endorsement.
-

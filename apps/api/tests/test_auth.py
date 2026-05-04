@@ -9,9 +9,10 @@ from sqlalchemy.pool import StaticPool
 from app.core.database import Base, get_db_session
 from app.core.rate_limit import clear_rate_limits
 from app.main import app
+from app.modules.alumni import models as alumni_models
 from app.modules.auth import models as auth_models
 
-_ = auth_models
+_ = auth_models, alumni_models
 
 
 @pytest.fixture
@@ -332,3 +333,63 @@ def test_session_listing_and_revocation_marks_current_session(client: TestClient
         headers=auth_headers(registered["access_token"]),
     )
     assert missing_session.status_code == 404
+
+
+def test_alumni_profile_is_created_and_completed_with_program_affiliation(
+    client: TestClient,
+) -> None:
+    registered = register_user(client, email="profile@example.com")
+    headers = auth_headers(registered["access_token"])
+
+    profile_response = client.get("/api/v1/alumni/me/profile", headers=headers)
+    assert profile_response.status_code == 200
+    profile = profile_response.json()
+    assert profile["user_id"] == registered["user"]["id"]
+    assert profile["completion_percentage"] == 0
+    assert profile["visibility"]["email"] is False
+    assert profile["program_affiliations"] == []
+
+    update_response = client.patch(
+        "/api/v1/alumni/me/profile",
+        headers=headers,
+        json={
+            "headline": "Civic technology organizer",
+            "bio": "Building transparent tools for local chapters.",
+            "country": "Ghana",
+            "city": "Accra",
+            "sector": "Civic technology",
+            "organization": "Open Chapter Lab",
+            "job_title": "Program Lead",
+            "skills": ["Governance", "Data", "governance", " Community "],
+            "visibility": {"email": True},
+        },
+    )
+    assert update_response.status_code == 200
+    updated_profile = update_response.json()
+    assert updated_profile["completion_percentage"] == 88
+    assert updated_profile["skills"] == ["Governance", "Data", "Community"]
+    assert updated_profile["visibility"]["email"] is True
+
+    affiliation_response = client.post(
+        "/api/v1/alumni/me/program-affiliations",
+        headers=headers,
+        json={
+            "program_name": "YALI Regional Leadership Center",
+            "cohort_year": 2024,
+            "country": "Ghana",
+            "city": "Accra",
+        },
+    )
+    assert affiliation_response.status_code == 201
+    completed_profile = affiliation_response.json()
+    assert completed_profile["completion_percentage"] == 100
+    assert completed_profile["profile_completed_at"] is not None
+    assert completed_profile["program_affiliations"][0]["program_name"] == (
+        "YALI Regional Leadership Center"
+    )
+
+
+def test_alumni_profile_requires_authenticated_user(client: TestClient) -> None:
+    response = client.get("/api/v1/alumni/me/profile")
+
+    assert response.status_code == 401

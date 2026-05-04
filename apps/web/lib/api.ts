@@ -74,6 +74,57 @@ export type AdminOverview = {
   latest_security_events: AdminSecurityEvent[];
 };
 
+export type ProgramAffiliation = {
+  id: string;
+  program_name: string;
+  cohort_year: number | null;
+  country: string | null;
+  city: string | null;
+  status: string;
+  created_at: string;
+};
+
+export type AlumniProfile = {
+  id: string;
+  user_id: string;
+  headline: string | null;
+  bio: string | null;
+  country: string | null;
+  city: string | null;
+  sector: string | null;
+  organization: string | null;
+  job_title: string | null;
+  linkedin_url: string | null;
+  website_url: string | null;
+  skills: string[];
+  visibility: Record<string, boolean>;
+  profile_completed_at: string | null;
+  completion_percentage: number;
+  program_affiliations: ProgramAffiliation[];
+};
+
+export type AlumniProfileUpdate = {
+  headline?: string | null;
+  bio?: string | null;
+  country?: string | null;
+  city?: string | null;
+  sector?: string | null;
+  organization?: string | null;
+  job_title?: string | null;
+  linkedin_url?: string | null;
+  website_url?: string | null;
+  skills?: string[] | null;
+  visibility?: Record<string, boolean> | null;
+};
+
+export type ProgramAffiliationPayload = {
+  program_name: string;
+  cohort_year?: number | null;
+  country?: string | null;
+  city?: string | null;
+  status?: string;
+};
+
 export const adminRoles: readonly string[] = [
   "SUPER_ADMIN",
   "PLATFORM_ADMIN",
@@ -221,5 +272,33 @@ export function bootstrapLocalAdmin(accessToken: string): Promise<AuthUser> {
 export function getAdminOverview(accessToken: string): Promise<AdminOverview> {
   return apiFetch<AdminOverview>("/api/v1/auth/admin/overview", {
     headers: authHeaders(accessToken)
+  });
+}
+
+export function getMyAlumniProfile(accessToken: string): Promise<AlumniProfile> {
+  return apiFetch<AlumniProfile>("/api/v1/alumni/me/profile", {
+    headers: authHeaders(accessToken)
+  });
+}
+
+export function updateMyAlumniProfile(
+  accessToken: string,
+  payload: AlumniProfileUpdate
+): Promise<AlumniProfile> {
+  return apiFetch<AlumniProfile>("/api/v1/alumni/me/profile", {
+    body: JSON.stringify(payload),
+    headers: authHeaders(accessToken),
+    method: "PATCH"
+  });
+}
+
+export function addProgramAffiliation(
+  accessToken: string,
+  payload: ProgramAffiliationPayload
+): Promise<AlumniProfile> {
+  return apiFetch<AlumniProfile>("/api/v1/alumni/me/program-affiliations", {
+    body: JSON.stringify(payload),
+    headers: authHeaders(accessToken),
+    method: "POST"
   });
 }

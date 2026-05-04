@@ -13,7 +13,7 @@ Status: implemented foundation, CI passing.
 
 ## Phase 2: Identity
 
-Status: started.
+Status: mostly implemented for MVP-local identity, with production hardening still open.
 
 - User/session models. Implemented.
 - JWT access and refresh tokens. Implemented.
@@ -30,9 +30,11 @@ Status: started.
 
 ## Phase 3: Alumni Profiles And Verification
 
-- Profile model.
-- Program affiliation model.
-- Visibility settings.
+- Profile model. Implemented.
+- Program affiliation model. Implemented.
+- Current-user profile edit API. Implemented.
+- Dashboard profile completion UI. Implemented.
+- Visibility settings. Started as profile-level JSON settings.
 - Verification requests and documents.
 - Admin verification queue.
 - Audit logs.
