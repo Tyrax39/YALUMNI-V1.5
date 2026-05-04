@@ -27,6 +27,12 @@ GET  /api/v1/alumni/me/profile
 PATCH /api/v1/alumni/me/profile
 POST /api/v1/alumni/me/program-affiliations
 DELETE /api/v1/alumni/me/program-affiliations/{affiliation_id}
+GET  /api/v1/alumni/me/verification-requests
+POST /api/v1/alumni/me/verification-requests
+GET  /api/v1/alumni/admin/verification-requests
+POST /api/v1/alumni/admin/verification-requests/{request_id}/approve
+POST /api/v1/alumni/admin/verification-requests/{request_id}/reject
+POST /api/v1/alumni/admin/verification-requests/{request_id}/request-info
 ```
 
 ## Phase 2: Auth
@@ -45,8 +51,7 @@ GET    /api/v1/alumni
 GET    /api/v1/alumni/search
 GET    /api/v1/alumni/{user_id}
 PATCH  /api/v1/alumni/me/visibility
-POST   /api/v1/alumni/me/verification-requests
-GET    /api/v1/alumni/me/verification-requests
+POST   /api/v1/alumni/me/verification-documents
 ```
 
 ## Phase 4: Communities
@@ -106,10 +111,6 @@ Started through the role-protected auth admin overview endpoint. Planned dedicat
 
 ```text
 GET  /api/v1/admin/users
-GET  /api/v1/admin/verification-requests
-POST /api/v1/admin/verification-requests/{request_id}/approve
-POST /api/v1/admin/verification-requests/{request_id}/reject
-POST /api/v1/admin/verification-requests/{request_id}/request-info
 GET  /api/v1/admin/reports
 POST /api/v1/admin/reports/{report_id}/resolve
 GET  /api/v1/admin/audit-logs

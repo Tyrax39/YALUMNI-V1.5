@@ -35,9 +35,11 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
 - Current-user profile edit API. Implemented.
 - Dashboard profile completion UI. Implemented.
 - Visibility settings. Started as profile-level JSON settings.
-- Verification requests and documents.
-- Admin verification queue.
-- Audit logs.
+- Verification request model and current-user submission. Implemented.
+- Admin verification queue and approve/reject/request-info actions. Implemented.
+- Audit events. Started through `security_events`.
+- Verification documents and uploads.
+- Dedicated audit log viewer.
 
 ## Phase 4: Directory And Search
 

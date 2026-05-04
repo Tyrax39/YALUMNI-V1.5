@@ -421,15 +421,16 @@ Remaining Phase 2 gaps:
 
 ## Immediate Next Implementations
 
-The next engineering task should deepen alumni verification while keeping identity hardening visible:
+The next engineering task should move from verification workflow foundation into directory readiness while keeping identity hardening visible:
 
 - Decide secure-cookie auth migration and middleware strategy.
 - Add privileged-role 2FA policy placeholder before deeper admin work.
-- Start verification request model and admin verification queue.
 - Add public/private alumni profile serializers before directory search.
 - Add profile photo/object-storage strategy before document uploads.
+- Add verification document upload metadata and object storage.
+- Start alumni directory list/search with privacy-aware fields.
 
-After the verification workflow lands, move directly into alumni directory search. That sequence gives the platform a trustworthy spine before social, community, payment, or election features are added.
+After profile visibility and directory serializers land, move directly into alumni directory search. That sequence gives the platform a trustworthy spine before social, community, payment, or election features are added.
 
 ## Current V1.5 Implementation Update: 2026-05-04 Alumni Profile Slice
 
@@ -473,9 +474,61 @@ Main gaps now:
 
 Next possible implementation slices:
 
-- Verification request schema/API plus dashboard request submission.
-- Admin verification queue with approve/reject/request-info actions.
 - Secure cookie auth migration and route middleware.
 - Public/private alumni profile serializers and directory search.
 - Profile photo upload and object storage abstraction.
 - Dedicated audit log viewer for admin verification activity.
+
+## Current V1.5 Implementation Update: 2026-05-04 Verification Workflow Slice
+
+Completed after alumni profiles:
+
+- Verification request model and Alembic migration `20260504_0004` were added.
+- Members can submit completed profiles to `/api/v1/alumni/me/verification-requests`.
+- Members can list their verification request history and see the latest review status on the dashboard.
+- Incomplete profiles are blocked from verification submission until profile completion reaches 100%.
+- Duplicate pending verification submissions are blocked.
+- Verification admins can list pending requests and approve, reject, or request more information.
+- Approving a verification request grants the `ALUMNI_MEMBER` role.
+- Admin review actions create security events for audit visibility.
+- Admin console now includes a live verification queue instead of only placeholder queue cards.
+- API tests now cover submission rules, admin role gates, approval, role grant, duplicate review denial, and request-more-information.
+
+Current plan position:
+
+- Phase 1 remains functionally complete for local foundation.
+- Phase 2 remains roughly 85% complete; remaining items are production-grade auth hardening.
+- Phase 3 is now roughly 34% complete.
+- Overall 24-week MVP implementation is roughly 19% complete.
+
+Implemented now:
+
+- Native landing page.
+- Monorepo foundation, CI, docs, Docker Compose.
+- FastAPI health/status and request middleware.
+- Identity auth, refresh sessions, account recovery, email verification, role-gated admin overview, session management, and MVP-local rate limiting.
+- Protected dashboard/admin route behavior.
+- Alumni current-user profile model/API/UI.
+- Program affiliation model/API/UI.
+- Verification request submission, member status history, admin queue, review actions, and alumni-member role grant.
+
+Main gaps now:
+
+- Auth still uses local-storage bearer tokens in the web app; production should move to HttpOnly cookies and SSR/middleware guards.
+- Admin 2FA is still not implemented.
+- Email verification and password reset still expose local dev tokens instead of a real provider and branded templates.
+- Verification document upload, object storage, and evidence review attachments are not implemented.
+- Public alumni directory/search and privacy-aware profile serialization are not implemented.
+- Profile photo upload is not implemented.
+- Skills are stored as MVP JSON rather than normalized skill tables.
+- Dedicated audit log viewer is not implemented; audit data currently lands in `security_events`.
+- Redis-backed rate limiting and background jobs are not wired yet.
+
+Next possible implementation slices:
+
+- Public/private alumni profile serializers and member directory search.
+- Verification document upload metadata plus object-storage abstraction.
+- Secure cookie auth migration and route middleware.
+- Profile photo upload and media pipeline foundation.
+- Dedicated admin audit log viewer.
+- Admin 2FA policy placeholder and enforcement gate.

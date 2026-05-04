@@ -37,6 +37,11 @@ class AlumniProfile(Base, TimestampMixin):
         cascade="all, delete-orphan",
         order_by="ProgramAffiliation.created_at.desc()",
     )
+    verification_requests: Mapped[list["VerificationRequest"]] = relationship(
+        back_populates="profile",
+        cascade="all, delete-orphan",
+        order_by="VerificationRequest.created_at.desc()",
+    )
 
 
 class ProgramAffiliation(Base, TimestampMixin):
@@ -55,3 +60,37 @@ class ProgramAffiliation(Base, TimestampMixin):
     status: Mapped[str] = mapped_column(String(40), default="COMPLETED", nullable=False)
 
     profile: Mapped[AlumniProfile] = relationship(back_populates="program_affiliations")
+
+
+class VerificationRequest(Base, TimestampMixin):
+    __tablename__ = "verification_requests"
+    __table_args__ = (
+        Index("ix_verification_requests_status_created", "status", "created_at"),
+        Index("ix_verification_requests_profile_status", "profile_id", "status"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    profile_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("alumni_profiles.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    request_type: Mapped[str] = mapped_column(
+        String(60),
+        default="ALUMNI_IDENTITY",
+        nullable=False,
+    )
+    status: Mapped[str] = mapped_column(
+        String(40),
+        default="PENDING_REVIEW",
+        nullable=False,
+    )
+    submitted_note: Mapped[str | None] = mapped_column(Text)
+    reviewer_note: Mapped[str | None] = mapped_column(Text)
+    profile_snapshot: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    reviewed_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+    )
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    profile: Mapped[AlumniProfile] = relationship(back_populates="verification_requests")
+    reviewed_by_user: Mapped[User | None] = relationship()

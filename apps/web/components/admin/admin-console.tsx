@@ -5,10 +5,18 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { ProtectedRoute } from "@/components/auth/protected-route";
-import { AdminOverview, adminRoles, getAdminOverview } from "@/lib/api";
+import {
+  AdminOverview,
+  adminRoles,
+  ApiError,
+  getAdminOverview,
+  getAdminVerificationRequests,
+  reviewVerificationRequest,
+  VerificationRequest,
+  VerificationReviewAction
+} from "@/lib/api";
 
-const queues = [
-  ["Verification queue", "Review alumni evidence, approve, reject, or request more information."],
+const upcomingQueues = [
   ["User management", "Assign roles, review account status, and audit sensitive changes."],
   ["Moderation", "Resolve reports for posts, profiles, messages, events, and communities."],
   ["Governance", "Prepare contribution, election, and audit workflows for later phases."]
@@ -17,6 +25,11 @@ const queues = [
 type OverviewState =
   | { status: "loading" }
   | { status: "ready"; overview: AdminOverview }
+  | { status: "error"; message: string };
+
+type QueueState =
+  | { status: "loading" }
+  | { status: "ready"; requests: VerificationRequest[] }
   | { status: "error"; message: string };
 
 export function AdminConsole() {
@@ -45,7 +58,9 @@ export function AdminConsole() {
         requiredRoles={adminRoles}
         title="Admin console"
       >
-        {({ accessToken, user }) => <AdminOverviewPanel accessToken={accessToken} email={user.email} />}
+        {({ accessToken, user }) => (
+          <AdminOverviewPanel accessToken={accessToken} email={user.email} />
+        )}
       </ProtectedRoute>
     </main>
   );
@@ -100,8 +115,10 @@ function AdminOverviewPanel({ accessToken, email }: { accessToken: string; email
             <MetricCard label="Admins" value={state.overview.admin_users} />
           </div>
 
-          <div className="mt-10 grid gap-4 md:grid-cols-2">
-            {queues.map(([title, body]) => (
+          <VerificationQueuePanel accessToken={accessToken} />
+
+          <div className="mt-10 grid gap-4 md:grid-cols-3">
+            {upcomingQueues.map(([title, body]) => (
               <article className="rounded-lg border border-border bg-white p-6 shadow-soft" key={title}>
                 <h2 className="font-display text-xl font-semibold text-ink">{title}</h2>
                 <p className="mt-3 text-sm leading-6 text-muted">{body}</p>
@@ -120,7 +137,7 @@ function AdminOverviewPanel({ accessToken, email }: { accessToken: string; email
                 </p>
               </div>
               <p className="text-sm font-semibold text-primary">
-                Pending verification: {state.overview.pending_verification_users}
+                Pending email verification: {state.overview.pending_verification_users}
               </p>
             </div>
             <div className="mt-5 divide-y divide-border">
@@ -140,6 +157,264 @@ function AdminOverviewPanel({ accessToken, email }: { accessToken: string; email
   );
 }
 
+function VerificationQueuePanel({ accessToken }: { accessToken: string }) {
+  const [state, setState] = useState<QueueState>({ status: "loading" });
+  const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
+  const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    reloadQueue();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accessToken]);
+
+  async function reloadQueue() {
+    setState({ status: "loading" });
+    try {
+      const response = await getAdminVerificationRequests(accessToken);
+      setState({ status: "ready", requests: response.requests });
+    } catch (caught) {
+      setState({
+        status: "error",
+        message:
+          caught instanceof ApiError
+            ? caught.message
+            : "Verification queue could not be loaded."
+      });
+    }
+  }
+
+  function updateReviewNote(requestId: string, value: string) {
+    setReviewNotes((current) => ({ ...current, [requestId]: value }));
+  }
+
+  async function handleReview(request: VerificationRequest, action: VerificationReviewAction) {
+    const actionKey = `${request.id}:${action}`;
+    setBusyAction(actionKey);
+    setMessage(null);
+    try {
+      const reviewed = await reviewVerificationRequest(
+        accessToken,
+        request.id,
+        action,
+        reviewNotes[request.id]
+      );
+      setState((current) =>
+        current.status === "ready"
+          ? {
+              status: "ready",
+              requests: current.requests.filter((item) => item.id !== request.id)
+            }
+          : current
+      );
+      setMessage(`${reviewed.display_name} marked ${formatStatus(reviewed.status)}.`);
+    } catch (caught) {
+      setMessage(
+        caught instanceof ApiError ? caught.message : "Verification request could not be reviewed."
+      );
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  return (
+    <section className="mt-10 rounded-lg border border-border bg-white p-6 shadow-soft">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h2 className="font-display text-2xl font-semibold text-ink">Verification queue</h2>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-muted">
+            Review completed member profiles, grant verified alumni access, reject mismatches, or
+            request clearer evidence.
+          </p>
+        </div>
+        <button
+          className="focus-ring rounded-lg border border-border px-4 py-2 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary"
+          onClick={reloadQueue}
+          type="button"
+        >
+          Refresh
+        </button>
+      </div>
+
+      {message ? (
+        <p className="mt-5 rounded-lg border border-border bg-surface px-4 py-3 text-sm font-semibold text-muted">
+          {message}
+        </p>
+      ) : null}
+
+      {state.status === "loading" ? (
+        <p className="mt-6 text-sm font-semibold text-muted">Loading verification queue...</p>
+      ) : null}
+
+      {state.status === "error" ? (
+        <p className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+          {state.message}
+        </p>
+      ) : null}
+
+      {state.status === "ready" ? (
+        <div className="mt-5 divide-y divide-border">
+          {state.requests.length === 0 ? (
+            <p className="py-6 text-sm font-semibold text-muted">
+              No verification requests are waiting for review.
+            </p>
+          ) : null}
+          {state.requests.map((request) => (
+            <VerificationQueueRow
+              busyAction={busyAction}
+              key={request.id}
+              onReview={handleReview}
+              onReviewNoteChange={updateReviewNote}
+              request={request}
+              reviewNote={reviewNotes[request.id] ?? ""}
+            />
+          ))}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function VerificationQueueRow({
+  busyAction,
+  onReview,
+  onReviewNoteChange,
+  request,
+  reviewNote
+}: {
+  busyAction: string | null;
+  onReview: (request: VerificationRequest, action: VerificationReviewAction) => void;
+  onReviewNoteChange: (requestId: string, value: string) => void;
+  request: VerificationRequest;
+  reviewNote: string;
+}) {
+  const snapshot = request.profile_snapshot;
+  const programs = snapshot.program_affiliations ?? [];
+
+  return (
+    <article className="grid gap-5 py-6 xl:grid-cols-[1fr_0.55fr]">
+      <div>
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="font-display text-xl font-semibold text-ink">{request.display_name}</h3>
+          <span className="rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-bold text-secondary">
+            {formatStatus(request.status)}
+          </span>
+        </div>
+        <p className="mt-1 text-sm text-muted">{request.email}</p>
+        <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
+          <QueueDetail label="Completion" value={`${snapshot.completion_percentage ?? 0}%`} />
+          <QueueDetail label="Country" value={snapshot.country ?? "Not set"} />
+          <QueueDetail label="Sector" value={snapshot.sector ?? "Not set"} />
+          <QueueDetail label="Organization" value={snapshot.organization ?? "Not set"} />
+          <QueueDetail label="Role" value={snapshot.job_title ?? "Not set"} />
+          <QueueDetail label="Submitted" value={new Date(request.created_at).toLocaleString()} />
+        </dl>
+        {programs.length > 0 ? (
+          <div className="mt-4 rounded-lg border border-border bg-surface px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">
+              Program record
+            </p>
+            {programs.map((program) => (
+              <p className="mt-2 text-sm font-semibold text-ink" key={program.program_name}>
+                {[program.program_name, program.cohort_year, program.city, program.country]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
+            ))}
+          </div>
+        ) : null}
+        {request.submitted_note ? (
+          <p className="mt-4 rounded-lg border border-border bg-white px-4 py-3 text-sm leading-6 text-muted">
+            {request.submitted_note}
+          </p>
+        ) : null}
+      </div>
+
+      <div className="grid gap-3">
+        <label className="grid gap-2 text-sm font-semibold text-ink">
+          Reviewer note
+          <textarea
+            className="min-h-24 rounded-lg border border-border bg-white px-4 py-3 text-sm font-normal leading-6 text-ink outline-none transition focus:border-primary"
+            onChange={(event) => onReviewNoteChange(request.id, event.target.value)}
+            placeholder="Add an audit note for this decision."
+            value={reviewNote}
+          />
+        </label>
+        <div className="flex flex-wrap gap-2">
+          <ReviewButton
+            action="approve"
+            busyAction={busyAction}
+            label="Approve"
+            onClick={() => onReview(request, "approve")}
+            requestId={request.id}
+            tone="primary"
+          />
+          <ReviewButton
+            action="request-info"
+            busyAction={busyAction}
+            label="Request info"
+            onClick={() => onReview(request, "request-info")}
+            requestId={request.id}
+            tone="neutral"
+          />
+          <ReviewButton
+            action="reject"
+            busyAction={busyAction}
+            label="Reject"
+            onClick={() => onReview(request, "reject")}
+            requestId={request.id}
+            tone="danger"
+          />
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function QueueDetail({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">{label}</dt>
+      <dd className="mt-1 font-semibold text-ink">{value}</dd>
+    </div>
+  );
+}
+
+function ReviewButton({
+  action,
+  busyAction,
+  label,
+  onClick,
+  requestId,
+  tone
+}: {
+  action: VerificationReviewAction;
+  busyAction: string | null;
+  label: string;
+  onClick: () => void;
+  requestId: string;
+  tone: "danger" | "neutral" | "primary";
+}) {
+  const isBusy = busyAction === `${requestId}:${action}`;
+  const toneClass =
+    tone === "primary"
+      ? "bg-primary text-white hover:bg-[#003d7d]"
+      : tone === "danger"
+        ? "border border-red-200 text-danger hover:border-danger"
+        : "border border-border text-ink hover:border-primary hover:text-primary";
+
+  return (
+    <button
+      className={`focus-ring inline-flex h-11 items-center justify-center rounded-lg px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${toneClass}`}
+      disabled={Boolean(busyAction)}
+      onClick={onClick}
+      type="button"
+    >
+      {isBusy ? "Working..." : label}
+    </button>
+  );
+}
+
 function MetricCard({ label, value }: { label: string; value: number }) {
   return (
     <article className="rounded-lg border border-border bg-white p-5 shadow-soft">
@@ -147,4 +422,12 @@ function MetricCard({ label, value }: { label: string; value: number }) {
       <p className="mt-3 font-display text-3xl font-bold text-primary">{value}</p>
     </article>
   );
+}
+
+function formatStatus(status: string) {
+  return status
+    .toLowerCase()
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
 }

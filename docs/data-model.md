@@ -29,7 +29,7 @@
 - `alumni_skills`
 - `interests`
 - `alumni_interests`
-- `verification_requests`
+- `verification_requests` - implemented with profile snapshot, status, submitted note, reviewer note, reviewer, and review timestamp.
 - `verification_documents`
 
 ### Communities
@@ -153,9 +153,9 @@ Completed alumni profile basics:
 
 - `alumni_profiles`
 - `program_affiliations`
-
-Next add verification workflow tables:
-
 - `verification_requests`
+
+Next add upload and audit depth:
+
 - `verification_documents`
 - `audit_logs` or a scoped verification event table

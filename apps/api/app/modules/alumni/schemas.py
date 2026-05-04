@@ -103,3 +103,54 @@ class AlumniProfileResponse(BaseModel):
     program_affiliations: list[ProgramAffiliationResponse]
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class VerificationRequestCreate(BaseModel):
+    request_type: str = Field(default="ALUMNI_IDENTITY", max_length=60)
+    submitted_note: str | None = Field(default=None, max_length=1200)
+
+    @field_validator("request_type")
+    @classmethod
+    def normalize_request_type(cls, value: str) -> str:
+        return value.strip().upper().replace(" ", "_") or "ALUMNI_IDENTITY"
+
+    @field_validator("submitted_note")
+    @classmethod
+    def normalize_submitted_note(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        return value or None
+
+
+class VerificationReviewAction(BaseModel):
+    reviewer_note: str | None = Field(default=None, max_length=1200)
+
+    @field_validator("reviewer_note")
+    @classmethod
+    def normalize_reviewer_note(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        return value or None
+
+
+class VerificationRequestResponse(BaseModel):
+    id: uuid.UUID
+    profile_id: uuid.UUID
+    user_id: uuid.UUID
+    display_name: str
+    email: str
+    request_type: str
+    status: str
+    submitted_note: str | None
+    reviewer_note: str | None
+    profile_snapshot: dict
+    reviewed_by_user_id: uuid.UUID | None
+    reviewed_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class VerificationRequestListResponse(BaseModel):
+    requests: list[VerificationRequestResponse]

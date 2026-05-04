@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { ProfilePanel } from "@/components/alumni/profile-panel";
+import { VerificationRequestPanel } from "@/components/alumni/verification-request-panel";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { SessionCard } from "@/components/auth/session-card";
 import { SessionManagementPanel } from "@/components/auth/session-management-panel";
@@ -77,6 +78,7 @@ export function DashboardWorkspace() {
                 />
               </div>
               <ProfilePanel accessToken={accessToken} />
+              <VerificationRequestPanel accessToken={accessToken} />
               <SessionManagementPanel
                 accessToken={accessToken}
                 onCurrentSessionRevoked={clearSession}

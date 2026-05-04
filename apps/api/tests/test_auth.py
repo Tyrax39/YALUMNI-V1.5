@@ -70,6 +70,38 @@ def session_headers(access_token: str, refresh_token: str) -> dict[str, str]:
     }
 
 
+def complete_alumni_profile(client: TestClient, access_token: str) -> dict:
+    headers = auth_headers(access_token)
+    update_response = client.patch(
+        "/api/v1/alumni/me/profile",
+        headers=headers,
+        json={
+            "headline": "Civic technology organizer",
+            "bio": "Building transparent tools for local chapters.",
+            "country": "Ghana",
+            "city": "Accra",
+            "sector": "Civic technology",
+            "organization": "Open Chapter Lab",
+            "job_title": "Program Lead",
+            "skills": ["Governance", "Data", "Community"],
+        },
+    )
+    assert update_response.status_code == 200
+
+    affiliation_response = client.post(
+        "/api/v1/alumni/me/program-affiliations",
+        headers=headers,
+        json={
+            "program_name": "YALI Regional Leadership Center",
+            "cohort_year": 2024,
+            "country": "Ghana",
+            "city": "Accra",
+        },
+    )
+    assert affiliation_response.status_code == 201
+    return affiliation_response.json()
+
+
 def test_register_login_me_refresh_and_logout(client: TestClient) -> None:
     registered = register_user(client)
 
@@ -393,3 +425,107 @@ def test_alumni_profile_requires_authenticated_user(client: TestClient) -> None:
     response = client.get("/api/v1/alumni/me/profile")
 
     assert response.status_code == 401
+
+
+def test_verification_request_requires_complete_profile(client: TestClient) -> None:
+    registered = register_user(client, email="verification-incomplete@example.com")
+
+    response = client.post(
+        "/api/v1/alumni/me/verification-requests",
+        headers=auth_headers(registered["access_token"]),
+        json={"submitted_note": "Please verify my profile."},
+    )
+
+    assert response.status_code == 400
+
+
+def test_verification_request_admin_approval_grants_alumni_role(
+    client: TestClient,
+) -> None:
+    registered = register_user(client, email="verification-ready@example.com")
+    complete_alumni_profile(client, registered["access_token"])
+    member_headers = auth_headers(registered["access_token"])
+
+    submit_response = client.post(
+        "/api/v1/alumni/me/verification-requests",
+        headers=member_headers,
+        json={"submitted_note": "My program and chapter details are ready for review."},
+    )
+    assert submit_response.status_code == 201
+    verification_request = submit_response.json()
+    assert verification_request["status"] == "PENDING_REVIEW"
+    assert verification_request["profile_snapshot"]["completion_percentage"] == 100
+
+    duplicate_response = client.post(
+        "/api/v1/alumni/me/verification-requests",
+        headers=member_headers,
+        json={"submitted_note": "Submitting again."},
+    )
+    assert duplicate_response.status_code == 409
+
+    rejected_admin_queue = client.get(
+        "/api/v1/alumni/admin/verification-requests",
+        headers=member_headers,
+    )
+    assert rejected_admin_queue.status_code == 403
+
+    admin = register_user(client, email="verification-admin@example.com")
+    admin_headers = auth_headers(admin["access_token"])
+    bootstrap_response = client.post("/api/v1/auth/dev/bootstrap-admin", headers=admin_headers)
+    assert bootstrap_response.status_code == 200
+
+    queue_response = client.get(
+        "/api/v1/alumni/admin/verification-requests",
+        headers=admin_headers,
+    )
+    assert queue_response.status_code == 200
+    queue = queue_response.json()["requests"]
+    assert queue[0]["id"] == verification_request["id"]
+
+    approve_response = client.post(
+        f"/api/v1/alumni/admin/verification-requests/{verification_request['id']}/approve",
+        headers=admin_headers,
+        json={"reviewer_note": "Program details verified."},
+    )
+    assert approve_response.status_code == 200
+    approved_request = approve_response.json()
+    assert approved_request["status"] == "APPROVED"
+    assert approved_request["reviewer_note"] == "Program details verified."
+
+    member_response = client.get("/api/v1/auth/me", headers=member_headers)
+    assert member_response.status_code == 200
+    assert "ALUMNI_MEMBER" in member_response.json()["roles"]
+
+    second_approval = client.post(
+        f"/api/v1/alumni/admin/verification-requests/{verification_request['id']}/approve",
+        headers=admin_headers,
+        json={"reviewer_note": "Already reviewed."},
+    )
+    assert second_approval.status_code == 409
+
+
+def test_verification_admin_can_request_more_information(client: TestClient) -> None:
+    registered = register_user(client, email="verification-more-info@example.com")
+    complete_alumni_profile(client, registered["access_token"])
+
+    submit_response = client.post(
+        "/api/v1/alumni/me/verification-requests",
+        headers=auth_headers(registered["access_token"]),
+        json={"submitted_note": "Ready for verification."},
+    )
+    assert submit_response.status_code == 201
+    verification_request = submit_response.json()
+
+    admin = register_user(client, email="verification-info-admin@example.com")
+    admin_headers = auth_headers(admin["access_token"])
+    bootstrap_response = client.post("/api/v1/auth/dev/bootstrap-admin", headers=admin_headers)
+    assert bootstrap_response.status_code == 200
+
+    info_response = client.post(
+        f"/api/v1/alumni/admin/verification-requests/{verification_request['id']}/request-info",
+        headers=admin_headers,
+        json={"reviewer_note": "Please add clearer cohort details."},
+    )
+
+    assert info_response.status_code == 200
+    assert info_response.json()["status"] == "MORE_INFO_REQUESTED"

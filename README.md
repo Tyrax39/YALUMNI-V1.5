@@ -51,12 +51,12 @@ docker compose up --build
 
 ## Current Milestone
 
-The current milestone is platform foundation plus the first identity and alumni profile slices:
+The current milestone is platform foundation plus the first identity, alumni profile, and verification workflow slices:
 
 - FastAPI app with health endpoint and request ID middleware
 - Next.js app with native public landing, login, register, dashboard, and admin surfaces
 - Registration, login, refresh, logout, current-user lookup, email verification, password reset, role-gated admin overview, session management, and in-process rate limiting
-- Current-user alumni profile, program affiliation, visibility JSON settings, and dashboard profile completion panel
+- Current-user alumni profile, program affiliation, visibility JSON settings, dashboard profile completion panel, verification request submission, and admin review queue
 - Docker Compose for PostgreSQL, Redis, API, and web
 - CI workflow for web build and API tests
 - Architecture, API, data model, security, migration, and project status docs

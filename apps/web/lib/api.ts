@@ -125,6 +125,51 @@ export type ProgramAffiliationPayload = {
   status?: string;
 };
 
+export type VerificationRequest = {
+  id: string;
+  profile_id: string;
+  user_id: string;
+  display_name: string;
+  email: string;
+  request_type: string;
+  status: string;
+  submitted_note: string | null;
+  reviewer_note: string | null;
+  profile_snapshot: {
+    completion_percentage?: number;
+    headline?: string | null;
+    bio?: string | null;
+    country?: string | null;
+    city?: string | null;
+    sector?: string | null;
+    organization?: string | null;
+    job_title?: string | null;
+    skills?: string[];
+    program_affiliations?: Array<{
+      program_name: string;
+      cohort_year: number | null;
+      country: string | null;
+      city: string | null;
+      status: string;
+    }>;
+  };
+  reviewed_by_user_id: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type VerificationRequestListResponse = {
+  requests: VerificationRequest[];
+};
+
+export type VerificationRequestPayload = {
+  request_type?: string;
+  submitted_note?: string | null;
+};
+
+export type VerificationReviewAction = "approve" | "reject" | "request-info";
+
 export const adminRoles: readonly string[] = [
   "SUPER_ADMIN",
   "PLATFORM_ADMIN",
@@ -301,4 +346,51 @@ export function addProgramAffiliation(
     headers: authHeaders(accessToken),
     method: "POST"
   });
+}
+
+export function getMyVerificationRequests(
+  accessToken: string
+): Promise<VerificationRequestListResponse> {
+  return apiFetch<VerificationRequestListResponse>("/api/v1/alumni/me/verification-requests", {
+    headers: authHeaders(accessToken)
+  });
+}
+
+export function submitVerificationRequest(
+  accessToken: string,
+  payload: VerificationRequestPayload
+): Promise<VerificationRequest> {
+  return apiFetch<VerificationRequest>("/api/v1/alumni/me/verification-requests", {
+    body: JSON.stringify(payload),
+    headers: authHeaders(accessToken),
+    method: "POST"
+  });
+}
+
+export function getAdminVerificationRequests(
+  accessToken: string,
+  status = "PENDING_REVIEW"
+): Promise<VerificationRequestListResponse> {
+  return apiFetch<VerificationRequestListResponse>(
+    `/api/v1/alumni/admin/verification-requests?status=${encodeURIComponent(status)}`,
+    {
+      headers: authHeaders(accessToken)
+    }
+  );
+}
+
+export function reviewVerificationRequest(
+  accessToken: string,
+  requestId: string,
+  action: VerificationReviewAction,
+  reviewerNote?: string | null
+): Promise<VerificationRequest> {
+  return apiFetch<VerificationRequest>(
+    `/api/v1/alumni/admin/verification-requests/${requestId}/${action}`,
+    {
+      body: JSON.stringify({ reviewer_note: reviewerNote ?? null }),
+      headers: authHeaders(accessToken),
+      method: "POST"
+    }
+  );
 }
