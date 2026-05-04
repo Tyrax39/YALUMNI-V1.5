@@ -100,6 +100,11 @@ class AlumniProfileResponse(BaseModel):
     visibility: dict[str, bool]
     profile_completed_at: datetime | None
     completion_percentage: int
+    profile_photo_url: str | None
+    profile_photo_file_name: str | None
+    profile_photo_content_type: str | None
+    profile_photo_file_size_bytes: int | None
+    profile_photo_updated_at: datetime | None
     program_affiliations: list[ProgramAffiliationResponse]
 
     model_config = ConfigDict(from_attributes=True)
@@ -186,6 +191,7 @@ class AlumniDirectoryProfileResponse(BaseModel):
     sector: str | None
     organization: str | None
     job_title: str | None
+    profile_photo_url: str | None
     skills: list[str]
     program_affiliations: list[AlumniDirectoryProgramResponse]
     profile_completed_at: datetime | None

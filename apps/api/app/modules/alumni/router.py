@@ -38,7 +38,12 @@ from app.modules.alumni.schemas import (
     VerificationRequestResponse,
     VerificationReviewAction,
 )
-from app.modules.alumni.storage import evidence_file_path, store_verification_file
+from app.modules.alumni.storage import (
+    evidence_file_path,
+    profile_photo_file_path,
+    store_profile_photo_file,
+    store_verification_file,
+)
 from app.modules.auth.dependencies import get_current_user, require_roles
 from app.modules.auth.models import Role, RoleAssignment, SecurityEvent, User
 
@@ -95,6 +100,12 @@ def _sync_completion(profile: AlumniProfile) -> None:
     profile.profile_completed_at = None
 
 
+def _profile_photo_url(profile: AlumniProfile) -> str | None:
+    if not profile.profile_photo_storage_key:
+        return None
+    return f"/api/v1/alumni/{profile.user_id}/photo"
+
+
 def _serialize_profile(profile: AlumniProfile) -> AlumniProfileResponse:
     return AlumniProfileResponse(
         id=profile.id,
@@ -112,6 +123,11 @@ def _serialize_profile(profile: AlumniProfile) -> AlumniProfileResponse:
         visibility=profile.visibility or DEFAULT_VISIBILITY.copy(),
         profile_completed_at=profile.profile_completed_at,
         completion_percentage=_completion_percentage(profile),
+        profile_photo_url=_profile_photo_url(profile),
+        profile_photo_file_name=profile.profile_photo_file_name,
+        profile_photo_content_type=profile.profile_photo_content_type,
+        profile_photo_file_size_bytes=profile.profile_photo_file_size_bytes,
+        profile_photo_updated_at=profile.profile_photo_updated_at,
         program_affiliations=profile.program_affiliations,
     )
 
@@ -173,6 +189,7 @@ def _serialize_directory_profile(profile: AlumniProfile) -> AlumniDirectoryProfi
         sector=profile.sector,
         organization=profile.organization if visibility["organization"] else None,
         job_title=profile.job_title if visibility["organization"] else None,
+        profile_photo_url=_profile_photo_url(profile),
         skills=profile.skills if visibility["skills"] else [],
         program_affiliations=[
             AlumniDirectoryProgramResponse(
@@ -282,6 +299,16 @@ def _get_or_create_profile(db: Session, user: User) -> AlumniProfile:
     return db.scalar(_get_profile_query(user)) or profile
 
 
+def _delete_local_profile_photo(storage_key: str | None) -> None:
+    if not storage_key:
+        return
+    file_path = profile_photo_file_path(storage_key)
+    try:
+        file_path.unlink(missing_ok=True)
+    except OSError:
+        return
+
+
 def _verification_request_options():
     return (
         joinedload(VerificationRequest.profile).joinedload(AlumniProfile.user),
@@ -334,6 +361,22 @@ def _get_accessible_verification_request_or_404(
     return verification_request
 
 
+def _can_access_profile_photo(
+    db: Session,
+    current_user: User,
+    profile: AlumniProfile,
+) -> bool:
+    if profile.user_id == current_user.id or has_any_role(
+        _user_role_names(current_user), ADMIN_ROLE_NAMES
+    ):
+        return True
+
+    visible_profile = db.scalar(
+        _directory_base_query().where(AlumniProfile.user_id == profile.user_id)
+    )
+    return visible_profile is not None
+
+
 @router.get("/me/profile", response_model=AlumniProfileResponse)
 def get_my_profile(
     current_user: Annotated[User, Depends(get_current_user)],
@@ -363,6 +406,56 @@ def update_my_profile(
 
     _sync_completion(profile)
     db.commit()
+    profile = db.scalar(_get_profile_query(current_user)) or profile
+    return _serialize_profile(profile)
+
+
+@router.post("/me/profile-photo", response_model=AlumniProfileResponse)
+async def upload_my_profile_photo(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+    photo_file: Annotated[UploadFile, File(alias="file")],
+) -> AlumniProfileResponse:
+    profile = _get_or_create_profile(db, current_user)
+    previous_storage_key = profile.profile_photo_storage_key
+    stored_file = await store_profile_photo_file(profile_id=profile.id, upload=photo_file)
+
+    profile.profile_photo_file_name = stored_file.file_name
+    profile.profile_photo_content_type = stored_file.content_type
+    profile.profile_photo_file_size_bytes = stored_file.file_size_bytes
+    profile.profile_photo_storage_provider = stored_file.storage_provider
+    profile.profile_photo_storage_key = stored_file.storage_key
+    profile.profile_photo_updated_at = utcnow()
+    _create_security_event(db, request, current_user, "alumni.profile_photo_uploaded")
+    db.commit()
+
+    if previous_storage_key and previous_storage_key != stored_file.storage_key:
+        _delete_local_profile_photo(previous_storage_key)
+
+    profile = db.scalar(_get_profile_query(current_user)) or profile
+    return _serialize_profile(profile)
+
+
+@router.delete("/me/profile-photo", response_model=AlumniProfileResponse)
+def delete_my_profile_photo(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> AlumniProfileResponse:
+    profile = _get_or_create_profile(db, current_user)
+    previous_storage_key = profile.profile_photo_storage_key
+    profile.profile_photo_file_name = None
+    profile.profile_photo_content_type = None
+    profile.profile_photo_file_size_bytes = None
+    profile.profile_photo_storage_provider = None
+    profile.profile_photo_storage_key = None
+    profile.profile_photo_updated_at = None
+    _create_security_event(db, request, current_user, "alumni.profile_photo_deleted")
+    db.commit()
+
+    _delete_local_profile_photo(previous_storage_key)
+
     profile = db.scalar(_get_profile_query(current_user)) or profile
     return _serialize_profile(profile)
 
@@ -471,6 +564,42 @@ def search_alumni_directory(
     return AlumniDirectorySearchResponse(
         profiles=[_serialize_directory_profile(profile) for profile in profiles],
         total=total,
+    )
+
+
+@router.get("/{user_id}/photo", response_class=FileResponse)
+def get_alumni_profile_photo(
+    user_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> FileResponse:
+    profile = db.scalar(
+        select(AlumniProfile)
+        .options(joinedload(AlumniProfile.user))
+        .where(AlumniProfile.user_id == user_id)
+    )
+    if profile is None or not _can_access_profile_photo(db, current_user, profile):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Profile photo not found",
+        )
+    if not profile.profile_photo_storage_key:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Profile photo not found",
+        )
+
+    file_path = profile_photo_file_path(profile.profile_photo_storage_key)
+    if not file_path.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Profile photo not found",
+        )
+
+    return FileResponse(
+        file_path,
+        filename=profile.profile_photo_file_name,
+        media_type=profile.profile_photo_content_type,
     )
 
 

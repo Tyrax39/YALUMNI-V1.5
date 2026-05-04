@@ -30,6 +30,12 @@ class AlumniProfile(Base, TimestampMixin):
     skills: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
     visibility: Mapped[dict[str, bool]] = mapped_column(JSON, default=dict, nullable=False)
     profile_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    profile_photo_file_name: Mapped[str | None] = mapped_column(String(255))
+    profile_photo_content_type: Mapped[str | None] = mapped_column(String(120))
+    profile_photo_file_size_bytes: Mapped[int | None] = mapped_column(Integer)
+    profile_photo_storage_provider: Mapped[str | None] = mapped_column(String(40))
+    profile_photo_storage_key: Mapped[str | None] = mapped_column(String(500))
+    profile_photo_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     user: Mapped[User] = relationship()
     program_affiliations: Mapped[list["ProgramAffiliation"]] = relationship(

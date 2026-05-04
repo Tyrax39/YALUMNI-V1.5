@@ -25,6 +25,8 @@ POST /api/v1/auth/dev/bootstrap-admin
 GET  /api/v1/auth/admin/overview
 GET  /api/v1/alumni/me/profile
 PATCH /api/v1/alumni/me/profile
+POST /api/v1/alumni/me/profile-photo
+DELETE /api/v1/alumni/me/profile-photo
 POST /api/v1/alumni/me/program-affiliations
 DELETE /api/v1/alumni/me/program-affiliations/{affiliation_id}
 GET  /api/v1/alumni/me/verification-requests
@@ -36,12 +38,16 @@ POST /api/v1/alumni/admin/verification-requests/{request_id}/approve
 POST /api/v1/alumni/admin/verification-requests/{request_id}/reject
 POST /api/v1/alumni/admin/verification-requests/{request_id}/request-info
 GET  /api/v1/alumni/search
+GET  /api/v1/alumni/{user_id}/photo
 GET  /api/v1/alumni/{user_id}
 ```
 
 Evidence uploads accept PDF, JPEG, PNG, and WebP files. Uploading evidence to a
 `MORE_INFO_REQUESTED` verification request returns it to `PENDING_REVIEW` so
 admins can continue the review loop.
+
+Profile photo uploads accept JPEG, PNG, and WebP files with authenticated
+download through the profile photo endpoint.
 
 ## Phase 2: Auth
 
@@ -57,7 +63,6 @@ POST /api/v1/auth/2fa/verify
 ```text
 GET    /api/v1/alumni
 PATCH  /api/v1/alumni/me/visibility
-POST   /api/v1/alumni/me/profile-photo
 ```
 
 ## Phase 4: Communities

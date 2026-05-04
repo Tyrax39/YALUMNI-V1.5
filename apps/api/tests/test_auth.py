@@ -511,7 +511,39 @@ def test_alumni_profile_is_created_and_completed_with_program_affiliation(
     assert profile["user_id"] == registered["user"]["id"]
     assert profile["completion_percentage"] == 0
     assert profile["visibility"]["email"] is False
+    assert profile["profile_photo_url"] is None
     assert profile["program_affiliations"] == []
+
+    photo_response = client.post(
+        "/api/v1/alumni/me/profile-photo",
+        headers=headers,
+        files={"file": ("headshot.png", b"\x89PNG\r\nYALUMNI profile photo\n", "image/png")},
+    )
+    assert photo_response.status_code == 200
+    photo_profile = photo_response.json()
+    assert photo_profile["profile_photo_url"] == (
+        f"/api/v1/alumni/{registered['user']['id']}/photo"
+    )
+    assert photo_profile["profile_photo_file_name"] == "headshot.png"
+    assert photo_profile["profile_photo_content_type"] == "image/png"
+    assert photo_profile["profile_photo_file_size_bytes"] > 0
+
+    photo_download = client.get(photo_profile["profile_photo_url"], headers=headers)
+    assert photo_download.status_code == 200
+    assert photo_download.content.startswith(b"\x89PNG")
+
+    rejected_photo = client.post(
+        "/api/v1/alumni/me/profile-photo",
+        headers=headers,
+        files={"file": ("headshot.gif", b"GIF89a", "image/gif")},
+    )
+    assert rejected_photo.status_code == 415
+
+    delete_photo = client.delete("/api/v1/alumni/me/profile-photo", headers=headers)
+    assert delete_photo.status_code == 200
+    assert delete_photo.json()["profile_photo_url"] is None
+    deleted_photo_download = client.get(photo_profile["profile_photo_url"], headers=headers)
+    assert deleted_photo_download.status_code == 404
 
     update_response = client.patch(
         "/api/v1/alumni/me/profile",
@@ -577,6 +609,12 @@ def test_verification_request_admin_approval_grants_alumni_role(
     registered = register_user(client, email="verification-ready@example.com")
     complete_alumni_profile(client, registered["access_token"])
     member_headers = auth_headers(registered["access_token"])
+    photo_response = client.post(
+        "/api/v1/alumni/me/profile-photo",
+        headers=member_headers,
+        files={"file": ("verified-headshot.webp", b"RIFFYALUMNIWEBP", "image/webp")},
+    )
+    assert photo_response.status_code == 200
 
     submit_response = client.post(
         "/api/v1/alumni/me/verification-requests",
@@ -684,6 +722,9 @@ def test_verification_request_admin_approval_grants_alumni_role(
     assert search_results["total"] == 1
     assert search_results["profiles"][0]["user_id"] == registered["user"]["id"]
     assert search_results["profiles"][0]["email"] is None
+    assert search_results["profiles"][0]["profile_photo_url"] == (
+        f"/api/v1/alumni/{registered['user']['id']}/photo"
+    )
     assert search_results["profiles"][0]["program_affiliations"][0]["program_name"] == (
         "YALI Regional Leadership Center"
     )
@@ -693,7 +734,13 @@ def test_verification_request_admin_approval_grants_alumni_role(
         headers=member_headers,
     )
     assert profile_detail_response.status_code == 200
-    assert profile_detail_response.json()["display_name"] == "Amara Diallo"
+    profile_detail = profile_detail_response.json()
+    assert profile_detail["display_name"] == "Amara Diallo"
+    assert profile_detail["profile_photo_url"] == f"/api/v1/alumni/{registered['user']['id']}/photo"
+
+    admin_photo_download = client.get(profile_detail["profile_photo_url"], headers=admin_headers)
+    assert admin_photo_download.status_code == 200
+    assert admin_photo_download.content.startswith(b"RIFF")
 
     second_approval = client.post(
         f"/api/v1/alumni/admin/verification-requests/{verification_request['id']}/approve",

@@ -7,6 +7,7 @@ import {
   ApiError,
   searchAlumniDirectory
 } from "@/lib/api";
+import { ProfilePhoto } from "@/components/alumni/profile-photo";
 
 type DirectorySearchPanelProps = {
   accessToken: string;
@@ -121,7 +122,11 @@ export function DirectorySearchPanel({ accessToken }: DirectorySearchPanelProps)
                   </p>
                 ) : null}
                 {state.profiles.map((profile) => (
-                  <DirectoryResultCard key={profile.user_id} profile={profile} />
+                  <DirectoryResultCard
+                    accessToken={accessToken}
+                    key={profile.user_id}
+                    profile={profile}
+                  />
                 ))}
               </div>
             </>
@@ -156,16 +161,33 @@ function DirectoryInput({
   );
 }
 
-function DirectoryResultCard({ profile }: { profile: AlumniDirectoryProfile }) {
+function DirectoryResultCard({
+  accessToken,
+  profile
+}: {
+  accessToken: string;
+  profile: AlumniDirectoryProfile;
+}) {
   const location = [profile.city, profile.country].filter(Boolean).join(", ");
   const primaryProgram = profile.program_affiliations[0];
 
   return (
     <article className="rounded-lg border border-border bg-surface p-4">
-      <h3 className="font-display text-xl font-semibold text-ink">{profile.display_name}</h3>
-      {profile.headline ? (
-        <p className="mt-2 text-sm font-semibold text-primary">{profile.headline}</p>
-      ) : null}
+      <div className="flex items-start gap-3">
+        <ProfilePhoto
+          accessToken={accessToken}
+          displayName={profile.display_name}
+          hasPhoto={Boolean(profile.profile_photo_url)}
+          sizeClassName="h-12 w-12"
+          userId={profile.user_id}
+        />
+        <div className="min-w-0">
+          <h3 className="font-display text-xl font-semibold text-ink">{profile.display_name}</h3>
+          {profile.headline ? (
+            <p className="mt-2 text-sm font-semibold text-primary">{profile.headline}</p>
+          ) : null}
+        </div>
+      </div>
       <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
         <DirectoryDetail label="Sector" value={profile.sector ?? "Not shared"} />
         <DirectoryDetail label="Location" value={location || "Not shared"} />

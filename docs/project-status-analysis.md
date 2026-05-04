@@ -533,6 +533,64 @@ Next possible implementation slices:
 - Dedicated admin audit log viewer.
 - Admin 2FA policy placeholder and enforcement gate.
 
+## Current V1.5 Implementation Update: 2026-05-05 Profile Photo Slice
+
+Completed after verification evidence uploads:
+
+- Alumni profile photo metadata columns and Alembic migration `20260505_0006` were added.
+- Member profile photo upload API was added at `/api/v1/alumni/me/profile-photo`.
+- Member profile photo deletion API was added at `/api/v1/alumni/me/profile-photo`.
+- Authenticated profile photo download API was added at `/api/v1/alumni/{user_id}/photo`.
+- Upload validation now allows JPEG, PNG, and WebP profile photos with a configurable 2 MB MVP limit.
+- Profile photo storage is local-only through `PROFILE_PHOTO_UPLOAD_DIR`; this should later use the same private object-storage adapter planned for verification evidence.
+- Current-user profile responses and directory profile responses now expose profile photo metadata/URL when available.
+- Dashboard profile panel now supports uploading, viewing, and removing the current member photo.
+- Directory cards now show authenticated member photos using bearer-token blob fetching.
+- API tests cover upload, invalid content-type rejection, authenticated download, delete, profile serialization, directory serialization, and admin download.
+
+Current plan position:
+
+- Phase 1 remains functionally complete for local foundation.
+- Phase 2 remains roughly 89% complete.
+- Phase 3 is now roughly 49% complete because profile media is implemented alongside profile, verification, and directory basics.
+- Phase 4 remains roughly 18% complete.
+- Overall 24-week MVP implementation is roughly 25% complete.
+
+Implemented now:
+
+- Native landing page.
+- Monorepo foundation, CI, docs, Docker Compose.
+- FastAPI health/status and request middleware.
+- Identity auth, refresh sessions, account recovery, email verification, protected platform owner, role-gated admin overview, session management, and MVP-local rate limiting.
+- Local-only test-account seeding for role and directory QA.
+- Protected dashboard/admin route behavior.
+- Alumni current-user profile model/API/UI with profile photo upload/display/delete.
+- Program affiliation model/API/UI.
+- Verification request submission, member status history, admin queue, review actions, alumni-member role grant, and local evidence upload/review.
+- Verified member directory search/profile detail with privacy-aware serializers and authenticated profile-photo display.
+
+Main gaps now:
+
+- Auth still uses local-storage bearer tokens in the web app; production should move to HttpOnly cookies and SSR/middleware guards.
+- Admin 2FA is still not implemented.
+- Real email provider/templates are not wired.
+- Upload storage is local-only; production object storage, malware scanning, signed URLs, image processing, CDN policy, and retention policy are still missing.
+- Directory search is database-backed MVP search, not Meilisearch/OpenSearch.
+- Public profile pages, saved searches, pagination UI, and advanced filters are not implemented.
+- Test accounts are local/dev seed data only; there is no production-safe demo identity lifecycle yet.
+- Skills are stored as MVP JSON rather than normalized skill tables.
+- Dedicated audit log viewer is not implemented; audit data currently lands in `security_events`.
+- Redis-backed rate limiting and background jobs are not wired yet.
+
+Next possible implementation slices:
+
+- Private object-storage adapter shared by profile photos and verification evidence.
+- Secure cookie auth migration and route middleware.
+- Directory pagination/advanced filters and profile detail page.
+- Dedicated admin audit log viewer.
+- Admin 2FA policy placeholder and enforcement gate.
+- Communities module foundation.
+
 ## Current V1.5 Implementation Update: 2026-05-05 Verification Evidence Slice
 
 Completed after platform owner and directory search:

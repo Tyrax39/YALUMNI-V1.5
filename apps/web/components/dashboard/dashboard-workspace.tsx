@@ -78,7 +78,7 @@ export function DashboardWorkspace() {
                   onUserChange={setUser}
                 />
               </div>
-              <ProfilePanel accessToken={accessToken} />
+              <ProfilePanel accessToken={accessToken} displayName={user.display_name} />
               <VerificationRequestPanel accessToken={accessToken} />
               <DirectorySearchPanel accessToken={accessToken} />
               <SessionManagementPanel

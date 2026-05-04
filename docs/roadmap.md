@@ -33,6 +33,7 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
 ## Phase 3: Alumni Profiles And Verification
 
 - Profile model. Implemented.
+- Profile photo upload/display. Implemented with local authenticated image storage.
 - Program affiliation model. Implemented.
 - Current-user profile edit API. Implemented.
 - Dashboard profile completion UI. Implemented.

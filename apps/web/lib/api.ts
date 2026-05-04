@@ -100,6 +100,11 @@ export type AlumniProfile = {
   visibility: Record<string, boolean>;
   profile_completed_at: string | null;
   completion_percentage: number;
+  profile_photo_url: string | null;
+  profile_photo_file_name: string | null;
+  profile_photo_content_type: string | null;
+  profile_photo_file_size_bytes: number | null;
+  profile_photo_updated_at: string | null;
   program_affiliations: ProgramAffiliation[];
 };
 
@@ -200,6 +205,7 @@ export type AlumniDirectoryProfile = {
   sector: string | null;
   organization: string | null;
   job_title: string | null;
+  profile_photo_url: string | null;
   skills: string[];
   program_affiliations: AlumniDirectoryProgram[];
   profile_completed_at: string | null;
@@ -376,6 +382,39 @@ export function updateMyAlumniProfile(
     headers: authHeaders(accessToken),
     method: "PATCH"
   });
+}
+
+export function uploadProfilePhoto(accessToken: string, file: File): Promise<AlumniProfile> {
+  const formData = new FormData();
+  formData.set("file", file);
+
+  return apiFetch<AlumniProfile>("/api/v1/alumni/me/profile-photo", {
+    body: formData,
+    headers: authHeaders(accessToken),
+    method: "POST"
+  });
+}
+
+export function deleteProfilePhoto(accessToken: string): Promise<AlumniProfile> {
+  return apiFetch<AlumniProfile>("/api/v1/alumni/me/profile-photo", {
+    headers: authHeaders(accessToken),
+    method: "DELETE"
+  });
+}
+
+export async function downloadProfilePhoto(
+  accessToken: string,
+  userId: string
+): Promise<Blob> {
+  const response = await fetch(`${apiBaseUrl}/api/v1/alumni/${userId}/photo`, {
+    headers: authHeaders(accessToken)
+  });
+
+  if (!response.ok) {
+    throw new ApiError(await readError(response), response.status);
+  }
+
+  return response.blob();
 }
 
 export function addProgramAffiliation(

@@ -6,12 +6,16 @@ import {
   addProgramAffiliation,
   AlumniProfile,
   ApiError,
+  deleteProfilePhoto,
   getMyAlumniProfile,
-  updateMyAlumniProfile
+  updateMyAlumniProfile,
+  uploadProfilePhoto
 } from "@/lib/api";
+import { ProfilePhoto } from "@/components/alumni/profile-photo";
 
 type ProfilePanelProps = {
   accessToken: string;
+  displayName: string;
 };
 
 type ProfileFormState = {
@@ -59,13 +63,18 @@ const emptyProgramForm: ProgramFormState = {
   city: ""
 };
 
-export function ProfilePanel({ accessToken }: ProfilePanelProps) {
+export function ProfilePanel({ accessToken, displayName }: ProfilePanelProps) {
   const [loadState, setLoadState] = useState<LoadState>({ status: "loading" });
   const [profileForm, setProfileForm] = useState<ProfileFormState>(emptyProfileForm);
   const [programForm, setProgramForm] = useState<ProgramFormState>(emptyProgramForm);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoInputKey, setPhotoInputKey] = useState(0);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isAddingProgram, setIsAddingProgram] = useState(false);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [isDeletingPhoto, setIsDeletingPhoto] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [photoMessage, setPhotoMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -161,6 +170,52 @@ export function ProfilePanel({ accessToken }: ProfilePanelProps) {
     }
   }
 
+  async function handlePhotoSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!photoFile) {
+      setPhotoMessage("Choose a JPEG, PNG, or WebP photo first.");
+      return;
+    }
+
+    setPhotoMessage(null);
+    setIsUploadingPhoto(true);
+
+    try {
+      const profile = await uploadProfilePhoto(accessToken, photoFile);
+      setLoadState({ status: "ready", profile });
+      setProfileForm(profileToForm(profile));
+      setPhotoFile(null);
+      setPhotoInputKey((current) => current + 1);
+      setPhotoMessage("Profile photo updated.");
+    } catch (caught) {
+      setPhotoMessage(
+        caught instanceof ApiError ? caught.message : "Profile photo could not be uploaded."
+      );
+    } finally {
+      setIsUploadingPhoto(false);
+    }
+  }
+
+  async function handlePhotoDelete() {
+    setPhotoMessage(null);
+    setIsDeletingPhoto(true);
+
+    try {
+      const profile = await deleteProfilePhoto(accessToken);
+      setLoadState({ status: "ready", profile });
+      setProfileForm(profileToForm(profile));
+      setPhotoFile(null);
+      setPhotoInputKey((current) => current + 1);
+      setPhotoMessage("Profile photo removed.");
+    } catch (caught) {
+      setPhotoMessage(
+        caught instanceof ApiError ? caught.message : "Profile photo could not be removed."
+      );
+    } finally {
+      setIsDeletingPhoto(false);
+    }
+  }
+
   async function handleProgramSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSuccessMessage(null);
@@ -224,20 +279,74 @@ export function ProfilePanel({ accessToken }: ProfilePanelProps) {
           ) : null}
 
           {loadState.status === "ready" ? (
-            <div className="mt-6 grid gap-2">
-              {completedItems.map(([label, done]) => (
-                <div className="flex items-center justify-between gap-3 text-sm" key={label}>
-                  <span className="font-semibold text-ink">{label}</span>
-                  <span
-                    className={`rounded-md px-2.5 py-1 text-xs font-bold ${
-                      done ? "bg-emerald-50 text-secondary" : "bg-white text-muted"
-                    }`}
-                  >
-                    {done ? "Done" : "Missing"}
-                  </span>
+            <>
+              <div className="mt-6 flex items-center gap-4 rounded-lg border border-border bg-surface p-4">
+                <ProfilePhoto
+                  accessToken={accessToken}
+                  displayName={displayName}
+                  hasPhoto={Boolean(loadState.profile.profile_photo_url)}
+                  sizeClassName="h-16 w-16"
+                  updatedAt={loadState.profile.profile_photo_updated_at}
+                  userId={loadState.profile.user_id}
+                />
+                <div>
+                  <p className="font-semibold text-ink">{displayName}</p>
+                  <p className="mt-1 text-sm leading-6 text-muted">
+                    {loadState.profile.profile_photo_file_name ?? "No profile photo uploaded"}
+                  </p>
                 </div>
-              ))}
-            </div>
+              </div>
+
+              <form className="mt-4 grid gap-3" onSubmit={handlePhotoSubmit}>
+                <label className="grid gap-2 text-sm font-semibold text-ink">
+                  Profile photo
+                  <input
+                    accept="image/jpeg,image/png,image/webp"
+                    className="rounded-lg border border-border bg-white px-3 py-2 text-sm font-normal text-ink file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white"
+                    key={photoInputKey}
+                    onChange={(event) => setPhotoFile(event.target.files?.[0] ?? null)}
+                    type="file"
+                  />
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    className="focus-ring rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#003d7d] disabled:cursor-not-allowed disabled:opacity-65"
+                    disabled={isUploadingPhoto}
+                    type="submit"
+                  >
+                    {isUploadingPhoto ? "Uploading..." : "Upload photo"}
+                  </button>
+                  {loadState.profile.profile_photo_url ? (
+                    <button
+                      className="focus-ring rounded-lg border border-border bg-white px-4 py-2 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={isDeletingPhoto}
+                      onClick={handlePhotoDelete}
+                      type="button"
+                    >
+                      {isDeletingPhoto ? "Removing..." : "Remove"}
+                    </button>
+                  ) : null}
+                </div>
+                {photoMessage ? (
+                  <p className="text-sm font-semibold text-muted">{photoMessage}</p>
+                ) : null}
+              </form>
+
+              <div className="mt-6 grid gap-2">
+                {completedItems.map(([label, done]) => (
+                  <div className="flex items-center justify-between gap-3 text-sm" key={label}>
+                    <span className="font-semibold text-ink">{label}</span>
+                    <span
+                      className={`rounded-md px-2.5 py-1 text-xs font-bold ${
+                        done ? "bg-emerald-50 text-secondary" : "bg-white text-muted"
+                      }`}
+                    >
+                      {done ? "Done" : "Missing"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </>
           ) : null}
         </aside>
 

@@ -22,7 +22,7 @@
 
 ### Alumni
 
-- `alumni_profiles` - implemented with current-user profile fields, skills JSON, visibility JSON, and completion timestamp.
+- `alumni_profiles` - implemented with current-user profile fields, profile photo metadata, skills JSON, visibility JSON, and completion timestamp.
 - `program_affiliations` - implemented for YALI program/cohort attachment.
 - `profile_visibility_settings` - folded into `alumni_profiles.visibility` for the MVP, likely split later if rules become per-field/per-community.
 - `skills`
@@ -157,5 +157,5 @@ Completed alumni profile basics:
 
 Next add production storage and audit depth:
 
-- Private object-storage adapter for `verification_evidence`
+- Private object-storage adapter shared by profile photos and verification evidence
 - `audit_logs` or a scoped verification event table
