@@ -533,6 +533,68 @@ Next possible implementation slices:
 - Dedicated admin audit log viewer.
 - Admin 2FA policy placeholder and enforcement gate.
 
+## Current V1.5 Implementation Update: 2026-05-05 Community Detail And Roster Slice
+
+Completed after the communities foundation slice:
+
+- Community member roster API was added at `/api/v1/communities/{community_id}/members`.
+- Active rosters are visible to authenticated members.
+- Pending and left roster status views are protected for admins and community owners.
+- Roster responses include member identity, role, status, join timestamp, pagination metadata, and `has_more`.
+- The route-entry proxy now protects `/communities/*`.
+- Dashboard community cards now link to a protected community detail route.
+- Protected web community detail pages were added at `/communities/{community_id}`.
+- Community detail pages load community summary and active roster data in parallel through the cookie-session backend proxy.
+- Detail pages support join, pending join state, owner state, leave, and paginated active member rosters.
+- Backend tests now cover active roster visibility and pending roster permission checks.
+
+Current plan position:
+
+- Phase 1 remains functionally complete for local foundation.
+- Phase 2 remains roughly 97% complete.
+- Phase 3 remains roughly 53% complete.
+- Phase 4 remains roughly 42% complete.
+- Phase 5 is now roughly 28% complete because communities have models, membership lifecycle basics, discovery, detail pages, and active rosters.
+- Overall 24-week MVP implementation is roughly 34% complete.
+
+Implemented now:
+
+- Native landing page.
+- Monorepo foundation, CI, docs, Docker Compose.
+- FastAPI health/status and request middleware.
+- Identity auth, refresh sessions, account recovery, email verification, protected platform owner, local test accounts, role-gated admin overview, session management, MVP-local rate limiting, HttpOnly cookie-backed web sessions, CSRF-protected web mutations, and TOTP 2FA enrollment.
+- Config-gated admin 2FA enforcement for privileged API routes.
+- Protected dashboard/admin/directory/community route behavior with a Next route-entry proxy and server-side backend API proxy.
+- Alumni current-user profile model/API/UI with profile photo upload/display/delete.
+- Program affiliation model/API/UI.
+- Verification request submission, member status history, admin queue, review actions, alumni-member role grant, and local/S3-ready evidence upload/review.
+- Verified member directory search/profile detail with privacy-aware serializers, authenticated profile-photo display, advanced filters, sort options, pagination, and a dedicated web profile page.
+- Community list/create/detail APIs, open/request join policies, member leave flow, dashboard communities panel, protected community detail page, active member roster API/UI, and basic community audit events.
+- Admin audit event API and admin audit log viewer.
+
+Main gaps now:
+
+- Community membership request approval/rejection is not implemented yet.
+- Scoped community manager roles, invitations, member removal, and role changes are not implemented.
+- Community content gates and private feed/event association are not implemented.
+- Directory search is still database-backed MVP search, not Meilisearch/OpenSearch.
+- Saved searches, recommended alumni, normalized skill taxonomy, and directory facets/counts are not implemented.
+- Profile-to-profile contact/introduction workflows are not implemented.
+- 2FA backup codes, forced enrollment grace period, and support recovery workflows are not implemented.
+- Real email provider/templates are not wired.
+- Production cookie/domain/SameSite review and per-session CSRF rotation policy are still pending.
+- Production object storage needs real bucket credentials, bucket policy validation, malware scanning, signed URL policy, image processing, CDN policy, and retention policy.
+- Redis-backed rate limiting and background jobs are not wired yet.
+
+Next possible implementation slices:
+
+- Community membership request review for admins/managers.
+- Community manager roles and member management.
+- Feed module foundation with community-scoped posts.
+- Profile-to-profile introduction/contact request flow.
+- 2FA backup/recovery codes and forced-enrollment rollout workflow.
+- Real email provider/template integration.
+
 ## Current V1.5 Implementation Update: 2026-05-05 Communities Foundation Slice
 
 Completed after the directory profile detail page slice:

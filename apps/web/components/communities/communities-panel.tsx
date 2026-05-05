@@ -2,7 +2,8 @@
 
 import { FormEvent, useEffect, useState } from "react";
 
-import { LogIn, LogOut, Plus, Users } from "lucide-react";
+import { ArrowRight, LogIn, LogOut, Plus, Users } from "lucide-react";
+import Link from "next/link";
 
 import {
   ApiError,
@@ -421,6 +422,13 @@ function CommunityCard({
         <CommunityDetail label="Your status" value={community.membership_status ? formatCommunityType(community.membership_status) : "Not joined"} />
       </dl>
       <div className="mt-5">
+        <Link
+          className="focus-ring mr-2 inline-flex min-h-10 items-center gap-2 rounded-lg border border-border px-4 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary"
+          href={`/communities/${community.id}`}
+        >
+          Open
+          <ArrowRight aria-hidden="true" className="h-4 w-4" />
+        </Link>
         {activeMember ? (
           <button
             className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-lg border border-border px-4 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"

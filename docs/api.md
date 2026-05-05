@@ -48,6 +48,7 @@ GET  /api/v1/alumni/{user_id}
 GET  /api/v1/communities
 POST /api/v1/communities
 GET  /api/v1/communities/{community_id}
+GET  /api/v1/communities/{community_id}/members
 POST /api/v1/communities/{community_id}/join
 POST /api/v1/communities/{community_id}/leave
 ```
@@ -82,6 +83,15 @@ Community listing supports:
 - `limit`
 - `offset`
 
+Community member rosters support:
+
+- `status=ACTIVE|PENDING|LEFT|ALL`
+- `limit`
+- `offset`
+
+Active rosters are visible to signed-in members. Pending, left, and all-status
+rosters are restricted to admins and community owners.
+
 ## Phase 3: Alumni
 
 ```text
@@ -93,7 +103,6 @@ PATCH  /api/v1/alumni/me/visibility
 
 ```text
 PATCH  /api/v1/communities/{community_id}
-GET    /api/v1/communities/{community_id}/members
 PATCH  /api/v1/communities/{community_id}/members/{user_id}
 ```
 

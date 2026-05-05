@@ -65,3 +65,22 @@ class CommunityListResponse(BaseModel):
     limit: int
     offset: int
     has_more: bool
+
+
+class CommunityMemberResponse(BaseModel):
+    id: uuid.UUID
+    user_id: uuid.UUID
+    display_name: str
+    email: str
+    role: str
+    status: str
+    joined_at: datetime | None
+    created_at: datetime
+
+
+class CommunityMemberListResponse(BaseModel):
+    members: list[CommunityMemberResponse]
+    total: int
+    limit: int
+    offset: int
+    has_more: bool

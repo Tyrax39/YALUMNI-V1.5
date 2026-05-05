@@ -4,7 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import String, and_, cast, func, or_, select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.core.database import get_db_session
 from app.core.permissions import ADMIN_ROLE_NAMES
@@ -15,6 +15,8 @@ from app.modules.communities.models import Community, CommunityMembership
 from app.modules.communities.schemas import (
     CommunityCreate,
     CommunityListResponse,
+    CommunityMemberListResponse,
+    CommunityMemberResponse,
     CommunityResponse,
 )
 
@@ -99,6 +101,18 @@ def _membership_for_user(
     )
 
 
+def _user_role_names(user: User) -> set[str]:
+    return {assignment.role.name for assignment in user.role_assignments}
+
+
+def _can_manage_community(user: User, community: Community) -> bool:
+    if _user_role_names(user).intersection(ADMIN_ROLE_NAMES):
+        return True
+
+    membership = _membership_for_user(community, user.id)
+    return bool(membership and membership.status == "ACTIVE" and membership.role == "OWNER")
+
+
 def _serialize_community(community: Community, current_user: User) -> CommunityResponse:
     membership = _membership_for_user(community, current_user.id)
     return CommunityResponse(
@@ -118,6 +132,19 @@ def _serialize_community(community: Community, current_user: User) -> CommunityR
         membership_status=membership.status if membership else None,
         membership_role=membership.role if membership else None,
         created_at=community.created_at,
+    )
+
+
+def _serialize_member(membership: CommunityMembership) -> CommunityMemberResponse:
+    return CommunityMemberResponse(
+        id=membership.id,
+        user_id=membership.user_id,
+        display_name=membership.user.display_name,
+        email=membership.user.email,
+        role=membership.role,
+        status=membership.status,
+        joined_at=membership.joined_at,
+        created_at=membership.created_at,
     )
 
 
@@ -254,6 +281,53 @@ def get_community(
 ) -> CommunityResponse:
     community = _get_community_or_404(db, community_id)
     return _serialize_community(community, current_user)
+
+
+@router.get("/{community_id}/members", response_model=CommunityMemberListResponse)
+def list_community_members(
+    community_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+    status_filter: Annotated[
+        str,
+        Query(alias="status", pattern="^(ACTIVE|PENDING|LEFT|ALL)$"),
+    ] = "ACTIVE",
+    limit: Annotated[int, Query(ge=1, le=50)] = 20,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> CommunityMemberListResponse:
+    community = _get_community_or_404(db, community_id)
+    normalized_status = status_filter.strip().upper()
+    if normalized_status != "ACTIVE" and not _can_manage_community(current_user, community):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to view this member status",
+        )
+
+    query = (
+        select(CommunityMembership)
+        .options(joinedload(CommunityMembership.user))
+        .where(CommunityMembership.community_id == community.id)
+    )
+    if normalized_status != "ALL":
+        query = query.where(CommunityMembership.status == normalized_status)
+
+    total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+    members = db.scalars(
+        query.order_by(
+            CommunityMembership.role.desc(),
+            CommunityMembership.joined_at.desc(),
+            CommunityMembership.created_at.desc(),
+        )
+        .offset(offset)
+        .limit(limit)
+    ).all()
+    return CommunityMemberListResponse(
+        members=[_serialize_member(membership) for membership in members],
+        total=total,
+        limit=limit,
+        offset=offset,
+        has_more=offset + len(members) < total,
+    )
 
 
 @router.post("/{community_id}/join", response_model=CommunityResponse)

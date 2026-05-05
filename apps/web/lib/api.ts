@@ -279,6 +279,25 @@ export type CommunityListResponse = {
   has_more: boolean;
 };
 
+export type CommunityMember = {
+  id: string;
+  user_id: string;
+  display_name: string;
+  email: string;
+  role: string;
+  status: string;
+  joined_at: string | null;
+  created_at: string;
+};
+
+export type CommunityMemberListResponse = {
+  members: CommunityMember[];
+  total: number;
+  limit: number;
+  offset: number;
+  has_more: boolean;
+};
+
 export type CommunityCreatePayload = {
   name: string;
   community_type?: string;
@@ -841,6 +860,40 @@ export function createCommunity(
     headers: authHeaders(accessToken),
     method: "POST"
   });
+}
+
+export function getCommunity(accessToken: string, communityId: string): Promise<Community> {
+  return protectedApiFetch<Community>(
+    `/api/v1/communities/${encodeURIComponent(communityId)}`,
+    {
+      headers: authHeaders(accessToken)
+    }
+  );
+}
+
+export function listCommunityMembers(
+  accessToken: string,
+  communityId: string,
+  params: { limit?: number; offset?: number; status?: string } = {}
+): Promise<CommunityMemberListResponse> {
+  const searchParams = new URLSearchParams();
+  if (params.status) {
+    searchParams.set("status", params.status);
+  }
+  if (params.limit) {
+    searchParams.set("limit", String(params.limit));
+  }
+  if (params.offset) {
+    searchParams.set("offset", String(params.offset));
+  }
+
+  const query = searchParams.toString();
+  return protectedApiFetch<CommunityMemberListResponse>(
+    `/api/v1/communities/${encodeURIComponent(communityId)}/members${query ? `?${query}` : ""}`,
+    {
+      headers: authHeaders(accessToken)
+    }
+  );
 }
 
 export function joinCommunity(accessToken: string, communityId: string): Promise<Community> {

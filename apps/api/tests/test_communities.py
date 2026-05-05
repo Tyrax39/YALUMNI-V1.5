@@ -128,6 +128,18 @@ def test_community_admin_can_create_and_member_can_join_leave(client: TestClient
     assert joined["membership_role"] == "MEMBER"
     assert joined["member_count"] == 2
 
+    members_response = client.get(
+        f"/api/v1/communities/{community['id']}/members",
+        headers=member_headers,
+    )
+    assert members_response.status_code == 200
+    members = members_response.json()
+    assert members["total"] == 2
+    assert {member["email"] for member in members["members"]} == {
+        "admin@example.com",
+        "member@example.com",
+    }
+
     mine_response = client.get("/api/v1/communities?membership=mine", headers=member_headers)
     assert mine_response.status_code == 200
     assert mine_response.json()["total"] == 1
@@ -140,6 +152,13 @@ def test_community_admin_can_create_and_member_can_join_leave(client: TestClient
     left = leave_response.json()
     assert left["membership_status"] == "LEFT"
     assert left["member_count"] == 1
+
+    members_after_leave = client.get(
+        f"/api/v1/communities/{community['id']}/members",
+        headers=member_headers,
+    )
+    assert members_after_leave.status_code == 200
+    assert members_after_leave.json()["total"] == 1
 
 
 def test_community_create_requires_admin_and_request_join_policy(client: TestClient) -> None:
@@ -168,6 +187,20 @@ def test_community_create_requires_admin_and_request_join_policy(client: TestCli
     requested = request_response.json()
     assert requested["membership_status"] == "PENDING"
     assert requested["member_count"] == 1
+
+    denied_pending_roster = client.get(
+        f"/api/v1/communities/{community['id']}/members?status=PENDING",
+        headers=auth_headers(regular_user["access_token"]),
+    )
+    assert denied_pending_roster.status_code == 403
+
+    pending_roster = client.get(
+        f"/api/v1/communities/{community['id']}/members?status=PENDING",
+        headers=admin_headers,
+    )
+    assert pending_roster.status_code == 200
+    assert pending_roster.json()["total"] == 1
+    assert pending_roster.json()["members"][0]["email"] == "regular@example.com"
 
     not_joined_response = client.get(
         "/api/v1/communities?membership=not_joined",

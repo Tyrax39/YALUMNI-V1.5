@@ -60,8 +60,9 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
 - Community model. Implemented.
 - Membership and join requests. Started with open joins, request-only pending status, and member leave.
 - Dashboard community discovery panel. Implemented with filters, pagination, join/leave, and admin create.
+- Community detail pages and active rosters. Implemented.
 - Chapter admin roles. Planned.
-- Community detail pages and rosters. Planned.
+- Membership request review and member management. Planned.
 - Private content gates. Planned.
 
 ## Phase 6: Feed And Moderation
