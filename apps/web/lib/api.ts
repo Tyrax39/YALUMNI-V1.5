@@ -735,3 +735,15 @@ export function searchAlumniDirectory(
     }
   );
 }
+
+export function getAlumniDirectoryProfile(
+  accessToken: string,
+  userId: string
+): Promise<AlumniDirectoryProfile> {
+  return protectedApiFetch<AlumniDirectoryProfile>(
+    `/api/v1/alumni/${encodeURIComponent(userId)}`,
+    {
+      headers: authHeaders(accessToken)
+    }
+  );
+}

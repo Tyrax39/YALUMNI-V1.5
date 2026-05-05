@@ -50,10 +50,10 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
 - Search and filters. Implemented for query, country, city, sector, program, cohort year, and skill.
 - Pagination metadata and previous/next dashboard controls. Implemented.
 - Sort controls. Implemented for name, recently verified, country, and sector.
-- Profile detail. Implemented for verified member profiles.
+- Profile detail API and protected web detail page. Implemented for verified member profiles.
 - Privacy-aware serializers. Started using profile visibility settings.
 - Dashboard directory search UI. Implemented.
-- Rich web profile detail page, saved searches, facets, and dedicated search indexing later.
+- Saved searches, facets, recommendations, profile-to-profile contact, and dedicated search indexing later.
 
 ## Phase 5: Communities
 

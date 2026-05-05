@@ -2,6 +2,9 @@
 
 import { FormEvent, useEffect, useState } from "react";
 
+import { ArrowRight } from "lucide-react";
+import Link from "next/link";
+
 import {
   AlumniDirectoryProfile,
   ApiError,
@@ -342,6 +345,13 @@ function DirectoryResultCard({
             .join(" · ")}
         </p>
       ) : null}
+      <Link
+        className="focus-ring mt-4 inline-flex min-h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white transition hover:bg-[#003d7d]"
+        href={`/directory/${profile.user_id}`}
+      >
+        View profile
+        <ArrowRight aria-hidden="true" className="h-4 w-4" />
+      </Link>
     </article>
   );
 }

@@ -533,6 +533,61 @@ Next possible implementation slices:
 - Dedicated admin audit log viewer.
 - Admin 2FA policy placeholder and enforcement gate.
 
+## Current V1.5 Implementation Update: 2026-05-05 Directory Profile Detail Page Slice
+
+Completed after the directory advanced search slice:
+
+- A protected web profile route was added at `/directory/{user_id}`.
+- Dashboard directory cards now link to the member profile detail route.
+- Directory profile detail pages load the existing privacy-aware directory profile API through the cookie-session backend proxy.
+- The route-entry proxy now protects `/directory/*` in addition to dashboard and admin routes.
+- Profile detail pages show the verified member identity, profile photo, headline, location, current work, program history, skills/focus, and shared email only when visibility allows it.
+- Loading and error states were added for profile detail fetches.
+- The web API client now exposes `getAlumniDirectoryProfile`.
+
+Current plan position:
+
+- Phase 1 remains functionally complete for local foundation.
+- Phase 2 remains roughly 97% complete.
+- Phase 3 remains roughly 53% complete.
+- Phase 4 is now roughly 42% complete because the directory now supports list, search, pagination, and a real member profile detail experience.
+- Overall 24-week MVP implementation is roughly 31% complete.
+
+Implemented now:
+
+- Native landing page.
+- Monorepo foundation, CI, docs, Docker Compose.
+- FastAPI health/status and request middleware.
+- Identity auth, refresh sessions, account recovery, email verification, protected platform owner, local test accounts, role-gated admin overview, session management, MVP-local rate limiting, HttpOnly cookie-backed web sessions, CSRF-protected web mutations, and TOTP 2FA enrollment.
+- Config-gated admin 2FA enforcement for privileged API routes.
+- Protected dashboard/admin/directory route behavior with a Next route-entry proxy and server-side backend API proxy.
+- Alumni current-user profile model/API/UI with profile photo upload/display/delete.
+- Program affiliation model/API/UI.
+- Verification request submission, member status history, admin queue, review actions, alumni-member role grant, and local/S3-ready evidence upload/review.
+- Verified member directory search/profile detail with privacy-aware serializers, authenticated profile-photo display, advanced filters, sort options, pagination, and a dedicated web profile page.
+- Admin audit event API and admin audit log viewer.
+
+Main gaps now:
+
+- Directory search is still database-backed MVP search, not Meilisearch/OpenSearch.
+- Saved searches, recommended alumni, normalized skill taxonomy, and directory facets/counts are not implemented.
+- Profile-to-profile contact/introduction workflows are not implemented; shared email is display-only when the member exposes it.
+- 2FA backup codes, forced enrollment grace period, and support recovery workflows are not implemented.
+- Real email provider/templates are not wired.
+- Production cookie/domain/SameSite review and per-session CSRF rotation policy are still pending.
+- Production object storage needs real bucket credentials, bucket policy validation, malware scanning, signed URL policy, image processing, CDN policy, and retention policy.
+- Test accounts are local/dev seed data only; there is no production-safe demo identity lifecycle yet.
+- Redis-backed rate limiting and background jobs are not wired yet.
+
+Next possible implementation slices:
+
+- Communities module foundation.
+- Profile-to-profile introduction/contact request flow.
+- 2FA backup/recovery codes and forced-enrollment rollout workflow.
+- Real email provider/template integration.
+- Redis-backed rate limits and background jobs.
+- Directory facets/saved searches and Meilisearch/OpenSearch indexing plan.
+
 ## Current V1.5 Implementation Update: 2026-05-05 Directory Advanced Search Slice
 
 Completed after the admin 2FA slice:
