@@ -2,7 +2,17 @@
 
 import { useEffect, useState } from "react";
 
-import { ArrowLeft, LogIn, LogOut, MapPin, ShieldCheck, Users } from "lucide-react";
+import {
+  ArrowLeft,
+  LogIn,
+  LogOut,
+  MapPin,
+  ShieldCheck,
+  ShieldMinus,
+  ShieldPlus,
+  UserMinus,
+  Users
+} from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 
@@ -17,7 +27,9 @@ import {
   joinCommunity,
   leaveCommunity,
   listCommunityMembers,
-  rejectCommunityMember
+  rejectCommunityMember,
+  removeCommunityMember,
+  updateCommunityMemberRole
 } from "@/lib/api";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 
@@ -71,6 +83,9 @@ function CommunityDetailContent({
   const [actionError, setActionError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [busyMemberId, setBusyMemberId] = useState<string | null>(null);
+  const [busyMemberAction, setBusyMemberAction] = useState<"remove" | "review" | "role" | null>(
+    null
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -146,6 +161,7 @@ function CommunityDetailContent({
     setMessage(null);
     setActionError(null);
     setBusyMemberId(member.id);
+    setBusyMemberAction("review");
     try {
       const reviewedMember =
         action === "approve"
@@ -163,6 +179,46 @@ function CommunityDetailContent({
       );
     } finally {
       setBusyMemberId(null);
+      setBusyMemberAction(null);
+    }
+  }
+
+  async function handleRoleUpdate(member: CommunityMember, role: "MANAGER" | "MEMBER") {
+    setMessage(null);
+    setActionError(null);
+    setBusyMemberId(member.id);
+    setBusyMemberAction("role");
+    try {
+      const updatedMember = await updateCommunityMemberRole(
+        accessToken,
+        communityId,
+        member.id,
+        role
+      );
+      setMessage(`${updatedMember.display_name} is now ${formatLabel(updatedMember.role)}.`);
+      await refresh();
+    } catch (caught) {
+      setActionError(caught instanceof ApiError ? caught.message : "Member role update failed.");
+    } finally {
+      setBusyMemberId(null);
+      setBusyMemberAction(null);
+    }
+  }
+
+  async function handleRemoveMember(member: CommunityMember) {
+    setMessage(null);
+    setActionError(null);
+    setBusyMemberId(member.id);
+    setBusyMemberAction("remove");
+    try {
+      const removedMember = await removeCommunityMember(accessToken, communityId, member.id);
+      setMessage(`${removedMember.display_name} removed from this community.`);
+      await refresh();
+    } catch (caught) {
+      setActionError(caught instanceof ApiError ? caught.message : "Member removal failed.");
+    } finally {
+      setBusyMemberId(null);
+      setBusyMemberAction(null);
     }
   }
 
@@ -331,6 +387,46 @@ function CommunityDetailContent({
               <p className="mt-3 text-xs font-semibold uppercase tracking-[0.12em] text-muted">
                 {member.joined_at ? `Joined ${formatDate(member.joined_at)}` : "Pending join date"}
               </p>
+              {canManageMember(userRoles, community, member) ? (
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {member.role === "MANAGER" ? (
+                    <button
+                      className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-lg border border-border px-3 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={busyMemberId === member.id}
+                      onClick={() => void handleRoleUpdate(member, "MEMBER")}
+                      type="button"
+                    >
+                      <ShieldMinus aria-hidden="true" className="h-4 w-4" />
+                      {busyMemberId === member.id && busyMemberAction === "role"
+                        ? "Updating..."
+                        : "Demote"}
+                    </button>
+                  ) : (
+                    <button
+                      className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-lg border border-border px-3 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={busyMemberId === member.id}
+                      onClick={() => void handleRoleUpdate(member, "MANAGER")}
+                      type="button"
+                    >
+                      <ShieldPlus aria-hidden="true" className="h-4 w-4" />
+                      {busyMemberId === member.id && busyMemberAction === "role"
+                        ? "Updating..."
+                        : "Make manager"}
+                    </button>
+                  )}
+                  <button
+                    className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-lg border border-red-200 px-3 text-sm font-semibold text-red-700 transition hover:border-red-300 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={busyMemberId === member.id}
+                    onClick={() => void handleRemoveMember(member)}
+                    type="button"
+                  >
+                    <UserMinus aria-hidden="true" className="h-4 w-4" />
+                    {busyMemberId === member.id && busyMemberAction === "remove"
+                      ? "Removing..."
+                      : "Remove"}
+                  </button>
+                </div>
+              ) : null}
             </article>
           ))}
         </div>
@@ -400,15 +496,17 @@ function CommunityDetailContent({
                 </div>
                 <div className="mt-4 flex flex-wrap gap-2">
                   <button
-                    className="focus-ring inline-flex min-h-10 rounded-lg bg-primary px-4 text-sm font-semibold text-white transition hover:bg-[#003d7d] disabled:cursor-not-allowed disabled:opacity-60"
+                    className="focus-ring inline-flex min-h-10 items-center rounded-lg bg-primary px-4 text-sm font-semibold text-white transition hover:bg-[#003d7d] disabled:cursor-not-allowed disabled:opacity-60"
                     disabled={busyMemberId === member.id}
                     onClick={() => void handleReview(member, "approve")}
                     type="button"
                   >
-                    {busyMemberId === member.id ? "Reviewing..." : "Approve"}
+                    {busyMemberId === member.id && busyMemberAction === "review"
+                      ? "Reviewing..."
+                      : "Approve"}
                   </button>
                   <button
-                    className="focus-ring inline-flex min-h-10 rounded-lg border border-border px-4 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+                    className="focus-ring inline-flex min-h-10 items-center rounded-lg border border-border px-4 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
                     disabled={busyMemberId === member.id}
                     onClick={() => void handleReview(member, "reject")}
                     type="button"
@@ -519,6 +617,24 @@ function formatDate(value: string): string {
 function canManageCommunity(userRoles: string[], community: Community): boolean {
   return (
     community.membership_role === "OWNER" ||
+    community.membership_role === "MANAGER" ||
     userRoles.some((role) => adminRoles.includes(role))
   );
+}
+
+function canManageMember(
+  userRoles: string[],
+  community: Community,
+  member: CommunityMember
+): boolean {
+  if (member.role === "OWNER") {
+    return false;
+  }
+
+  const isAdmin = userRoles.some((role) => adminRoles.includes(role));
+  if (isAdmin || community.membership_role === "OWNER") {
+    return true;
+  }
+
+  return community.membership_role === "MANAGER" && member.role === "MEMBER";
 }

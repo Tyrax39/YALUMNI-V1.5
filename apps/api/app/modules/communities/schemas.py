@@ -67,6 +67,15 @@ class CommunityListResponse(BaseModel):
     has_more: bool
 
 
+class CommunityMemberRoleUpdate(BaseModel):
+    role: str = Field(max_length=40)
+
+    @field_validator("role")
+    @classmethod
+    def normalize_role(cls, value: str) -> str:
+        return value.strip().upper().replace(" ", "_")
+
+
 class CommunityMemberResponse(BaseModel):
     id: uuid.UUID
     user_id: uuid.UUID

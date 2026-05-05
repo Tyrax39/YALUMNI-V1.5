@@ -17,6 +17,7 @@ from app.modules.communities.schemas import (
     CommunityListResponse,
     CommunityMemberListResponse,
     CommunityMemberResponse,
+    CommunityMemberRoleUpdate,
     CommunityResponse,
 )
 
@@ -32,6 +33,7 @@ COMMUNITY_TYPES = {
 }
 COMMUNITY_VISIBILITY = {"MEMBER_ONLY", "PRIVATE"}
 JOIN_POLICIES = {"OPEN", "REQUEST"}
+COMMUNITY_MEMBER_ROLES = {"MEMBER", "MANAGER"}
 
 
 def _request_context(request: Request) -> tuple[str | None, str | None]:
@@ -105,12 +107,38 @@ def _user_role_names(user: User) -> set[str]:
     return {assignment.role.name for assignment in user.role_assignments}
 
 
+def _has_admin_role(user: User) -> bool:
+    return bool(_user_role_names(user).intersection(ADMIN_ROLE_NAMES))
+
+
+def _active_membership_role(user: User, community: Community) -> str | None:
+    membership = _membership_for_user(community, user.id)
+    if membership and membership.status == "ACTIVE":
+        return membership.role
+    return None
+
+
 def _can_manage_community(user: User, community: Community) -> bool:
-    if _user_role_names(user).intersection(ADMIN_ROLE_NAMES):
+    if _has_admin_role(user):
         return True
 
-    membership = _membership_for_user(community, user.id)
-    return bool(membership and membership.status == "ACTIVE" and membership.role == "OWNER")
+    return _active_membership_role(user, community) in {"OWNER", "MANAGER"}
+
+
+def _can_manage_membership(
+    user: User,
+    community: Community,
+    membership: CommunityMembership,
+) -> bool:
+    if membership.role == "OWNER":
+        return False
+    if _has_admin_role(user):
+        return True
+
+    actor_role = _active_membership_role(user, community)
+    if actor_role == "OWNER":
+        return True
+    return actor_role == "MANAGER" and membership.role == "MEMBER"
 
 
 def _serialize_community(community: Community, current_user: User) -> CommunityResponse:
@@ -429,6 +457,108 @@ def reject_community_member(
             "community_id": str(community.id),
             "membership_id": str(membership.id),
             "target_user_id": str(membership.user_id),
+        },
+    )
+    db.commit()
+    db.refresh(membership)
+    return _serialize_member(membership)
+
+
+@router.patch(
+    "/{community_id}/members/{membership_id}",
+    response_model=CommunityMemberResponse,
+)
+def update_community_member_role(
+    community_id: uuid.UUID,
+    membership_id: uuid.UUID,
+    payload: CommunityMemberRoleUpdate,
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> CommunityMemberResponse:
+    community = _get_community_or_404(db, community_id)
+    if not _can_manage_community(current_user, community):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to manage community members",
+        )
+    if payload.role not in COMMUNITY_MEMBER_ROLES:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid member role")
+
+    membership = _get_membership_or_404(db, community, membership_id)
+    if membership.status != "ACTIVE":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only active memberships can be updated",
+        )
+    if not _can_manage_membership(current_user, community, membership):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to manage this member",
+        )
+
+    previous_role = membership.role
+    membership.role = payload.role
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "community.member_role_updated",
+        metadata={
+            "community_id": str(community.id),
+            "membership_id": str(membership.id),
+            "target_user_id": str(membership.user_id),
+            "previous_role": previous_role,
+            "new_role": membership.role,
+        },
+    )
+    db.commit()
+    db.refresh(membership)
+    return _serialize_member(membership)
+
+
+@router.post(
+    "/{community_id}/members/{membership_id}/remove",
+    response_model=CommunityMemberResponse,
+)
+def remove_community_member(
+    community_id: uuid.UUID,
+    membership_id: uuid.UUID,
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> CommunityMemberResponse:
+    community = _get_community_or_404(db, community_id)
+    if not _can_manage_community(current_user, community):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to manage community members",
+        )
+
+    membership = _get_membership_or_404(db, community, membership_id)
+    if membership.status != "ACTIVE":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only active memberships can be removed",
+        )
+    if not _can_manage_membership(current_user, community, membership):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to manage this member",
+        )
+
+    membership.status = "LEFT"
+    membership.joined_at = None
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "community.member_removed",
+        metadata={
+            "community_id": str(community.id),
+            "membership_id": str(membership.id),
+            "target_user_id": str(membership.user_id),
+            "previous_role": membership.role,
         },
     )
     db.commit()

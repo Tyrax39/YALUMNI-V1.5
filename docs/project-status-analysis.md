@@ -8,6 +8,66 @@ The current Yalumni project is a useful Laravel 9 alumni management platform, bu
 
 The first V1.5 implementation step has started in `D:\YALUMNI-V1.5`. The new repository now contains a platform foundation with a FastAPI backend, Next.js web shell, Docker Compose, CI workflow, shared packages, copied YALUMNI logo assets, and documentation.
 
+## Current V1.5 Implementation Update: 2026-05-05 Community Member Management Slice
+
+Completed after community membership review:
+
+- Added `MANAGER` as an active community-level management role.
+- Community owners and platform admins can promote active ordinary members to manager and demote managers back to member.
+- Active community managers can review pending join requests and manage ordinary members without being able to demote/remove peer managers or owners.
+- Active non-owner memberships can now be removed by authorized admins, owners, or eligible managers.
+- Community owners remain protected from demotion/removal through member-management endpoints; ownership transfer remains a separate planned workflow.
+- New audit events record member role changes and removals through `security_events`.
+- Community detail pages now expose roster management controls with manager promotion, demotion, and removal actions.
+- API tests cover regular-member denial, owner lock protection, manager-only boundaries, manager removal of ordinary members, and manager approval of pending requests.
+
+Current plan position:
+
+- Phase 1 remains functionally complete for local foundation.
+- Phase 2 remains roughly 89% complete.
+- Phase 3 remains roughly 52% complete.
+- Phase 4 remains roughly 22% complete.
+- Phase 5 is now roughly 46% complete because community model, discovery, detail rosters, joins, pending review, manager roles, and basic member management are implemented.
+- Overall 24-week MVP implementation is roughly 36% complete.
+
+Implemented now:
+
+- Native landing page.
+- Monorepo foundation, CI, docs, Docker Compose.
+- FastAPI health/status and request middleware.
+- Identity auth, refresh sessions, account recovery, email verification, protected platform owner, role-gated admin overview, session management, admin 2FA policy gate, secure cookie-backed web sessions, CSRF protection, and MVP-local rate limiting.
+- Local-only test-account seeding for role and directory QA.
+- Protected dashboard/admin route behavior.
+- Alumni current-user profile model/API/UI with profile photo upload/display/delete.
+- Shared local/S3 upload storage adapter for profile photos and verification evidence.
+- Program affiliation model/API/UI.
+- Verification request submission, member status history, admin queue, review actions, alumni-member role grant, and evidence upload/review.
+- Verified member directory search/profile detail with privacy-aware serializers and authenticated profile-photo display.
+- Dedicated admin audit log viewer backed by `security_events`.
+- Community discovery, creation, detail pages, active rosters, open/request joins, pending review, manager roles, role updates, and non-owner member removal.
+
+Main gaps now:
+
+- Real email provider/templates are not wired.
+- S3 adapter exists, but production still needs real bucket credentials, bucket policy validation, malware scanning, image processing, lifecycle/retention policy, and CDN/signed URL decisions.
+- Directory search is database-backed MVP search, not Meilisearch/OpenSearch.
+- Public profile pages, saved searches, recommendations, and richer dedicated search indexing are not implemented.
+- Test accounts are local/dev seed data only; there is no production-safe demo identity lifecycle yet.
+- Skills are stored as MVP JSON rather than normalized skill tables.
+- Audit data is viewable through `security_events`, but richer immutable compliance audit tables and export tooling are not implemented.
+- Redis-backed rate limiting, background jobs, realtime notifications, messaging, feed, events, initiatives, contributions, and elections are not wired yet.
+- Communities still need edit settings, invitations, ownership transfer, privacy gates, content scopes, chapter analytics, and moderation hooks.
+
+Next possible implementation slices:
+
+- Community settings edit API/UI.
+- Community invitations and invite acceptance.
+- Ownership transfer and owner succession safeguards.
+- Private community content/feed gate.
+- Feed/posts/comments/reactions foundation.
+- Notification/event hooks for community join requests and role changes.
+- Redis-backed jobs/rate limiting and production email delivery.
+
 ## Legacy Repository State
 
 Source path:

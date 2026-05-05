@@ -51,6 +51,8 @@ GET  /api/v1/communities/{community_id}
 GET  /api/v1/communities/{community_id}/members
 POST /api/v1/communities/{community_id}/members/{membership_id}/approve
 POST /api/v1/communities/{community_id}/members/{membership_id}/reject
+PATCH /api/v1/communities/{community_id}/members/{membership_id}
+POST /api/v1/communities/{community_id}/members/{membership_id}/remove
 POST /api/v1/communities/{community_id}/join
 POST /api/v1/communities/{community_id}/leave
 ```
@@ -92,8 +94,21 @@ Community member rosters support:
 - `offset`
 
 Active rosters are visible to signed-in members. Pending, left, and all-status
-rosters are restricted to admins and community owners. Pending membership
-approval/rejection is also restricted to admins and community owners.
+rosters are restricted to admins, community owners, and active community
+managers. Pending membership approval/rejection is restricted to the same
+manager set.
+
+Community member management supports:
+
+- `PATCH /api/v1/communities/{community_id}/members/{membership_id}` with
+  `role=MEMBER|MANAGER` for active non-owner memberships.
+- `POST /api/v1/communities/{community_id}/members/{membership_id}/remove` for
+  active non-owner memberships.
+
+Admins and community owners can manage non-owner members and managers. Active
+community managers can manage ordinary members only. Community owners cannot be
+demoted or removed through these endpoints; ownership transfer remains a
+separate planned workflow.
 
 ## Phase 3: Alumni
 
@@ -106,7 +121,8 @@ PATCH  /api/v1/alumni/me/visibility
 
 ```text
 PATCH  /api/v1/communities/{community_id}
-PATCH  /api/v1/communities/{community_id}/members/{user_id}
+POST   /api/v1/communities/{community_id}/invitations
+POST   /api/v1/communities/{community_id}/ownership-transfer
 ```
 
 ## Phase 5: Feed

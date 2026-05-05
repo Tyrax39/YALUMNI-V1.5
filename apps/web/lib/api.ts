@@ -924,6 +924,36 @@ export function rejectCommunityMember(
   );
 }
 
+export function updateCommunityMemberRole(
+  accessToken: string,
+  communityId: string,
+  membershipId: string,
+  role: "MANAGER" | "MEMBER"
+): Promise<CommunityMember> {
+  return protectedApiFetch<CommunityMember>(
+    `/api/v1/communities/${encodeURIComponent(communityId)}/members/${encodeURIComponent(membershipId)}`,
+    {
+      body: JSON.stringify({ role }),
+      headers: authHeaders(accessToken),
+      method: "PATCH"
+    }
+  );
+}
+
+export function removeCommunityMember(
+  accessToken: string,
+  communityId: string,
+  membershipId: string
+): Promise<CommunityMember> {
+  return protectedApiFetch<CommunityMember>(
+    `/api/v1/communities/${encodeURIComponent(communityId)}/members/${encodeURIComponent(membershipId)}/remove`,
+    {
+      headers: authHeaders(accessToken),
+      method: "POST"
+    }
+  );
+}
+
 export function joinCommunity(accessToken: string, communityId: string): Promise<Community> {
   return protectedApiFetch<Community>(`/api/v1/communities/${communityId}/join`, {
     headers: authHeaders(accessToken),

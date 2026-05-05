@@ -261,6 +261,151 @@ def test_community_create_requires_admin_and_request_join_policy(client: TestCli
     assert not_joined_response.json()["total"] == 0
 
 
+def test_community_owner_and_manager_can_manage_active_members(client: TestClient) -> None:
+    admin_headers = create_admin(client)
+    community = create_community(
+        client,
+        admin_headers,
+        name="Nigeria Civic Action Chapter",
+        country="Nigeria",
+    )
+
+    manager_user = register_user(client, "manager.member@example.com")
+    member_user = register_user(client, "managed.member@example.com")
+    manager_headers = auth_headers(manager_user["access_token"])
+    member_headers = auth_headers(member_user["access_token"])
+    for headers in (manager_headers, member_headers):
+        response = client.post(f"/api/v1/communities/{community['id']}/join", headers=headers)
+        assert response.status_code == 200
+
+    roster_response = client.get(
+        f"/api/v1/communities/{community['id']}/members",
+        headers=admin_headers,
+    )
+    assert roster_response.status_code == 200
+    members_by_email = {member["email"]: member for member in roster_response.json()["members"]}
+
+    denied_promotion = client.patch(
+        f"/api/v1/communities/{community['id']}/members/"
+        f"{members_by_email['manager.member@example.com']['id']}",
+        headers=member_headers,
+        json={"role": "MANAGER"},
+    )
+    assert denied_promotion.status_code == 403
+
+    promotion_response = client.patch(
+        f"/api/v1/communities/{community['id']}/members/"
+        f"{members_by_email['manager.member@example.com']['id']}",
+        headers=admin_headers,
+        json={"role": "manager"},
+    )
+    assert promotion_response.status_code == 200
+    assert promotion_response.json()["role"] == "MANAGER"
+
+    owner_change = client.patch(
+        f"/api/v1/communities/{community['id']}/members/{members_by_email['admin@example.com']['id']}",
+        headers=admin_headers,
+        json={"role": "MEMBER"},
+    )
+    assert owner_change.status_code == 403
+
+    manager_peer_change = client.patch(
+        f"/api/v1/communities/{community['id']}/members/"
+        f"{members_by_email['manager.member@example.com']['id']}",
+        headers=manager_headers,
+        json={"role": "MEMBER"},
+    )
+    assert manager_peer_change.status_code == 403
+
+    removal_response = client.post(
+        f"/api/v1/communities/{community['id']}/members/"
+        f"{members_by_email['managed.member@example.com']['id']}/remove",
+        headers=manager_headers,
+    )
+    assert removal_response.status_code == 200
+    assert removal_response.json()["status"] == "LEFT"
+
+    demotion_response = client.patch(
+        f"/api/v1/communities/{community['id']}/members/"
+        f"{members_by_email['manager.member@example.com']['id']}",
+        headers=admin_headers,
+        json={"role": "MEMBER"},
+    )
+    assert demotion_response.status_code == 200
+    assert demotion_response.json()["role"] == "MEMBER"
+
+    active_roster = client.get(
+        f"/api/v1/communities/{community['id']}/members",
+        headers=admin_headers,
+    )
+    assert active_roster.status_code == 200
+    assert active_roster.json()["total"] == 2
+    assert {member["email"] for member in active_roster.json()["members"]} == {
+        "admin@example.com",
+        "manager.member@example.com",
+    }
+
+
+def test_community_manager_can_review_pending_join_requests(client: TestClient) -> None:
+    admin_headers = create_admin(client)
+    community = create_community(
+        client,
+        admin_headers,
+        name="Health Leaders Working Group",
+        community_type="WORKING_GROUP",
+        sector="Health",
+        join_policy="REQUEST",
+    )
+
+    manager_user = register_user(client, "review.manager@example.com")
+    applicant_user = register_user(client, "chapter.applicant@example.com")
+    manager_headers = auth_headers(manager_user["access_token"])
+    applicant_headers = auth_headers(applicant_user["access_token"])
+
+    manager_request = client.post(
+        f"/api/v1/communities/{community['id']}/join",
+        headers=manager_headers,
+    )
+    assert manager_request.status_code == 200
+    pending_roster = client.get(
+        f"/api/v1/communities/{community['id']}/members?status=PENDING",
+        headers=admin_headers,
+    )
+    assert pending_roster.status_code == 200
+    manager_membership = pending_roster.json()["members"][0]
+    approval_response = client.post(
+        f"/api/v1/communities/{community['id']}/members/{manager_membership['id']}/approve",
+        headers=admin_headers,
+    )
+    assert approval_response.status_code == 200
+    promotion_response = client.patch(
+        f"/api/v1/communities/{community['id']}/members/{manager_membership['id']}",
+        headers=admin_headers,
+        json={"role": "MANAGER"},
+    )
+    assert promotion_response.status_code == 200
+
+    applicant_request = client.post(
+        f"/api/v1/communities/{community['id']}/join",
+        headers=applicant_headers,
+    )
+    assert applicant_request.status_code == 200
+    manager_pending_roster = client.get(
+        f"/api/v1/communities/{community['id']}/members?status=PENDING",
+        headers=manager_headers,
+    )
+    assert manager_pending_roster.status_code == 200
+    applicant_membership = manager_pending_roster.json()["members"][0]
+    assert applicant_membership["email"] == "chapter.applicant@example.com"
+
+    manager_approval = client.post(
+        f"/api/v1/communities/{community['id']}/members/{applicant_membership['id']}/approve",
+        headers=manager_headers,
+    )
+    assert manager_approval.status_code == 200
+    assert manager_approval.json()["status"] == "ACTIVE"
+
+
 def test_community_filters_and_pagination(client: TestClient) -> None:
     admin_headers = create_admin(client)
     create_community(
