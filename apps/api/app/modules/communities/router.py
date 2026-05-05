@@ -290,7 +290,7 @@ def list_community_members(
     db: Annotated[Session, Depends(get_db_session)],
     status_filter: Annotated[
         str,
-        Query(alias="status", pattern="^(ACTIVE|PENDING|LEFT|ALL)$"),
+        Query(alias="status", pattern="^(ACTIVE|PENDING|LEFT|REJECTED|ALL)$"),
     ] = "ACTIVE",
     limit: Annotated[int, Query(ge=1, le=50)] = 20,
     offset: Annotated[int, Query(ge=0)] = 0,
@@ -328,6 +328,112 @@ def list_community_members(
         offset=offset,
         has_more=offset + len(members) < total,
     )
+
+
+def _get_membership_or_404(
+    db: Session,
+    community: Community,
+    membership_id: uuid.UUID,
+) -> CommunityMembership:
+    membership = db.scalar(
+        select(CommunityMembership)
+        .options(joinedload(CommunityMembership.user))
+        .where(
+            CommunityMembership.id == membership_id,
+            CommunityMembership.community_id == community.id,
+        )
+    )
+    if membership is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
+
+    return membership
+
+
+@router.post(
+    "/{community_id}/members/{membership_id}/approve",
+    response_model=CommunityMemberResponse,
+)
+def approve_community_member(
+    community_id: uuid.UUID,
+    membership_id: uuid.UUID,
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> CommunityMemberResponse:
+    community = _get_community_or_404(db, community_id)
+    if not _can_manage_community(current_user, community):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to review community memberships",
+        )
+
+    membership = _get_membership_or_404(db, community, membership_id)
+    if membership.status != "PENDING":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only pending memberships can be approved",
+        )
+
+    membership.status = "ACTIVE"
+    membership.role = membership.role or "MEMBER"
+    membership.joined_at = utcnow()
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "community.member_approved",
+        metadata={
+            "community_id": str(community.id),
+            "membership_id": str(membership.id),
+            "target_user_id": str(membership.user_id),
+        },
+    )
+    db.commit()
+    db.refresh(membership)
+    return _serialize_member(membership)
+
+
+@router.post(
+    "/{community_id}/members/{membership_id}/reject",
+    response_model=CommunityMemberResponse,
+)
+def reject_community_member(
+    community_id: uuid.UUID,
+    membership_id: uuid.UUID,
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> CommunityMemberResponse:
+    community = _get_community_or_404(db, community_id)
+    if not _can_manage_community(current_user, community):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to review community memberships",
+        )
+
+    membership = _get_membership_or_404(db, community, membership_id)
+    if membership.status != "PENDING":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only pending memberships can be rejected",
+        )
+
+    membership.status = "REJECTED"
+    membership.joined_at = None
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "community.member_rejected",
+        metadata={
+            "community_id": str(community.id),
+            "membership_id": str(membership.id),
+            "target_user_id": str(membership.user_id),
+        },
+    )
+    db.commit()
+    db.refresh(membership)
+    return _serialize_member(membership)
 
 
 @router.post("/{community_id}/join", response_model=CommunityResponse)

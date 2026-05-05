@@ -61,8 +61,9 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
 - Membership and join requests. Started with open joins, request-only pending status, and member leave.
 - Dashboard community discovery panel. Implemented with filters, pagination, join/leave, and admin create.
 - Community detail pages and active rosters. Implemented.
+- Membership request review. Implemented for admins and community owners.
 - Chapter admin roles. Planned.
-- Membership request review and member management. Planned.
+- Member management, invitations, and ownership transfer. Planned.
 - Private content gates. Planned.
 
 ## Phase 6: Feed And Moderation

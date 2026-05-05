@@ -200,7 +200,58 @@ def test_community_create_requires_admin_and_request_join_policy(client: TestCli
     )
     assert pending_roster.status_code == 200
     assert pending_roster.json()["total"] == 1
-    assert pending_roster.json()["members"][0]["email"] == "regular@example.com"
+    pending_member = pending_roster.json()["members"][0]
+    assert pending_member["email"] == "regular@example.com"
+
+    denied_approval = client.post(
+        f"/api/v1/communities/{community['id']}/members/{pending_member['id']}/approve",
+        headers=auth_headers(regular_user["access_token"]),
+    )
+    assert denied_approval.status_code == 403
+
+    approval_response = client.post(
+        f"/api/v1/communities/{community['id']}/members/{pending_member['id']}/approve",
+        headers=admin_headers,
+    )
+    assert approval_response.status_code == 200
+    approved_member = approval_response.json()
+    assert approved_member["email"] == "regular@example.com"
+    assert approved_member["status"] == "ACTIVE"
+    assert approved_member["joined_at"] is not None
+
+    active_roster = client.get(
+        f"/api/v1/communities/{community['id']}/members",
+        headers=auth_headers(regular_user["access_token"]),
+    )
+    assert active_roster.status_code == 200
+    assert active_roster.json()["total"] == 2
+
+    rejected_user = register_user(client, "rejected@example.com")
+    rejected_request = client.post(
+        f"/api/v1/communities/{community['id']}/join",
+        headers=auth_headers(rejected_user["access_token"]),
+    )
+    assert rejected_request.status_code == 200
+    second_pending_roster = client.get(
+        f"/api/v1/communities/{community['id']}/members?status=PENDING",
+        headers=admin_headers,
+    )
+    assert second_pending_roster.status_code == 200
+    rejected_member = second_pending_roster.json()["members"][0]
+    reject_response = client.post(
+        f"/api/v1/communities/{community['id']}/members/{rejected_member['id']}/reject",
+        headers=admin_headers,
+    )
+    assert reject_response.status_code == 200
+    assert reject_response.json()["status"] == "REJECTED"
+
+    rejected_roster = client.get(
+        f"/api/v1/communities/{community['id']}/members?status=REJECTED",
+        headers=admin_headers,
+    )
+    assert rejected_roster.status_code == 200
+    assert rejected_roster.json()["total"] == 1
+    assert rejected_roster.json()["members"][0]["email"] == "rejected@example.com"
 
     not_joined_response = client.get(
         "/api/v1/communities?membership=not_joined",

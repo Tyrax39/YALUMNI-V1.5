@@ -8,12 +8,16 @@ import Link from "next/link";
 
 import {
   ApiError,
+  approveCommunityMember,
+  adminRoles,
   Community,
+  CommunityMember,
   CommunityMemberListResponse,
   getCommunity,
   joinCommunity,
   leaveCommunity,
-  listCommunityMembers
+  listCommunityMembers,
+  rejectCommunityMember
 } from "@/lib/api";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 
@@ -27,10 +31,12 @@ type DetailState =
       community: Community;
       members: CommunityMemberListResponse;
       status: "ready";
+      pendingMembers: CommunityMemberListResponse | null;
     }
   | { status: "error"; message: string };
 
 const rosterPageSize = 12;
+const pendingPageSize = 6;
 
 export function CommunityDetailPage({ communityId }: CommunityDetailPageProps) {
   return (
@@ -39,8 +45,12 @@ export function CommunityDetailPage({ communityId }: CommunityDetailPageProps) {
         description="Community spaces are available to signed-in YALUMNI members."
         title="Community"
       >
-        {({ accessToken }) => (
-          <CommunityDetailContent accessToken={accessToken} communityId={communityId} />
+        {({ accessToken, user }) => (
+          <CommunityDetailContent
+            accessToken={accessToken}
+            communityId={communityId}
+            userRoles={user.roles}
+          />
         )}
       </ProtectedRoute>
     </main>
@@ -49,19 +59,22 @@ export function CommunityDetailPage({ communityId }: CommunityDetailPageProps) {
 
 function CommunityDetailContent({
   accessToken,
-  communityId
+  communityId,
+  userRoles
 }: {
   accessToken: string;
   communityId: string;
+  userRoles: string[];
 }) {
   const [state, setState] = useState<DetailState>({ status: "loading" });
   const [message, setMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [busyMemberId, setBusyMemberId] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
-    loadDetail(0)
+    loadDetail(0, 0)
       .then((nextState) => {
         if (isMounted) {
           setState(nextState);
@@ -83,20 +96,31 @@ function CommunityDetailContent({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accessToken, communityId]);
 
-  async function loadDetail(offset: number): Promise<DetailState> {
+  async function loadDetail(activeOffset: number, pendingOffset: number): Promise<DetailState> {
     const [community, members] = await Promise.all([
       getCommunity(accessToken, communityId),
       listCommunityMembers(accessToken, communityId, {
         limit: rosterPageSize,
-        offset,
+        offset: activeOffset,
         status: "ACTIVE"
       })
     ]);
-    return { community, members, status: "ready" };
+    const canManage = canManageCommunity(userRoles, community);
+    const pendingMembers = canManage
+      ? await listCommunityMembers(accessToken, communityId, {
+          limit: pendingPageSize,
+          offset: pendingOffset,
+          status: "PENDING"
+        })
+      : null;
+    return { community, members, pendingMembers, status: "ready" };
   }
 
-  async function refresh(offset = state.status === "ready" ? state.members.offset : 0) {
-    setState(await loadDetail(offset));
+  async function refresh(
+    activeOffset = state.status === "ready" ? state.members.offset : 0,
+    pendingOffset = state.status === "ready" ? state.pendingMembers?.offset ?? 0 : 0
+  ) {
+    setState(await loadDetail(activeOffset, pendingOffset));
   }
 
   async function handleJoin() {
@@ -115,6 +139,30 @@ function CommunityDetailContent({
       setActionError(caught instanceof ApiError ? caught.message : "Join request failed.");
     } finally {
       setIsSubmitting(false);
+    }
+  }
+
+  async function handleReview(member: CommunityMember, action: "approve" | "reject") {
+    setMessage(null);
+    setActionError(null);
+    setBusyMemberId(member.id);
+    try {
+      const reviewedMember =
+        action === "approve"
+          ? await approveCommunityMember(accessToken, communityId, member.id)
+          : await rejectCommunityMember(accessToken, communityId, member.id);
+      setMessage(
+        action === "approve"
+          ? `${reviewedMember.display_name} approved.`
+          : `${reviewedMember.display_name} rejected.`
+      );
+      await refresh();
+    } catch (caught) {
+      setActionError(
+        caught instanceof ApiError ? caught.message : "Membership review failed."
+      );
+    } finally {
+      setBusyMemberId(null);
     }
   }
 
@@ -160,11 +208,12 @@ function CommunityDetailContent({
     );
   }
 
-  const { community, members } = state;
+  const { community, members, pendingMembers } = state;
   const activeMember = community.membership_status === "ACTIVE";
   const pendingMember = community.membership_status === "PENDING";
   const owner = community.membership_role === "OWNER";
   const location = [community.city, community.country].filter(Boolean).join(", ");
+  const canManage = canManageCommunity(userRoles, community);
 
   return (
     <CommunityShell>
@@ -311,6 +360,94 @@ function CommunityDetailContent({
           </div>
         </div>
       </section>
+
+      {canManage && pendingMembers ? (
+        <section className="mt-8">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-secondary">
+                Join requests
+              </p>
+              <h2 className="mt-2 font-display text-2xl font-semibold text-ink">
+                Pending community members
+              </h2>
+            </div>
+            <p className="text-sm font-semibold text-muted">
+              {pendingMembers.total} pending requests
+            </p>
+          </div>
+          <div className="mt-5 grid gap-3 lg:grid-cols-2">
+            {pendingMembers.members.length === 0 ? (
+              <p className="border-y border-border bg-white px-4 py-6 text-sm font-semibold text-muted lg:col-span-2">
+                No pending join requests.
+              </p>
+            ) : null}
+            {pendingMembers.members.map((member) => (
+              <article
+                className="rounded-lg border border-border bg-white p-4 shadow-soft"
+                key={member.id}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="font-display text-xl font-semibold text-ink">
+                      {member.display_name}
+                    </h3>
+                    <p className="mt-1 text-sm font-semibold text-muted">{member.email}</p>
+                  </div>
+                  <span className="rounded-md bg-surface px-2.5 py-1 text-xs font-bold text-secondary">
+                    Pending
+                  </span>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    className="focus-ring inline-flex min-h-10 rounded-lg bg-primary px-4 text-sm font-semibold text-white transition hover:bg-[#003d7d] disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={busyMemberId === member.id}
+                    onClick={() => void handleReview(member, "approve")}
+                    type="button"
+                  >
+                    {busyMemberId === member.id ? "Reviewing..." : "Approve"}
+                  </button>
+                  <button
+                    className="focus-ring inline-flex min-h-10 rounded-lg border border-border px-4 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={busyMemberId === member.id}
+                    onClick={() => void handleReview(member, "reject")}
+                    type="button"
+                  >
+                    Reject
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+          <div className="mt-5 flex flex-col gap-3 border-y border-border bg-white px-4 py-3 text-sm font-semibold text-muted sm:flex-row sm:items-center sm:justify-between">
+            <p>
+              {pendingMembers.total === 0
+                ? "No requests"
+                : `Showing ${pendingMembers.offset + 1}-${pendingMembers.offset + pendingMembers.members.length} of ${pendingMembers.total}`}
+            </p>
+            <div className="flex gap-2">
+              <button
+                className="focus-ring min-h-10 rounded-lg border border-border px-4 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={pendingMembers.offset === 0}
+                onClick={() =>
+                  void refresh(members.offset, Math.max(0, pendingMembers.offset - pendingMembers.limit))
+                }
+                type="button"
+              >
+                Previous
+              </button>
+              <button
+                className="focus-ring min-h-10 rounded-lg border border-border px-4 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={!pendingMembers.has_more}
+                onClick={() => void refresh(members.offset, pendingMembers.offset + pendingMembers.limit)}
+                type="button"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        </section>
+      ) : null}
     </CommunityShell>
   );
 }
@@ -377,4 +514,11 @@ function formatDate(value: string): string {
     month: "short",
     year: "numeric"
   }).format(new Date(value));
+}
+
+function canManageCommunity(userRoles: string[], community: Community): boolean {
+  return (
+    community.membership_role === "OWNER" ||
+    userRoles.some((role) => adminRoles.includes(role))
+  );
 }

@@ -896,6 +896,34 @@ export function listCommunityMembers(
   );
 }
 
+export function approveCommunityMember(
+  accessToken: string,
+  communityId: string,
+  membershipId: string
+): Promise<CommunityMember> {
+  return protectedApiFetch<CommunityMember>(
+    `/api/v1/communities/${encodeURIComponent(communityId)}/members/${encodeURIComponent(membershipId)}/approve`,
+    {
+      headers: authHeaders(accessToken),
+      method: "POST"
+    }
+  );
+}
+
+export function rejectCommunityMember(
+  accessToken: string,
+  communityId: string,
+  membershipId: string
+): Promise<CommunityMember> {
+  return protectedApiFetch<CommunityMember>(
+    `/api/v1/communities/${encodeURIComponent(communityId)}/members/${encodeURIComponent(membershipId)}/reject`,
+    {
+      headers: authHeaders(accessToken),
+      method: "POST"
+    }
+  );
+}
+
 export function joinCommunity(accessToken: string, communityId: string): Promise<Community> {
   return protectedApiFetch<Community>(`/api/v1/communities/${communityId}/join`, {
     headers: authHeaders(accessToken),

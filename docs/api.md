@@ -49,6 +49,8 @@ GET  /api/v1/communities
 POST /api/v1/communities
 GET  /api/v1/communities/{community_id}
 GET  /api/v1/communities/{community_id}/members
+POST /api/v1/communities/{community_id}/members/{membership_id}/approve
+POST /api/v1/communities/{community_id}/members/{membership_id}/reject
 POST /api/v1/communities/{community_id}/join
 POST /api/v1/communities/{community_id}/leave
 ```
@@ -85,12 +87,13 @@ Community listing supports:
 
 Community member rosters support:
 
-- `status=ACTIVE|PENDING|LEFT|ALL`
+- `status=ACTIVE|PENDING|LEFT|REJECTED|ALL`
 - `limit`
 - `offset`
 
 Active rosters are visible to signed-in members. Pending, left, and all-status
-rosters are restricted to admins and community owners.
+rosters are restricted to admins and community owners. Pending membership
+approval/rejection is also restricted to admins and community owners.
 
 ## Phase 3: Alumni
 
