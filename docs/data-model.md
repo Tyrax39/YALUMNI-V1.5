@@ -147,7 +147,7 @@ Completed identity basics:
 - `sessions`
 - `roles`
 - `role_assignments`
-- `security_events`
+- `security_events` with a role-gated admin audit viewer
 
 Completed alumni profile basics:
 
@@ -161,4 +161,4 @@ Completed upload storage foundation:
 
 Next add audit depth:
 
-- `audit_logs` or a scoped verification event table
+- Dedicated immutable `audit_logs` or scoped verification/governance event tables for richer compliance exports

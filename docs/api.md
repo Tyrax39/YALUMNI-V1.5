@@ -23,6 +23,7 @@ POST /api/v1/auth/password/reset
 POST /api/v1/auth/email/verify
 POST /api/v1/auth/dev/bootstrap-admin
 GET  /api/v1/auth/admin/overview
+GET  /api/v1/auth/admin/audit-events
 GET  /api/v1/alumni/me/profile
 PATCH /api/v1/alumni/me/profile
 POST /api/v1/alumni/me/profile-photo
@@ -118,13 +119,13 @@ GET    /api/v1/events/{event_id}/registrations
 
 ## Admin
 
-Started through the role-protected auth admin overview endpoint. Planned dedicated admin module:
+Started through role-protected auth admin overview, verification queue, and audit-event endpoints.
+Planned dedicated admin module:
 
 ```text
 GET  /api/v1/admin/users
 GET  /api/v1/admin/reports
 POST /api/v1/admin/reports/{report_id}/resolve
-GET  /api/v1/admin/audit-logs
 ```
 
 ## API Standards

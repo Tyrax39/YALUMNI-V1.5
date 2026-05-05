@@ -431,6 +431,46 @@ def test_admin_overview_requires_role_and_local_bootstrap_grants_access(
     assert overview["latest_security_events"][0]["event_type"] == "auth.dev_admin_bootstrapped"
 
 
+def test_admin_audit_events_requires_role_and_supports_filters(client: TestClient) -> None:
+    registered = register_user(client, email="audit-viewer@example.com")
+    headers = auth_headers(registered["access_token"])
+
+    rejected_response = client.get("/api/v1/auth/admin/audit-events", headers=headers)
+    assert rejected_response.status_code == 403
+
+    bootstrap_response = client.post("/api/v1/auth/dev/bootstrap-admin", headers=headers)
+    assert bootstrap_response.status_code == 200
+
+    audit_response = client.get(
+        "/api/v1/auth/admin/audit-events?event_type=auth.dev_admin_bootstrapped",
+        headers=headers,
+    )
+    assert audit_response.status_code == 200
+    audit_log = audit_response.json()
+    assert audit_log["total"] == 1
+    assert audit_log["limit"] == 25
+    assert audit_log["offset"] == 0
+    event = audit_log["events"][0]
+    assert event["event_type"] == "auth.dev_admin_bootstrapped"
+    assert event["user_id"] == registered["user"]["id"]
+    assert event["user_email"] == "audit-viewer@example.com"
+    assert event["user_display_name"] == "Amara Diallo"
+    assert event["ip_address"] is not None
+    assert "testclient" in event["user_agent"].lower()
+
+    user_filtered_response = client.get(
+        f"/api/v1/auth/admin/audit-events?user_id={registered['user']['id']}&limit=2",
+        headers=headers,
+    )
+    assert user_filtered_response.status_code == 200
+    user_filtered_log = user_filtered_response.json()
+    assert user_filtered_log["total"] >= 2
+    assert len(user_filtered_log["events"]) == 2
+    assert all(
+        event["user_id"] == registered["user"]["id"] for event in user_filtered_log["events"]
+    )
+
+
 def test_local_admin_bootstrap_rate_limit_returns_429(client: TestClient) -> None:
     registered = register_user(client, email="admin-limited@example.com")
     headers = auth_headers(registered["access_token"])

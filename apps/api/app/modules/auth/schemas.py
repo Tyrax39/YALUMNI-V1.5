@@ -96,6 +96,25 @@ class AdminSecurityEvent(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class AdminAuditEvent(BaseModel):
+    id: uuid.UUID
+    event_type: str
+    user_id: uuid.UUID | None
+    user_email: str | None
+    user_display_name: str | None
+    ip_address: str | None
+    user_agent: str | None
+    metadata: dict | None
+    created_at: datetime
+
+
+class AdminAuditEventListResponse(BaseModel):
+    events: list[AdminAuditEvent]
+    total: int
+    limit: int
+    offset: int
+
+
 class AdminOverview(BaseModel):
     total_users: int
     verified_users: int

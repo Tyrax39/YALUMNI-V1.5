@@ -40,9 +40,9 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
 - Visibility settings. Started as profile-level JSON settings.
 - Verification request model and current-user submission. Implemented.
 - Admin verification queue and approve/reject/request-info actions. Implemented.
-- Audit events. Started through `security_events`.
+- Audit events. Implemented through `security_events` with an admin audit log viewer.
 - Verification documents and uploads. Started with shared local/S3 evidence storage and authenticated admin/member downloads.
-- Dedicated audit log viewer.
+- Dedicated audit log viewer. Implemented for current security events.
 
 ## Phase 4: Directory And Search
 

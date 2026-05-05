@@ -64,6 +64,25 @@ export type AdminSecurityEvent = {
   created_at: string;
 };
 
+export type AdminAuditEvent = {
+  id: string;
+  event_type: string;
+  user_id: string | null;
+  user_email: string | null;
+  user_display_name: string | null;
+  ip_address: string | null;
+  user_agent: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+};
+
+export type AdminAuditEventListResponse = {
+  events: AdminAuditEvent[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
 export type AdminOverview = {
   total_users: number;
   verified_users: number;
@@ -365,6 +384,33 @@ export function getAdminOverview(accessToken: string): Promise<AdminOverview> {
   return apiFetch<AdminOverview>("/api/v1/auth/admin/overview", {
     headers: authHeaders(accessToken)
   });
+}
+
+export function getAdminAuditEvents(
+  accessToken: string,
+  params: { eventType?: string; limit?: number; offset?: number; userId?: string } = {}
+): Promise<AdminAuditEventListResponse> {
+  const searchParams = new URLSearchParams();
+  if (params.eventType) {
+    searchParams.set("event_type", params.eventType);
+  }
+  if (params.userId) {
+    searchParams.set("user_id", params.userId);
+  }
+  if (params.limit) {
+    searchParams.set("limit", String(params.limit));
+  }
+  if (params.offset) {
+    searchParams.set("offset", String(params.offset));
+  }
+
+  const query = searchParams.toString();
+  return apiFetch<AdminAuditEventListResponse>(
+    `/api/v1/auth/admin/audit-events${query ? `?${query}` : ""}`,
+    {
+      headers: authHeaders(accessToken)
+    }
+  );
 }
 
 export function getMyAlumniProfile(accessToken: string): Promise<AlumniProfile> {

@@ -73,6 +73,7 @@ Users must control visibility of:
 - Add verification evidence upload/download authorization. Done for local MVP storage.
 - Add profile photo upload/download authorization. Done for local MVP storage.
 - Add shared local/S3 upload storage adapter. Done; production still needs real bucket credentials and bucket policy validation.
+- Add admin audit log viewer. Done for recorded `security_events`.
 - Add tests for auth denial and basic IDOR prevention.
 
 ## File Storage Controls

@@ -533,6 +533,62 @@ Next possible implementation slices:
 - Dedicated admin audit log viewer.
 - Admin 2FA policy placeholder and enforcement gate.
 
+## Current V1.5 Implementation Update: 2026-05-05 Admin Audit Log Slice
+
+Completed after shared upload storage:
+
+- Added role-gated audit log API at `/api/v1/auth/admin/audit-events`.
+- Audit event responses now include event type, actor user ID, actor email/display name, IP address, user agent, metadata, timestamp, total count, limit, and offset.
+- Added filtering by partial event type and exact user ID.
+- Added pagination controls with configurable limit/offset.
+- Admin console now includes a dedicated audit log panel beneath the verification queue.
+- Admin audit UI supports event type and user ID filters, clear action, previous/next paging, and compact event detail rows.
+- API tests now cover audit endpoint role gating, event-type filtering, user filtering, pagination metadata, and actor enrichment.
+
+Current plan position:
+
+- Phase 1 remains functionally complete for local foundation.
+- Phase 2 remains roughly 90% complete because admin visibility into auth/session/security events is now implemented.
+- Phase 3 remains roughly 52% complete.
+- Phase 4 is now roughly 24% complete because admin audit visibility has moved from placeholder to usable tooling.
+- Overall 24-week MVP implementation is roughly 27% complete.
+
+Implemented now:
+
+- Native landing page.
+- Monorepo foundation, CI, docs, Docker Compose.
+- FastAPI health/status and request middleware.
+- Identity auth, refresh sessions, account recovery, email verification, protected platform owner, role-gated admin overview, session management, MVP-local rate limiting, and audit log viewer.
+- Local-only test-account seeding for role and directory QA.
+- Protected dashboard/admin route behavior.
+- Alumni current-user profile model/API/UI with profile photo upload/display/delete.
+- Shared local/S3 upload storage adapter for profile photos and verification evidence.
+- Program affiliation model/API/UI.
+- Verification request submission, member status history, admin queue, review actions, alumni-member role grant, and evidence upload/review.
+- Verified member directory search/profile detail with privacy-aware serializers and authenticated profile-photo display.
+
+Main gaps now:
+
+- Auth still uses local-storage bearer tokens in the web app; production should move to HttpOnly cookies and SSR/middleware guards.
+- Admin 2FA is still not implemented.
+- Real email provider/templates are not wired.
+- Current audit viewer is based on `security_events`; richer immutable compliance audit tables and export tooling are not implemented.
+- S3 adapter exists, but production still needs real bucket credentials, bucket policy validation, malware scanning, image processing, lifecycle/retention policy, and CDN/signed URL decisions.
+- Directory search is database-backed MVP search, not Meilisearch/OpenSearch.
+- Public profile pages, saved searches, pagination UI, and advanced filters are not implemented.
+- Test accounts are local/dev seed data only; there is no production-safe demo identity lifecycle yet.
+- Skills are stored as MVP JSON rather than normalized skill tables.
+- Redis-backed rate limiting and background jobs are not wired yet.
+
+Next possible implementation slices:
+
+- Secure cookie auth migration and route middleware.
+- Admin 2FA policy placeholder and enforcement gate.
+- Directory pagination/advanced filters and profile detail page.
+- Malware scanning hook for verification evidence.
+- Immutable audit export/compliance log model.
+- Communities module foundation.
+
 ## Current V1.5 Implementation Update: 2026-05-05 Shared Upload Storage Slice
 
 Completed after profile photos:

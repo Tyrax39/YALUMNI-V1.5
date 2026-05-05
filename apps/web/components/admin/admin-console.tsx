@@ -2,14 +2,16 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import {
   AdminOverview,
+  AdminAuditEvent,
   adminRoles,
   ApiError,
   downloadVerificationEvidence,
+  getAdminAuditEvents,
   getAdminOverview,
   getAdminVerificationRequests,
   reviewVerificationRequest,
@@ -32,6 +34,19 @@ type QueueState =
   | { status: "loading" }
   | { status: "ready"; requests: VerificationRequest[] }
   | { status: "error"; message: string };
+
+type AuditState =
+  | { status: "loading" }
+  | { status: "ready"; events: AdminAuditEvent[]; limit: number; offset: number; total: number }
+  | { status: "error"; message: string };
+
+type AuditFilters = {
+  eventType: string;
+  offset: number;
+  userId: string;
+};
+
+const auditLimit = 25;
 
 export function AdminConsole() {
   return (
@@ -117,6 +132,7 @@ function AdminOverviewPanel({ accessToken, email }: { accessToken: string; email
           </div>
 
           <VerificationQueuePanel accessToken={accessToken} />
+          <AuditLogPanel accessToken={accessToken} />
 
           <div className="mt-10 grid gap-4 md:grid-cols-3">
             {upcomingQueues.map(([title, body]) => (
@@ -155,6 +171,249 @@ function AdminOverviewPanel({ accessToken, email }: { accessToken: string; email
         </>
       ) : null}
     </section>
+  );
+}
+
+function AuditLogPanel({ accessToken }: { accessToken: string }) {
+  const [state, setState] = useState<AuditState>({ status: "loading" });
+  const [eventTypeInput, setEventTypeInput] = useState("");
+  const [userIdInput, setUserIdInput] = useState("");
+  const [filters, setFilters] = useState<AuditFilters>({
+    eventType: "",
+    offset: 0,
+    userId: ""
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+
+    getAdminAuditEvents(accessToken, {
+      eventType: filters.eventType,
+      limit: auditLimit,
+      offset: filters.offset,
+      userId: filters.userId
+    })
+      .then((response) => {
+        if (!isMounted) {
+          return;
+        }
+        setState({
+          status: "ready",
+          events: response.events,
+          limit: response.limit,
+          offset: response.offset,
+          total: response.total
+        });
+      })
+      .catch((caught) => {
+        if (!isMounted) {
+          return;
+        }
+        setState({
+          status: "error",
+          message: caught instanceof ApiError ? caught.message : "Audit log could not be loaded."
+        });
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [accessToken, filters.eventType, filters.offset, filters.userId]);
+
+  function handleFilterSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setState({ status: "loading" });
+    setFilters({
+      eventType: eventTypeInput.trim(),
+      offset: 0,
+      userId: userIdInput.trim()
+    });
+  }
+
+  function clearFilters() {
+    setEventTypeInput("");
+    setUserIdInput("");
+    setState({ status: "loading" });
+    setFilters({ eventType: "", offset: 0, userId: "" });
+  }
+
+  const canPageBackward = state.status === "ready" && state.offset > 0;
+  const canPageForward =
+    state.status === "ready" && state.offset + state.limit < state.total;
+
+  return (
+    <section className="mt-10 rounded-lg border border-border bg-white p-6 shadow-soft">
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+        <div>
+          <h2 className="font-display text-2xl font-semibold text-ink">Audit log</h2>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-muted">
+            Inspect recorded auth, session, profile, verification, and admin-sensitive events.
+          </p>
+        </div>
+        {state.status === "ready" ? (
+          <p className="text-sm font-semibold text-primary">
+            Showing {state.events.length} of {state.total}
+          </p>
+        ) : null}
+      </div>
+
+      <form
+        className="mt-5 grid gap-3 lg:grid-cols-[1fr_1fr_auto_auto]"
+        onSubmit={handleFilterSubmit}
+      >
+        <AuditInput
+          label="Event type"
+          onChange={setEventTypeInput}
+          placeholder="auth.login or verification"
+          value={eventTypeInput}
+        />
+        <AuditInput
+          label="User ID"
+          onChange={setUserIdInput}
+          placeholder="UUID"
+          value={userIdInput}
+        />
+        <button
+          className="focus-ring h-12 self-end rounded-lg bg-primary px-5 text-sm font-semibold text-white transition hover:bg-[#003d7d]"
+          type="submit"
+        >
+          Filter
+        </button>
+        <button
+          className="focus-ring h-12 self-end rounded-lg border border-border bg-white px-5 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary"
+          onClick={clearFilters}
+          type="button"
+        >
+          Clear
+        </button>
+      </form>
+
+      {state.status === "loading" ? (
+        <p className="mt-6 text-sm font-semibold text-muted">Loading audit events...</p>
+      ) : null}
+
+      {state.status === "error" ? (
+        <p className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+          {state.message}
+        </p>
+      ) : null}
+
+      {state.status === "ready" ? (
+        <>
+          <div className="mt-5 divide-y divide-border">
+            {state.events.length === 0 ? (
+              <p className="py-6 text-sm font-semibold text-muted">
+                No audit events match the current filters.
+              </p>
+            ) : null}
+            {state.events.map((event) => (
+              <AuditEventRow event={event} key={event.id} />
+            ))}
+          </div>
+
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm font-semibold text-muted">
+              Offset {state.offset} · Page size {state.limit}
+            </p>
+            <div className="flex gap-2">
+              <button
+                className="focus-ring rounded-lg border border-border bg-white px-4 py-2 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={!canPageBackward}
+                onClick={() => {
+                  setState({ status: "loading" });
+                  setFilters((current) => ({
+                    ...current,
+                    offset: Math.max(current.offset - auditLimit, 0)
+                  }));
+                }}
+                type="button"
+              >
+                Previous
+              </button>
+              <button
+                className="focus-ring rounded-lg border border-border bg-white px-4 py-2 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={!canPageForward}
+                onClick={() => {
+                  setState({ status: "loading" });
+                  setFilters((current) => ({
+                    ...current,
+                    offset: current.offset + auditLimit
+                  }));
+                }}
+                type="button"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        </>
+      ) : null}
+    </section>
+  );
+}
+
+function AuditInput({
+  label,
+  onChange,
+  placeholder,
+  value
+}: {
+  label: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  value: string;
+}) {
+  return (
+    <label className="grid gap-2 text-sm font-semibold text-ink">
+      {label}
+      <input
+        className="h-12 rounded-lg border border-border bg-white px-4 text-sm font-normal text-ink outline-none transition focus:border-primary"
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        value={value}
+      />
+    </label>
+  );
+}
+
+function AuditEventRow({ event }: { event: AdminAuditEvent }) {
+  const userLabel =
+    event.user_display_name || event.user_email || event.user_id || "System / unknown user";
+  const metadata = event.metadata ? JSON.stringify(event.metadata) : null;
+
+  return (
+    <article className="grid gap-4 py-4 xl:grid-cols-[0.8fr_1.2fr_0.8fr]">
+      <div>
+        <p className="font-semibold text-ink">{event.event_type}</p>
+        <time className="mt-1 block text-sm text-muted" dateTime={event.created_at}>
+          {new Date(event.created_at).toLocaleString()}
+        </time>
+      </div>
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-ink">{userLabel}</p>
+        {event.user_email ? (
+          <p className="mt-1 break-all text-sm text-muted">{event.user_email}</p>
+        ) : null}
+        {metadata ? (
+          <p className="mt-2 break-all rounded-lg border border-border bg-surface px-3 py-2 font-mono text-xs leading-5 text-muted">
+            {metadata}
+          </p>
+        ) : null}
+      </div>
+      <dl className="grid gap-2 text-sm">
+        <AuditDetail label="IP" value={event.ip_address ?? "Not captured"} />
+        <AuditDetail label="User agent" value={event.user_agent ?? "Not captured"} />
+      </dl>
+    </article>
+  );
+}
+
+function AuditDetail({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">{label}</dt>
+      <dd className="mt-1 break-words font-semibold text-ink">{value}</dd>
+    </div>
   );
 }
 

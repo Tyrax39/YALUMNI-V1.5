@@ -2,9 +2,9 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response, status
 from sqlalchemy import distinct, func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.core.config import get_settings
 from app.core.database import get_db_session
@@ -33,6 +33,8 @@ from app.modules.auth.platform_owner import (
     restore_platform_owner_if_needed,
 )
 from app.modules.auth.schemas import (
+    AdminAuditEvent,
+    AdminAuditEventListResponse,
     AdminOverview,
     AuthResponse,
     AuthSessionInfo,
@@ -131,6 +133,20 @@ def _serialize_session(
     )
 
 
+def _serialize_audit_event(event: SecurityEvent) -> AdminAuditEvent:
+    return AdminAuditEvent(
+        id=event.id,
+        event_type=event.event_type,
+        user_id=event.user_id,
+        user_email=event.user.email if event.user else None,
+        user_display_name=event.user.display_name if event.user else None,
+        ip_address=event.ip_address,
+        user_agent=event.user_agent,
+        metadata=event.metadata_json,
+        created_at=event.created_at,
+    )
+
+
 def _ensure_role(db: Session, role_name: str) -> Role:
     role = db.scalar(select(Role).where(Role.name == role_name))
     if role:
@@ -194,11 +210,7 @@ def _get_valid_account_token(db: Session, token: str, purpose: str) -> AccountTo
             AccountToken.purpose == purpose,
         )
     )
-    if (
-        not account_token
-        or account_token.consumed_at
-        or _is_expired(account_token.expires_at)
-    ):
+    if not account_token or account_token.consumed_at or _is_expired(account_token.expires_at):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid or expired token",
@@ -379,10 +391,7 @@ def list_sessions(
     ).all()
 
     return AuthSessionsResponse(
-        sessions=[
-            _serialize_session(session, current_refresh_token_hash)
-            for session in sessions
-        ]
+        sessions=[_serialize_session(session, current_refresh_token_hash) for session in sessions]
     )
 
 
@@ -406,8 +415,8 @@ def revoke_session(
             detail="Session not found",
         )
 
-    revoked_current_session = (
-        bool(x_refresh_token) and session.refresh_token_hash == hash_token(x_refresh_token)
+    revoked_current_session = bool(x_refresh_token) and session.refresh_token_hash == hash_token(
+        x_refresh_token
     )
     if session.revoked_at is None:
         session.revoked_at = utcnow()
@@ -504,6 +513,40 @@ def admin_overview(
     )
 
 
+@router.get("/admin/audit-events", response_model=AdminAuditEventListResponse)
+def list_admin_audit_events(
+    current_user: Annotated[User, Depends(admin_user_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+    event_type: Annotated[str | None, Query(max_length=80)] = None,
+    user_id: uuid.UUID | None = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> AdminAuditEventListResponse:
+    _ = current_user
+    filters = []
+    if event_type:
+        filters.append(SecurityEvent.event_type.ilike(f"%{event_type.strip()}%"))
+    if user_id:
+        filters.append(SecurityEvent.user_id == user_id)
+
+    total = db.scalar(select(func.count(SecurityEvent.id)).where(*filters)) or 0
+    events = db.scalars(
+        select(SecurityEvent)
+        .options(joinedload(SecurityEvent.user))
+        .where(*filters)
+        .order_by(SecurityEvent.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+    ).all()
+
+    return AdminAuditEventListResponse(
+        events=[_serialize_audit_event(event) for event in events],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
 @router.post("/password/forgot", response_model=DevTokenResponse)
 def forgot_password(
     payload: ForgotPasswordRequest,
@@ -528,8 +571,7 @@ def forgot_password(
     db.commit()
     return DevTokenResponse(
         message=(
-            "If an active account exists for that email, "
-            "password reset instructions were sent."
+            "If an active account exists for that email, password reset instructions were sent."
         ),
         dev_token=dev_token,
     )
