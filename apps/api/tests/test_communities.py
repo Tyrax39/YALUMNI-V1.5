@@ -346,6 +346,108 @@ def test_community_owner_and_manager_can_manage_active_members(client: TestClien
     }
 
 
+def test_community_owner_can_transfer_ownership(client: TestClient) -> None:
+    admin_headers = create_admin(client)
+    community = create_community(
+        client,
+        admin_headers,
+        name="Kenya Ownership Chapter",
+        country="Kenya",
+    )
+
+    successor_user = register_user(client, "successor.owner@example.com")
+    manager_user = register_user(client, "transfer.manager@example.com")
+    outsider_user = register_user(client, "transfer.outsider@example.com")
+    successor_headers = auth_headers(successor_user["access_token"])
+    manager_headers = auth_headers(manager_user["access_token"])
+    outsider_headers = auth_headers(outsider_user["access_token"])
+    for headers in (successor_headers, manager_headers):
+        join_response = client.post(
+            f"/api/v1/communities/{community['id']}/join",
+            headers=headers,
+        )
+        assert join_response.status_code == 200
+
+    roster_response = client.get(
+        f"/api/v1/communities/{community['id']}/members",
+        headers=admin_headers,
+    )
+    assert roster_response.status_code == 200
+    members_by_email = {member["email"]: member for member in roster_response.json()["members"]}
+    successor_membership = members_by_email["successor.owner@example.com"]
+    manager_membership = members_by_email["transfer.manager@example.com"]
+    original_owner_membership = members_by_email["admin@example.com"]
+
+    manager_promotion = client.patch(
+        f"/api/v1/communities/{community['id']}/members/{manager_membership['id']}",
+        headers=admin_headers,
+        json={"role": "MANAGER"},
+    )
+    assert manager_promotion.status_code == 200
+
+    outsider_denied = client.post(
+        f"/api/v1/communities/{community['id']}/ownership-transfer",
+        headers=outsider_headers,
+        json={"new_owner_membership_id": successor_membership["id"]},
+    )
+    assert outsider_denied.status_code == 403
+
+    manager_denied = client.post(
+        f"/api/v1/communities/{community['id']}/ownership-transfer",
+        headers=manager_headers,
+        json={"new_owner_membership_id": successor_membership["id"]},
+    )
+    assert manager_denied.status_code == 403
+
+    already_owner = client.post(
+        f"/api/v1/communities/{community['id']}/ownership-transfer",
+        headers=admin_headers,
+        json={"new_owner_membership_id": original_owner_membership["id"]},
+    )
+    assert already_owner.status_code == 409
+
+    transfer_response = client.post(
+        f"/api/v1/communities/{community['id']}/ownership-transfer",
+        headers=admin_headers,
+        json={"new_owner_membership_id": successor_membership["id"]},
+    )
+    assert transfer_response.status_code == 200
+    assert transfer_response.json()["membership_role"] == "MANAGER"
+    assert transfer_response.json()["member_count"] == 3
+
+    updated_roster = client.get(
+        f"/api/v1/communities/{community['id']}/members",
+        headers=successor_headers,
+    )
+    assert updated_roster.status_code == 200
+    updated_members = {member["email"]: member for member in updated_roster.json()["members"]}
+    assert updated_members["successor.owner@example.com"]["role"] == "OWNER"
+    assert updated_members["admin@example.com"]["role"] == "MANAGER"
+    assert updated_members["transfer.manager@example.com"]["role"] == "MANAGER"
+
+    new_owner_update = client.patch(
+        f"/api/v1/communities/{community['id']}",
+        headers=successor_headers,
+        json={"name": "Kenya Successor Chapter"},
+    )
+    assert new_owner_update.status_code == 200
+    assert new_owner_update.json()["name"] == "Kenya Successor Chapter"
+
+    owner_removal_denied = client.post(
+        f"/api/v1/communities/{community['id']}/members/{successor_membership['id']}/remove",
+        headers=admin_headers,
+    )
+    assert owner_removal_denied.status_code == 403
+
+    former_owner_leave = client.post(
+        f"/api/v1/communities/{community['id']}/leave",
+        headers=admin_headers,
+    )
+    assert former_owner_leave.status_code == 200
+    assert former_owner_leave.json()["membership_status"] == "LEFT"
+    assert former_owner_leave.json()["member_count"] == 2
+
+
 def test_community_manager_can_review_pending_join_requests(client: TestClient) -> None:
     admin_headers = create_admin(client)
     community = create_community(

@@ -341,6 +341,10 @@ export type CommunityInvitationCreatePayload = {
   role?: "MANAGER" | "MEMBER";
 };
 
+export type CommunityOwnershipTransferPayload = {
+  new_owner_membership_id: string;
+};
+
 export const adminRoles: readonly string[] = [
   "SUPER_ADMIN",
   "PLATFORM_ADMIN",
@@ -1004,6 +1008,21 @@ export function acceptCommunityInvitation(
     headers: authHeaders(accessToken),
     method: "POST"
   });
+}
+
+export function transferCommunityOwnership(
+  accessToken: string,
+  communityId: string,
+  payload: CommunityOwnershipTransferPayload
+): Promise<Community> {
+  return protectedApiFetch<Community>(
+    `/api/v1/communities/${encodeURIComponent(communityId)}/ownership-transfer`,
+    {
+      body: JSON.stringify(payload),
+      headers: authHeaders(accessToken),
+      method: "POST"
+    }
+  );
 }
 
 export function approveCommunityMember(

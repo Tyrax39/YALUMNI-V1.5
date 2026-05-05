@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import {
   ArrowLeft,
   Ban,
+  Crown,
   LogIn,
   LogOut,
   MailPlus,
@@ -40,6 +41,7 @@ import {
   listCommunityMembers,
   rejectCommunityMember,
   removeCommunityMember,
+  transferCommunityOwnership,
   updateCommunity,
   CommunityUpdatePayload,
   updateCommunityMemberRole
@@ -120,9 +122,9 @@ function CommunityDetailContent({
   const [actionError, setActionError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [busyMemberId, setBusyMemberId] = useState<string | null>(null);
-  const [busyMemberAction, setBusyMemberAction] = useState<"remove" | "review" | "role" | null>(
-    null
-  );
+  const [busyMemberAction, setBusyMemberAction] = useState<
+    "ownership" | "remove" | "review" | "role" | null
+  >(null);
   const [isEditingSettings, setIsEditingSettings] = useState(false);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [settingsForm, setSettingsForm] = useState<CommunitySettingsForm>(
@@ -355,6 +357,27 @@ function CommunityDetailContent({
     }
   }
 
+  async function handleOwnershipTransfer(member: CommunityMember) {
+    setMessage(null);
+    setActionError(null);
+    setBusyMemberId(member.id);
+    setBusyMemberAction("ownership");
+    try {
+      await transferCommunityOwnership(accessToken, communityId, {
+        new_owner_membership_id: member.id
+      });
+      setMessage(`${member.display_name} is now the community owner.`);
+      await refresh();
+    } catch (caught) {
+      setActionError(
+        caught instanceof ApiError ? caught.message : "Ownership transfer failed."
+      );
+    } finally {
+      setBusyMemberId(null);
+      setBusyMemberAction(null);
+    }
+  }
+
   async function handleRemoveMember(member: CommunityMember) {
     setMessage(null);
     setActionError(null);
@@ -561,6 +584,19 @@ function CommunityDetailContent({
               </p>
               {canManageMember(userRoles, community, member) ? (
                 <div className="mt-4 flex flex-wrap gap-2">
+                  {canTransferOwnership(userRoles, community, member) ? (
+                    <button
+                      className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-lg border border-secondary/40 px-3 text-sm font-semibold text-secondary transition hover:border-secondary hover:bg-secondary/10 disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={busyMemberId === member.id}
+                      onClick={() => void handleOwnershipTransfer(member)}
+                      type="button"
+                    >
+                      <Crown aria-hidden="true" className="h-4 w-4" />
+                      {busyMemberId === member.id && busyMemberAction === "ownership"
+                        ? "Transferring..."
+                        : "Make owner"}
+                    </button>
+                  ) : null}
                   {member.role === "MANAGER" ? (
                     <button
                       className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-lg border border-border px-3 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
@@ -1193,4 +1229,16 @@ function canManageMember(
   }
 
   return community.membership_role === "MANAGER" && member.role === "MEMBER";
+}
+
+function canTransferOwnership(
+  userRoles: string[],
+  community: Community,
+  member: CommunityMember
+): boolean {
+  return (
+    member.status === "ACTIVE" &&
+    member.role !== "OWNER" &&
+    canEditCommunitySettings(userRoles, community)
+  );
 }

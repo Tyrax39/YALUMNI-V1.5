@@ -116,6 +116,10 @@ class CommunityMemberRoleUpdate(BaseModel):
         return value.strip().upper().replace(" ", "_")
 
 
+class CommunityOwnershipTransfer(BaseModel):
+    new_owner_membership_id: uuid.UUID
+
+
 class CommunityInvitationCreate(BaseModel):
     email: str = Field(max_length=320, pattern=EMAIL_PATTERN)
     role: str = Field(default="MEMBER", max_length=40)

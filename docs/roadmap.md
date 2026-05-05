@@ -66,7 +66,7 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
 - Member management. Started with manager promotion/demotion and active non-owner member removal.
 - Community settings editing. Implemented for admins and community owners.
 - Invitations. Implemented for manager/owner/admin creation, cancellation, and token acceptance.
-- Ownership transfer. Planned.
+- Ownership transfer. Implemented for owner/admin succession to active non-owner members.
 - Private content gates. Planned.
 
 ## Phase 6: Feed And Moderation

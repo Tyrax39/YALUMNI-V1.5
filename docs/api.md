@@ -138,6 +138,16 @@ Community invitations support:
 Local/dev invitation creation responses include `dev_invitation_token` until a
 real email provider is wired. List responses do not repeat invitation tokens.
 
+Community ownership transfer support:
+
+- `POST /api/v1/communities/{community_id}/ownership-transfer` with
+  `new_owner_membership_id`.
+- Only platform admins and the current active community owner can transfer
+  ownership.
+- The target membership must be active and non-owner.
+- Previous active owners are retained as managers so the community keeps a
+  management chain after succession.
+
 ## Phase 3: Alumni
 
 ```text
@@ -148,7 +158,7 @@ PATCH  /api/v1/alumni/me/visibility
 ## Phase 4: Communities
 
 ```text
-POST   /api/v1/communities/{community_id}/ownership-transfer
+POST   /api/v1/communities/{community_id}/ownership-transfer  # implemented
 ```
 
 ## Phase 5: Feed

@@ -24,6 +24,7 @@ from app.modules.communities.schemas import (
     CommunityMemberListResponse,
     CommunityMemberResponse,
     CommunityMemberRoleUpdate,
+    CommunityOwnershipTransfer,
     CommunityResponse,
     CommunityUpdate,
 )
@@ -112,6 +113,14 @@ def _validate_payload(payload: CommunityCreate) -> None:
 
 def _active_member_count(community: Community) -> int:
     return sum(1 for membership in community.memberships if membership.status == "ACTIVE")
+
+
+def _active_owner_memberships(community: Community) -> list[CommunityMembership]:
+    return [
+        membership
+        for membership in community.memberships
+        if membership.status == "ACTIVE" and membership.role == "OWNER"
+    ]
 
 
 def _membership_for_user(
@@ -917,6 +926,58 @@ def remove_community_member(
     db.commit()
     db.refresh(membership)
     return _serialize_member(membership)
+
+
+@router.post(
+    "/{community_id}/ownership-transfer",
+    response_model=CommunityResponse,
+)
+def transfer_community_ownership(
+    community_id: uuid.UUID,
+    payload: CommunityOwnershipTransfer,
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> CommunityResponse:
+    community = _get_community_or_404(db, community_id)
+    if not _can_edit_community_settings(current_user, community):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to transfer community ownership",
+        )
+
+    new_owner = _get_membership_or_404(db, community, payload.new_owner_membership_id)
+    if new_owner.status != "ACTIVE":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only active members can receive ownership",
+        )
+    if new_owner.role == "OWNER":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="That member is already an owner",
+        )
+
+    previous_owners = _active_owner_memberships(community)
+    previous_owner_ids = [str(owner.id) for owner in previous_owners]
+    for owner in previous_owners:
+        owner.role = "MANAGER"
+    new_owner.role = "OWNER"
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "community.ownership_transferred",
+        metadata={
+            "community_id": str(community.id),
+            "new_owner_membership_id": str(new_owner.id),
+            "new_owner_user_id": str(new_owner.user_id),
+            "previous_owner_membership_ids": previous_owner_ids,
+        },
+    )
+    db.commit()
+    community = _get_community_or_404(db, community.id)
+    return _serialize_community(community, current_user)
 
 
 @router.post(
