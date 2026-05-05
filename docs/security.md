@@ -72,11 +72,13 @@ Users must control visibility of:
 - Add auth rate limits. Done in-process for login, password reset, and local admin bootstrap.
 - Add verification evidence upload/download authorization. Done for local MVP storage.
 - Add profile photo upload/download authorization. Done for local MVP storage.
+- Add shared local/S3 upload storage adapter. Done; production still needs real bucket credentials and bucket policy validation.
 - Add tests for auth denial and basic IDOR prevention.
 
 ## File Storage Controls
 
-- Current verification evidence storage is local-only for MVP development.
-- Current profile photo storage is local-only for MVP development.
-- Production should move uploaded files to private object storage.
+- Current verification evidence and profile photo storage use the shared upload storage adapter.
+- Local development uses `UPLOAD_STORAGE_PROVIDER=LOCAL`.
+- Production can use `UPLOAD_STORAGE_PROVIDER=S3` with a private bucket and S3-compatible endpoint configuration.
 - Evidence and profile photo URLs should be short-lived, permission checked, and never public bucket URLs.
+- Production still needs malware scanning, retention policy, image processing, and explicit bucket policy review.

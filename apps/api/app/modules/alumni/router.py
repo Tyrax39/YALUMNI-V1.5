@@ -9,16 +9,17 @@ from fastapi import (
     HTTPException,
     Query,
     Request,
+    Response,
     UploadFile,
     status,
 )
-from fastapi.responses import FileResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.core.database import get_db_session
 from app.core.permissions import ADMIN_ROLE_NAMES, GlobalRole, has_any_role
 from app.core.security import utcnow
+from app.core.storage import UploadCategory, delete_upload, upload_response
 from app.modules.alumni.models import (
     AlumniProfile,
     ProgramAffiliation,
@@ -38,12 +39,7 @@ from app.modules.alumni.schemas import (
     VerificationRequestResponse,
     VerificationReviewAction,
 )
-from app.modules.alumni.storage import (
-    evidence_file_path,
-    profile_photo_file_path,
-    store_profile_photo_file,
-    store_verification_file,
-)
+from app.modules.alumni.storage import store_profile_photo_file, store_verification_file
 from app.modules.auth.dependencies import get_current_user, require_roles
 from app.modules.auth.models import Role, RoleAssignment, SecurityEvent, User
 
@@ -299,14 +295,12 @@ def _get_or_create_profile(db: Session, user: User) -> AlumniProfile:
     return db.scalar(_get_profile_query(user)) or profile
 
 
-def _delete_local_profile_photo(storage_key: str | None) -> None:
-    if not storage_key:
-        return
-    file_path = profile_photo_file_path(storage_key)
-    try:
-        file_path.unlink(missing_ok=True)
-    except OSError:
-        return
+def _delete_profile_photo_upload(storage_key: str | None, storage_provider: str | None) -> None:
+    delete_upload(
+        category=UploadCategory.PROFILE_PHOTO,
+        storage_key=storage_key,
+        storage_provider=storage_provider or "LOCAL",
+    )
 
 
 def _verification_request_options():
@@ -419,6 +413,7 @@ async def upload_my_profile_photo(
 ) -> AlumniProfileResponse:
     profile = _get_or_create_profile(db, current_user)
     previous_storage_key = profile.profile_photo_storage_key
+    previous_storage_provider = profile.profile_photo_storage_provider
     stored_file = await store_profile_photo_file(profile_id=profile.id, upload=photo_file)
 
     profile.profile_photo_file_name = stored_file.file_name
@@ -431,7 +426,7 @@ async def upload_my_profile_photo(
     db.commit()
 
     if previous_storage_key and previous_storage_key != stored_file.storage_key:
-        _delete_local_profile_photo(previous_storage_key)
+        _delete_profile_photo_upload(previous_storage_key, previous_storage_provider)
 
     profile = db.scalar(_get_profile_query(current_user)) or profile
     return _serialize_profile(profile)
@@ -445,6 +440,7 @@ def delete_my_profile_photo(
 ) -> AlumniProfileResponse:
     profile = _get_or_create_profile(db, current_user)
     previous_storage_key = profile.profile_photo_storage_key
+    previous_storage_provider = profile.profile_photo_storage_provider
     profile.profile_photo_file_name = None
     profile.profile_photo_content_type = None
     profile.profile_photo_file_size_bytes = None
@@ -454,7 +450,7 @@ def delete_my_profile_photo(
     _create_security_event(db, request, current_user, "alumni.profile_photo_deleted")
     db.commit()
 
-    _delete_local_profile_photo(previous_storage_key)
+    _delete_profile_photo_upload(previous_storage_key, previous_storage_provider)
 
     profile = db.scalar(_get_profile_query(current_user)) or profile
     return _serialize_profile(profile)
@@ -567,12 +563,12 @@ def search_alumni_directory(
     )
 
 
-@router.get("/{user_id}/photo", response_class=FileResponse)
+@router.get("/{user_id}/photo")
 def get_alumni_profile_photo(
     user_id: uuid.UUID,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db_session)],
-) -> FileResponse:
+) -> Response:
     profile = db.scalar(
         select(AlumniProfile)
         .options(joinedload(AlumniProfile.user))
@@ -589,17 +585,12 @@ def get_alumni_profile_photo(
             detail="Profile photo not found",
         )
 
-    file_path = profile_photo_file_path(profile.profile_photo_storage_key)
-    if not file_path.exists():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Profile photo not found",
-        )
-
-    return FileResponse(
-        file_path,
-        filename=profile.profile_photo_file_name,
-        media_type=profile.profile_photo_content_type,
+    return upload_response(
+        category=UploadCategory.PROFILE_PHOTO,
+        content_type=profile.profile_photo_content_type or "application/octet-stream",
+        file_name=profile.profile_photo_file_name,
+        storage_key=profile.profile_photo_storage_key,
+        storage_provider=profile.profile_photo_storage_provider or "LOCAL",
     )
 
 
@@ -744,14 +735,13 @@ async def upload_my_verification_evidence(
 
 @router.get(
     "/verification-requests/{verification_request_id}/evidence/{evidence_id}/download",
-    response_class=FileResponse,
 )
 def download_verification_evidence(
     verification_request_id: uuid.UUID,
     evidence_id: uuid.UUID,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db_session)],
-) -> FileResponse:
+) -> Response:
     verification_request = _get_accessible_verification_request_or_404(
         db,
         verification_request_id,
@@ -769,17 +759,12 @@ def download_verification_evidence(
             detail="Evidence file not found",
         )
 
-    file_path = evidence_file_path(evidence.storage_key)
-    if not file_path.exists():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Evidence file not found",
-        )
-
-    return FileResponse(
-        file_path,
-        filename=evidence.file_name,
-        media_type=evidence.content_type,
+    return upload_response(
+        category=UploadCategory.VERIFICATION_EVIDENCE,
+        content_type=evidence.content_type,
+        file_name=evidence.file_name,
+        storage_key=evidence.storage_key,
+        storage_provider=evidence.storage_provider,
     )
 
 

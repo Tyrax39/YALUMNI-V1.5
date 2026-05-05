@@ -28,12 +28,19 @@ class Settings(BaseSettings):
     platform_owner_password: str | None = None
     seed_test_accounts: bool = False
     test_accounts_password: str = "YalumniTest@12345!"
+    upload_storage_provider: str = "LOCAL"
+    upload_storage_prefix: str = "yalumni"
     verification_upload_dir: str = ".local/uploads/verification"
     verification_upload_max_bytes: int = 5 * 1024 * 1024
     verification_upload_allowed_types: str = "application/pdf,image/jpeg,image/png,image/webp"
     profile_photo_upload_dir: str = ".local/uploads/profile-photos"
     profile_photo_upload_max_bytes: int = 2 * 1024 * 1024
     profile_photo_upload_allowed_types: str = "image/jpeg,image/png,image/webp"
+    s3_endpoint_url: str | None = None
+    s3_access_key_id: str | None = None
+    s3_secret_access_key: str | None = None
+    s3_bucket_name: str | None = None
+    s3_region: str | None = None
     cors_origins: str = (
         "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3010,http://127.0.0.1:3010"
     )

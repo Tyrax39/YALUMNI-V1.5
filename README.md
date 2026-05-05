@@ -57,7 +57,7 @@ The current milestone is platform foundation plus the first identity, alumni pro
 - Next.js app with native public landing, login, register, dashboard, and admin surfaces
 - Registration, login, refresh, logout, current-user lookup, email verification, password reset, role-gated admin overview, session management, and in-process rate limiting
 - Protected platform owner seed, role restoration, and local-only test-account seeding through environment configuration
-- Current-user alumni profile, profile photo upload/display, program affiliation, visibility JSON settings, dashboard profile completion panel, verification request submission, local evidence uploads, admin review queue, and verified alumni directory search
+- Current-user alumni profile, profile photo upload/display, program affiliation, visibility JSON settings, dashboard profile completion panel, verification request submission, private storage-backed evidence uploads, admin review queue, and verified alumni directory search
 - Docker Compose for PostgreSQL, Redis, API, and web
 - CI workflow for web build and API tests
 - Architecture, API, data model, security, migration, development test-account, and project status docs

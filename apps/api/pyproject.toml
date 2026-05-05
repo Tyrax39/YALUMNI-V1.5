@@ -5,6 +5,7 @@ description = "FastAPI backend for the YALI Alumni Platform rebuild."
 requires-python = ">=3.11"
 dependencies = [
   "alembic>=1.13.2",
+  "boto3>=1.35.0",
   "fastapi>=0.115.0",
   "passlib[argon2]>=1.7.4",
   "psycopg[binary]>=3.2.1",
@@ -42,4 +43,3 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
-

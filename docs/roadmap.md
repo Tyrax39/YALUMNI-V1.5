@@ -33,7 +33,7 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
 ## Phase 3: Alumni Profiles And Verification
 
 - Profile model. Implemented.
-- Profile photo upload/display. Implemented with local authenticated image storage.
+- Profile photo upload/display. Implemented with shared local/S3 authenticated upload storage.
 - Program affiliation model. Implemented.
 - Current-user profile edit API. Implemented.
 - Dashboard profile completion UI. Implemented.
@@ -41,7 +41,7 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
 - Verification request model and current-user submission. Implemented.
 - Admin verification queue and approve/reject/request-info actions. Implemented.
 - Audit events. Started through `security_events`.
-- Verification documents and uploads. Started with local evidence storage and authenticated admin/member downloads.
+- Verification documents and uploads. Started with shared local/S3 evidence storage and authenticated admin/member downloads.
 - Dedicated audit log viewer.
 
 ## Phase 4: Directory And Search

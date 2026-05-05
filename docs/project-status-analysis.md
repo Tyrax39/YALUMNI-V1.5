@@ -533,6 +533,63 @@ Next possible implementation slices:
 - Dedicated admin audit log viewer.
 - Admin 2FA policy placeholder and enforcement gate.
 
+## Current V1.5 Implementation Update: 2026-05-05 Shared Upload Storage Slice
+
+Completed after profile photos:
+
+- Added `app.core.storage`, a shared upload storage adapter used by profile photos and verification evidence.
+- Local storage remains the default through `UPLOAD_STORAGE_PROVIDER=LOCAL`.
+- Added S3-compatible storage support through `UPLOAD_STORAGE_PROVIDER=S3`, `UPLOAD_STORAGE_PREFIX`, `S3_ENDPOINT_URL`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_BUCKET_NAME`, and `S3_REGION`.
+- Verification evidence uploads now write through the shared adapter while preserving authenticated member/admin download checks.
+- Profile photo uploads now write through the same adapter while preserving authenticated owner/admin/verified-directory download checks.
+- Existing local records remain compatible because stored provider values continue to drive download/delete behavior.
+- Added storage unit tests for local key behavior, S3 key prefixing, and local put/delete behavior.
+- Added `docs/storage.md` to document local and S3-compatible upload configuration.
+
+Current plan position:
+
+- Phase 1 remains functionally complete for local foundation.
+- Phase 2 remains roughly 89% complete.
+- Phase 3 is now roughly 52% complete because the media/evidence pipeline has a production-oriented storage abstraction.
+- Phase 4 remains roughly 18% complete.
+- Overall 24-week MVP implementation is roughly 26% complete.
+
+Implemented now:
+
+- Native landing page.
+- Monorepo foundation, CI, docs, Docker Compose.
+- FastAPI health/status and request middleware.
+- Identity auth, refresh sessions, account recovery, email verification, protected platform owner, role-gated admin overview, session management, and MVP-local rate limiting.
+- Local-only test-account seeding for role and directory QA.
+- Protected dashboard/admin route behavior.
+- Alumni current-user profile model/API/UI with profile photo upload/display/delete.
+- Shared local/S3 upload storage adapter for profile photos and verification evidence.
+- Program affiliation model/API/UI.
+- Verification request submission, member status history, admin queue, review actions, alumni-member role grant, and evidence upload/review.
+- Verified member directory search/profile detail with privacy-aware serializers and authenticated profile-photo display.
+
+Main gaps now:
+
+- Auth still uses local-storage bearer tokens in the web app; production should move to HttpOnly cookies and SSR/middleware guards.
+- Admin 2FA is still not implemented.
+- Real email provider/templates are not wired.
+- S3 adapter exists, but production still needs real bucket credentials, bucket policy validation, malware scanning, image processing, lifecycle/retention policy, and CDN/signed URL decisions.
+- Directory search is database-backed MVP search, not Meilisearch/OpenSearch.
+- Public profile pages, saved searches, pagination UI, and advanced filters are not implemented.
+- Test accounts are local/dev seed data only; there is no production-safe demo identity lifecycle yet.
+- Skills are stored as MVP JSON rather than normalized skill tables.
+- Dedicated audit log viewer is not implemented; audit data currently lands in `security_events`.
+- Redis-backed rate limiting and background jobs are not wired yet.
+
+Next possible implementation slices:
+
+- Dedicated admin audit log viewer.
+- Secure cookie auth migration and route middleware.
+- Directory pagination/advanced filters and profile detail page.
+- Admin 2FA policy placeholder and enforcement gate.
+- Malware scanning hook for verification evidence.
+- Communities module foundation.
+
 ## Current V1.5 Implementation Update: 2026-05-05 Profile Photo Slice
 
 Completed after verification evidence uploads:

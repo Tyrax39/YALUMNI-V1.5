@@ -155,7 +155,10 @@ Completed alumni profile basics:
 - `program_affiliations`
 - `verification_requests`
 
-Next add production storage and audit depth:
+Completed upload storage foundation:
 
 - Private object-storage adapter shared by profile photos and verification evidence
+
+Next add audit depth:
+
 - `audit_logs` or a scoped verification event table

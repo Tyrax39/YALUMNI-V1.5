@@ -6,6 +6,7 @@ from pathlib import Path
 from fastapi import HTTPException, UploadFile, status
 
 from app.core.config import get_settings
+from app.core.storage import UploadCategory, build_storage_key, put_upload_bytes
 
 CONTENT_TYPE_EXTENSIONS = {
     "application/pdf": ".pdf",
@@ -56,33 +57,6 @@ def _safe_file_name(file_name: str | None, extension: str, default_name: str) ->
     return cleaned[:255]
 
 
-def _storage_file_path(base_dir: str, storage_key: str, detail: str) -> Path:
-    base_path = Path(base_dir).resolve()
-    file_path = (base_path / storage_key).resolve()
-    if base_path not in file_path.parents:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=detail,
-        )
-    return file_path
-
-
-def evidence_file_path(storage_key: str) -> Path:
-    return _storage_file_path(
-        get_settings().verification_upload_dir,
-        storage_key,
-        "Invalid evidence storage key",
-    )
-
-
-def profile_photo_file_path(storage_key: str) -> Path:
-    return _storage_file_path(
-        get_settings().profile_photo_upload_dir,
-        storage_key,
-        "Invalid profile photo storage key",
-    )
-
-
 async def store_verification_file(
     *,
     evidence_id: uuid.UUID,
@@ -112,16 +86,23 @@ async def store_verification_file(
 
     extension = CONTENT_TYPE_EXTENSIONS[content_type]
     file_name = _safe_file_name(upload.filename, extension, "verification-evidence")
-    storage_key = f"{verification_request_id}/{evidence_id}{extension}"
-    file_path = evidence_file_path(storage_key)
-    file_path.parent.mkdir(parents=True, exist_ok=True)
-    file_path.write_bytes(content)
+    storage_key = build_storage_key(
+        UploadCategory.VERIFICATION_EVIDENCE,
+        f"{verification_request_id}/{evidence_id}{extension}",
+    )
+    stored_object = put_upload_bytes(
+        category=UploadCategory.VERIFICATION_EVIDENCE,
+        content=content,
+        content_type=content_type,
+        storage_key=storage_key,
+    )
 
     return StoredVerificationFile(
         file_name=file_name,
         content_type=content_type,
         file_size_bytes=len(content),
-        storage_key=storage_key,
+        storage_key=stored_object.key,
+        storage_provider=stored_object.provider,
     )
 
 
@@ -156,14 +137,21 @@ async def store_profile_photo_file(
 
     extension = PROFILE_PHOTO_CONTENT_TYPE_EXTENSIONS[content_type]
     file_name = _safe_file_name(upload.filename, extension, "profile-photo")
-    storage_key = f"{profile_id}/{uuid.uuid4()}{extension}"
-    file_path = profile_photo_file_path(storage_key)
-    file_path.parent.mkdir(parents=True, exist_ok=True)
-    file_path.write_bytes(content)
+    storage_key = build_storage_key(
+        UploadCategory.PROFILE_PHOTO,
+        f"{profile_id}/{uuid.uuid4()}{extension}",
+    )
+    stored_object = put_upload_bytes(
+        category=UploadCategory.PROFILE_PHOTO,
+        content=content,
+        content_type=content_type,
+        storage_key=storage_key,
+    )
 
     return StoredProfilePhotoFile(
         file_name=file_name,
         content_type=content_type,
         file_size_bytes=len(content),
-        storage_key=storage_key,
+        storage_key=stored_object.key,
+        storage_provider=stored_object.provider,
     )
