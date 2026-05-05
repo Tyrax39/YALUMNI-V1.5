@@ -31,10 +31,6 @@ export function SessionCard({
   const [isVerifying, setIsVerifying] = useState(false);
 
   useEffect(() => {
-    const accessToken = providedAccessToken ?? window.localStorage.getItem("yalumni.accessToken");
-    if (!accessToken) {
-      return;
-    }
     const storedVerificationToken = window.localStorage.getItem("yalumni.emailVerificationToken");
 
     if (initialUser) {
@@ -45,7 +41,11 @@ export function SessionCard({
       return;
     }
 
-    getMe(accessToken)
+    if (!providedAccessToken) {
+      return;
+    }
+
+    getMe(providedAccessToken)
       .then((user) => {
         setVerificationToken(storedVerificationToken);
         setSession({ status: "authenticated", user });
@@ -62,7 +62,6 @@ export function SessionCard({
     try {
       const user = await verifyEmail(verificationToken);
       window.localStorage.removeItem("yalumni.emailVerificationToken");
-      window.localStorage.setItem("yalumni.user", JSON.stringify(user));
       onUserChange?.(user);
       setVerificationToken(null);
       setSession({ status: "authenticated", user });
@@ -72,10 +71,7 @@ export function SessionCard({
   }
 
   async function handleLogout() {
-    const refreshToken = window.localStorage.getItem("yalumni.refreshToken");
-    if (refreshToken) {
-      await logout(refreshToken).catch(() => undefined);
-    }
+    await logout().catch(() => undefined);
     window.localStorage.removeItem("yalumni.accessToken");
     window.localStorage.removeItem("yalumni.refreshToken");
     window.localStorage.removeItem("yalumni.user");

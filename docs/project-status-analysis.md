@@ -533,6 +533,62 @@ Next possible implementation slices:
 - Dedicated admin audit log viewer.
 - Admin 2FA policy placeholder and enforcement gate.
 
+## Current V1.5 Implementation Update: 2026-05-05 Secure Web Session Slice
+
+Completed after the admin audit log, shared upload storage, profile photo, and verification evidence slices:
+
+- Next.js web session endpoints were added for login, register, logout, and refresh.
+- The web app now stores access and refresh tokens in HttpOnly cookies instead of browser local storage.
+- A protected `/api/backend/*` proxy forwards authenticated web requests to FastAPI with server-side bearer headers.
+- The backend proxy supports JSON requests, form-data uploads, binary downloads, and one refresh retry on access-token expiry.
+- Dashboard and admin routes are guarded by the Next `proxy.ts` route entry guard before client rendering.
+- Client auth forms now remove legacy local-storage token keys and keep only the local development email verification token when present.
+- Protected dashboard/admin components keep their current `accessToken` prop compatibility, but the value is now a non-secret cookie-session marker.
+- Session revocation clears web cookies when the current session is revoked.
+- Login redirects respect a safe relative `next` path from the route guard.
+
+Current plan position:
+
+- Phase 1 remains functionally complete for local foundation.
+- Phase 2 is now roughly 93% complete because secure web-session transport is implemented for MVP-local use.
+- Phase 3 remains roughly 53% complete.
+- Phase 4 remains roughly 18% complete.
+- Overall 24-week MVP implementation is roughly 27% complete.
+
+Implemented now:
+
+- Native landing page.
+- Monorepo foundation, CI, docs, Docker Compose.
+- FastAPI health/status and request middleware.
+- Identity auth, refresh sessions, account recovery, email verification, protected platform owner, local test accounts, role-gated admin overview, session management, MVP-local rate limiting, and HttpOnly cookie-backed web sessions.
+- Protected dashboard/admin route behavior with a Next route-entry proxy and server-side backend API proxy.
+- Alumni current-user profile model/API/UI with profile photo upload/display/delete.
+- Program affiliation model/API/UI.
+- Verification request submission, member status history, admin queue, review actions, alumni-member role grant, and local/S3-ready evidence upload/review.
+- Verified member directory search/profile detail with privacy-aware serializers and authenticated profile-photo display.
+- Admin audit event API and admin audit log viewer.
+
+Main gaps now:
+
+- CSRF protection is not yet implemented for cookie-authenticated state-changing requests.
+- Admin 2FA is still not implemented.
+- Real email provider/templates are not wired.
+- Production object storage needs real bucket credentials, bucket policy validation, malware scanning, signed URL policy, image processing, CDN policy, and retention policy.
+- Directory search is database-backed MVP search, not Meilisearch/OpenSearch.
+- Public profile pages, saved searches, pagination UI, and advanced filters are not implemented.
+- Test accounts are local/dev seed data only; there is no production-safe demo identity lifecycle yet.
+- Skills are stored as MVP JSON rather than normalized skill tables.
+- Redis-backed rate limiting and background jobs are not wired yet.
+
+Next possible implementation slices:
+
+- CSRF protection for cookie-session state-changing requests.
+- Admin 2FA policy placeholder and enforcement gate.
+- Directory pagination/advanced filters and profile detail page.
+- Communities module foundation.
+- Real email provider/template integration.
+- Redis-backed rate limits and background jobs.
+
 ## Current V1.5 Implementation Update: 2026-05-05 Admin Audit Log Slice
 
 Completed after shared upload storage:

@@ -74,6 +74,7 @@ Users must control visibility of:
 - Add profile photo upload/download authorization. Done for local MVP storage.
 - Add shared local/S3 upload storage adapter. Done; production still needs real bucket credentials and bucket policy validation.
 - Add admin audit log viewer. Done for recorded `security_events`.
+- Move web auth transport out of browser local storage. Done with HttpOnly access/refresh cookies, web session routes, protected backend proxy routes, and Next proxy guards for dashboard/admin entry points.
 - Add tests for auth denial and basic IDOR prevention.
 
 ## File Storage Controls
@@ -83,3 +84,13 @@ Users must control visibility of:
 - Production can use `UPLOAD_STORAGE_PROVIDER=S3` with a private bucket and S3-compatible endpoint configuration.
 - Evidence and profile photo URLs should be short-lived, permission checked, and never public bucket URLs.
 - Production still needs malware scanning, retention policy, image processing, and explicit bucket policy review.
+
+## Web Session Controls
+
+- Browser JavaScript no longer receives or stores access and refresh tokens after login/register.
+- `/api/session/login`, `/api/session/register`, `/api/session/logout`, and `/api/session/refresh` manage HttpOnly cookies.
+- `/api/backend/*` forwards authenticated web requests to FastAPI with server-side bearer headers.
+- The proxy refreshes access tokens once on protected 401 responses when a valid refresh cookie is available.
+- Dashboard and admin routes are guarded by the Next `proxy.ts` entry guard before client rendering.
+- Legacy local-storage token keys are removed during auth transitions for migration cleanup.
+- Remaining production work: CSRF tokens for state-changing web API calls, role-aware server guards, stricter cookie domain/SameSite review, and end-to-end browser tests.

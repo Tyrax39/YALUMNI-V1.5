@@ -21,14 +21,16 @@ const inputClass =
   "mt-2 h-12 w-full rounded-lg border border-border bg-white px-4 text-sm text-ink outline-none transition placeholder:text-slate-400 focus:border-primary focus:ring-4 focus:ring-blue-100";
 
 function storeAuth(response: AuthResponse) {
-  window.localStorage.setItem("yalumni.accessToken", response.access_token);
-  window.localStorage.setItem("yalumni.refreshToken", response.refresh_token);
-  window.localStorage.setItem("yalumni.user", JSON.stringify(response.user));
+  window.localStorage.removeItem("yalumni.accessToken");
+  window.localStorage.removeItem("yalumni.refreshToken");
+  window.localStorage.removeItem("yalumni.user");
   if (response.dev_email_verification_token) {
     window.localStorage.setItem(
       "yalumni.emailVerificationToken",
       response.dev_email_verification_token
     );
+  } else {
+    window.localStorage.removeItem("yalumni.emailVerificationToken");
   }
 }
 
@@ -63,7 +65,8 @@ export function AuthForm({ mode }: AuthFormProps) {
 
       storeAuth(response);
       setSuccess(isRegister ? "Account created. Opening your dashboard..." : "Signed in. Opening your dashboard...");
-      router.push("/dashboard");
+      const nextPath = new URLSearchParams(window.location.search).get("next");
+      router.push(nextPath?.startsWith("/") && !nextPath.startsWith("//") ? nextPath : "/dashboard");
       router.refresh();
     } catch (caught) {
       const message =

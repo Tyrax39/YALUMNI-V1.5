@@ -5,6 +5,8 @@ import { ReactNode, useEffect, useMemo, useState } from "react";
 
 import { ApiError, AuthUser, bootstrapLocalAdmin, getMe } from "@/lib/api";
 
+const cookieSessionToken = "cookie-session";
+
 type AuthState =
   | { status: "loading" }
   | { status: "anonymous" }
@@ -45,20 +47,23 @@ export function ProtectedRoute({
   const [isBootstrapping, setIsBootstrapping] = useState(false);
 
   useEffect(() => {
-    const accessToken = window.localStorage.getItem("yalumni.accessToken");
-    const refreshToken = window.localStorage.getItem("yalumni.refreshToken");
-    if (!accessToken) {
-      queueMicrotask(() => setState({ status: "anonymous" }));
-      return;
-    }
-
-    getMe(accessToken)
+    getMe()
       .then((user) => {
-        window.localStorage.setItem("yalumni.user", JSON.stringify(user));
-        setState({ status: "authenticated", accessToken, refreshToken, user });
+        clearStoredAuth();
+        setState({
+          accessToken: cookieSessionToken,
+          refreshToken: null,
+          status: "authenticated",
+          user
+        });
       })
       .catch((caught) => {
         clearStoredAuth();
+        if (caught instanceof ApiError && caught.status === 401) {
+          setState({ status: "anonymous" });
+          return;
+        }
+
         setState({
           status: "error",
           message:
@@ -82,7 +87,6 @@ export function ProtectedRoute({
       return;
     }
 
-    window.localStorage.setItem("yalumni.user", JSON.stringify(user));
     setState({ ...state, user });
   }
 

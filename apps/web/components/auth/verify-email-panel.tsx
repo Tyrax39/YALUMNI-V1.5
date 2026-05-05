@@ -25,7 +25,6 @@ export function VerifyEmailPanel() {
     verifyEmail(token)
       .then((user) => {
         window.localStorage.removeItem("yalumni.emailVerificationToken");
-        window.localStorage.setItem("yalumni.user", JSON.stringify(user));
         setState({ status: "success", user });
       })
       .catch(() => setState({ status: "error", message: "This verification link is invalid or expired." }));

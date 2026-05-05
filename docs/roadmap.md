@@ -23,11 +23,11 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
 - Email verification. Implemented API and local web flow.
 - Password reset. Implemented API and local web flow.
 - Role baseline. Started with global `UNVERIFIED_USER` plus local `SUPER_ADMIN` bootstrap.
-- Protected web route behavior. Implemented client-side dashboard/admin guards for current token storage.
+- Protected web route behavior. Implemented with HttpOnly cookie-backed web sessions, Next proxy guards, and a backend API proxy.
 - Role-aware admin overview. Implemented API guard and web console summary.
 - Session/device management. Implemented API and dashboard UI for refresh-token sessions.
 - Login/reset/admin action rate limiting. Implemented in-process API guard for MVP hardening.
-- Secure cookie auth hardening.
+- Secure cookie auth hardening. Implemented for the web app foundation; remaining hardening includes CSRF protection, SSR role checks, and production cookie/domain review.
 - Admin 2FA requirement.
 
 ## Phase 3: Alumni Profiles And Verification

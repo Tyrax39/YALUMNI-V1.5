@@ -10,9 +10,6 @@ export type AuthUser = {
 };
 
 export type AuthResponse = {
-  access_token: string;
-  refresh_token: string;
-  token_type: "bearer";
   expires_in: number;
   user: AuthUser;
   dev_email_verification_token: string | null;
@@ -296,38 +293,60 @@ async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   return (await response.json()) as T;
 }
 
+async function webApiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const hasFormDataBody = typeof FormData !== "undefined" && init.body instanceof FormData;
+  const response = await fetch(path, {
+    ...init,
+    credentials: "same-origin",
+    headers: {
+      ...(hasFormDataBody ? {} : { "Content-Type": "application/json" }),
+      ...init.headers
+    }
+  });
+
+  if (!response.ok) {
+    throw new ApiError(await readError(response), response.status);
+  }
+
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
+  return (await response.json()) as T;
+}
+
+function protectedApiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
+  return webApiFetch<T>(`/api/backend${path}`, init);
+}
+
 export function register(payload: RegisterPayload): Promise<AuthResponse> {
-  return apiFetch<AuthResponse>("/api/v1/auth/register", {
+  return webApiFetch<AuthResponse>("/api/session/register", {
     body: JSON.stringify(payload),
     method: "POST"
   });
 }
 
 export function login(payload: LoginPayload): Promise<AuthResponse> {
-  return apiFetch<AuthResponse>("/api/v1/auth/login", {
+  return webApiFetch<AuthResponse>("/api/session/login", {
     body: JSON.stringify(payload),
     method: "POST"
   });
 }
 
-export function getMe(accessToken: string): Promise<AuthUser> {
-  return apiFetch<AuthUser>("/api/v1/auth/me", {
-    headers: {
-      Authorization: `Bearer ${accessToken}`
-    }
-  });
+export function getMe(accessToken?: string): Promise<AuthUser> {
+  void accessToken;
+  return protectedApiFetch<AuthUser>("/api/v1/auth/me");
 }
 
 function authHeaders(accessToken: string, refreshToken?: string | null) {
-  return {
-    Authorization: `Bearer ${accessToken}`,
-    ...(refreshToken ? { "X-Refresh-Token": refreshToken } : {})
-  };
+  void accessToken;
+  void refreshToken;
+  return {};
 }
 
-export function logout(refreshToken: string): Promise<void> {
-  return apiFetch<void>("/api/v1/auth/logout", {
-    body: JSON.stringify({ refresh_token: refreshToken }),
+export function logout(refreshToken?: string | null): Promise<void> {
+  void refreshToken;
+  return webApiFetch<void>("/api/session/logout", {
     method: "POST"
   });
 }
@@ -336,7 +355,7 @@ export function getSessions(
   accessToken: string,
   refreshToken?: string | null
 ): Promise<AuthSessionsResponse> {
-  return apiFetch<AuthSessionsResponse>("/api/v1/auth/sessions", {
+  return protectedApiFetch<AuthSessionsResponse>("/api/v1/auth/sessions", {
     headers: authHeaders(accessToken, refreshToken)
   });
 }
@@ -346,7 +365,7 @@ export function revokeSession(
   sessionId: string,
   refreshToken?: string | null
 ): Promise<SessionRevocationResponse> {
-  return apiFetch<SessionRevocationResponse>(`/api/v1/auth/sessions/${sessionId}`, {
+  return webApiFetch<SessionRevocationResponse>(`/api/session/sessions/${sessionId}`, {
     headers: authHeaders(accessToken, refreshToken),
     method: "DELETE"
   });
@@ -374,14 +393,14 @@ export function verifyEmail(token: string): Promise<AuthUser> {
 }
 
 export function bootstrapLocalAdmin(accessToken: string): Promise<AuthUser> {
-  return apiFetch<AuthUser>("/api/v1/auth/dev/bootstrap-admin", {
+  return protectedApiFetch<AuthUser>("/api/v1/auth/dev/bootstrap-admin", {
     headers: authHeaders(accessToken),
     method: "POST"
   });
 }
 
 export function getAdminOverview(accessToken: string): Promise<AdminOverview> {
-  return apiFetch<AdminOverview>("/api/v1/auth/admin/overview", {
+  return protectedApiFetch<AdminOverview>("/api/v1/auth/admin/overview", {
     headers: authHeaders(accessToken)
   });
 }
@@ -405,7 +424,7 @@ export function getAdminAuditEvents(
   }
 
   const query = searchParams.toString();
-  return apiFetch<AdminAuditEventListResponse>(
+  return protectedApiFetch<AdminAuditEventListResponse>(
     `/api/v1/auth/admin/audit-events${query ? `?${query}` : ""}`,
     {
       headers: authHeaders(accessToken)
@@ -414,7 +433,7 @@ export function getAdminAuditEvents(
 }
 
 export function getMyAlumniProfile(accessToken: string): Promise<AlumniProfile> {
-  return apiFetch<AlumniProfile>("/api/v1/alumni/me/profile", {
+  return protectedApiFetch<AlumniProfile>("/api/v1/alumni/me/profile", {
     headers: authHeaders(accessToken)
   });
 }
@@ -423,7 +442,7 @@ export function updateMyAlumniProfile(
   accessToken: string,
   payload: AlumniProfileUpdate
 ): Promise<AlumniProfile> {
-  return apiFetch<AlumniProfile>("/api/v1/alumni/me/profile", {
+  return protectedApiFetch<AlumniProfile>("/api/v1/alumni/me/profile", {
     body: JSON.stringify(payload),
     headers: authHeaders(accessToken),
     method: "PATCH"
@@ -434,7 +453,7 @@ export function uploadProfilePhoto(accessToken: string, file: File): Promise<Alu
   const formData = new FormData();
   formData.set("file", file);
 
-  return apiFetch<AlumniProfile>("/api/v1/alumni/me/profile-photo", {
+  return protectedApiFetch<AlumniProfile>("/api/v1/alumni/me/profile-photo", {
     body: formData,
     headers: authHeaders(accessToken),
     method: "POST"
@@ -442,7 +461,7 @@ export function uploadProfilePhoto(accessToken: string, file: File): Promise<Alu
 }
 
 export function deleteProfilePhoto(accessToken: string): Promise<AlumniProfile> {
-  return apiFetch<AlumniProfile>("/api/v1/alumni/me/profile-photo", {
+  return protectedApiFetch<AlumniProfile>("/api/v1/alumni/me/profile-photo", {
     headers: authHeaders(accessToken),
     method: "DELETE"
   });
@@ -452,7 +471,8 @@ export async function downloadProfilePhoto(
   accessToken: string,
   userId: string
 ): Promise<Blob> {
-  const response = await fetch(`${apiBaseUrl}/api/v1/alumni/${userId}/photo`, {
+  const response = await fetch(`/api/backend/api/v1/alumni/${userId}/photo`, {
+    credentials: "same-origin",
     headers: authHeaders(accessToken)
   });
 
@@ -467,7 +487,7 @@ export function addProgramAffiliation(
   accessToken: string,
   payload: ProgramAffiliationPayload
 ): Promise<AlumniProfile> {
-  return apiFetch<AlumniProfile>("/api/v1/alumni/me/program-affiliations", {
+  return protectedApiFetch<AlumniProfile>("/api/v1/alumni/me/program-affiliations", {
     body: JSON.stringify(payload),
     headers: authHeaders(accessToken),
     method: "POST"
@@ -477,7 +497,7 @@ export function addProgramAffiliation(
 export function getMyVerificationRequests(
   accessToken: string
 ): Promise<VerificationRequestListResponse> {
-  return apiFetch<VerificationRequestListResponse>("/api/v1/alumni/me/verification-requests", {
+  return protectedApiFetch<VerificationRequestListResponse>("/api/v1/alumni/me/verification-requests", {
     headers: authHeaders(accessToken)
   });
 }
@@ -486,7 +506,7 @@ export function submitVerificationRequest(
   accessToken: string,
   payload: VerificationRequestPayload
 ): Promise<VerificationRequest> {
-  return apiFetch<VerificationRequest>("/api/v1/alumni/me/verification-requests", {
+  return protectedApiFetch<VerificationRequest>("/api/v1/alumni/me/verification-requests", {
     body: JSON.stringify(payload),
     headers: authHeaders(accessToken),
     method: "POST"
@@ -497,7 +517,7 @@ export function getAdminVerificationRequests(
   accessToken: string,
   status = "PENDING_REVIEW"
 ): Promise<VerificationRequestListResponse> {
-  return apiFetch<VerificationRequestListResponse>(
+  return protectedApiFetch<VerificationRequestListResponse>(
     `/api/v1/alumni/admin/verification-requests?status=${encodeURIComponent(status)}`,
     {
       headers: authHeaders(accessToken)
@@ -511,7 +531,7 @@ export function reviewVerificationRequest(
   action: VerificationReviewAction,
   reviewerNote?: string | null
 ): Promise<VerificationRequest> {
-  return apiFetch<VerificationRequest>(
+  return protectedApiFetch<VerificationRequest>(
     `/api/v1/alumni/admin/verification-requests/${requestId}/${action}`,
     {
       body: JSON.stringify({ reviewer_note: reviewerNote ?? null }),
@@ -532,7 +552,7 @@ export function uploadVerificationEvidence(
     formData.set("label", payload.label);
   }
 
-  return apiFetch<VerificationEvidence>(
+  return protectedApiFetch<VerificationEvidence>(
     `/api/v1/alumni/me/verification-requests/${requestId}/evidence`,
     {
       body: formData,
@@ -548,8 +568,9 @@ export async function downloadVerificationEvidence(
   evidenceId: string
 ): Promise<Blob> {
   const response = await fetch(
-    `${apiBaseUrl}/api/v1/alumni/verification-requests/${requestId}/evidence/${evidenceId}/download`,
+    `/api/backend/api/v1/alumni/verification-requests/${requestId}/evidence/${evidenceId}/download`,
     {
+      credentials: "same-origin",
       headers: authHeaders(accessToken)
     }
   );
@@ -577,7 +598,7 @@ export function searchAlumniDirectory(
   }
 
   const query = searchParams.toString();
-  return apiFetch<AlumniDirectorySearchResponse>(
+  return protectedApiFetch<AlumniDirectorySearchResponse>(
     `/api/v1/alumni/search${query ? `?${query}` : ""}`,
     {
       headers: authHeaders(accessToken)
