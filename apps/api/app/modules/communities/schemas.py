@@ -1,0 +1,67 @@
+import uuid
+from datetime import datetime
+
+from pydantic import BaseModel, Field, field_validator
+
+
+class CommunityCreate(BaseModel):
+    name: str = Field(min_length=2, max_length=140)
+    community_type: str = Field(default="COUNTRY_CHAPTER", max_length=40)
+    description: str | None = Field(default=None, max_length=1200)
+    country: str | None = Field(default=None, max_length=80)
+    city: str | None = Field(default=None, max_length=100)
+    sector: str | None = Field(default=None, max_length=120)
+    program_name: str | None = Field(default=None, max_length=120)
+    cohort_year: int | None = Field(default=None, ge=2000, le=2100)
+    visibility: str = Field(default="MEMBER_ONLY", max_length=40)
+    join_policy: str = Field(default="OPEN", max_length=40)
+
+    @field_validator(
+        "name",
+        "description",
+        "country",
+        "city",
+        "sector",
+        "program_name",
+        "community_type",
+        "visibility",
+        "join_policy",
+    )
+    @classmethod
+    def normalize_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        return value or None
+
+    @field_validator("community_type", "visibility", "join_policy")
+    @classmethod
+    def normalize_enums(cls, value: str) -> str:
+        return value.strip().upper().replace(" ", "_")
+
+
+class CommunityResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    slug: str
+    community_type: str
+    description: str | None
+    country: str | None
+    city: str | None
+    sector: str | None
+    program_name: str | None
+    cohort_year: int | None
+    visibility: str
+    join_policy: str
+    member_count: int
+    membership_status: str | None
+    membership_role: str | None
+    created_at: datetime
+
+
+class CommunityListResponse(BaseModel):
+    communities: list[CommunityResponse]
+    total: int
+    limit: int
+    offset: int
+    has_more: bool

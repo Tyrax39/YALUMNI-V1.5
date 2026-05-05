@@ -7,8 +7,9 @@ from app.core.config import get_settings
 from app.core.database import Base
 from app.modules.alumni import models as alumni_models
 from app.modules.auth import models as auth_models
+from app.modules.communities import models as community_models
 
-_ = auth_models, alumni_models
+_ = auth_models, alumni_models, community_models
 
 config = context.config
 

@@ -45,6 +45,11 @@ POST /api/v1/alumni/admin/verification-requests/{request_id}/request-info
 GET  /api/v1/alumni/search
 GET  /api/v1/alumni/{user_id}/photo
 GET  /api/v1/alumni/{user_id}
+GET  /api/v1/communities
+POST /api/v1/communities
+GET  /api/v1/communities/{community_id}
+POST /api/v1/communities/{community_id}/join
+POST /api/v1/communities/{community_id}/leave
 ```
 
 Evidence uploads accept PDF, JPEG, PNG, and WebP files. Uploading evidence to a
@@ -67,6 +72,16 @@ Directory search supports:
 - `offset`
 - `sort=name|recent|country|sector`
 
+Community listing supports:
+
+- `q`
+- `community_type`
+- `country`
+- `sector`
+- `membership=all|mine|not_joined`
+- `limit`
+- `offset`
+
 ## Phase 3: Alumni
 
 ```text
@@ -77,12 +92,7 @@ PATCH  /api/v1/alumni/me/visibility
 ## Phase 4: Communities
 
 ```text
-GET    /api/v1/communities
-POST   /api/v1/communities
-GET    /api/v1/communities/{community_id}
 PATCH  /api/v1/communities/{community_id}
-POST   /api/v1/communities/{community_id}/join
-POST   /api/v1/communities/{community_id}/leave
 GET    /api/v1/communities/{community_id}/members
 PATCH  /api/v1/communities/{community_id}/members/{user_id}
 ```

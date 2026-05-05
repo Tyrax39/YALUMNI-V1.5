@@ -10,6 +10,7 @@ import { ProtectedRoute } from "@/components/auth/protected-route";
 import { SessionCard } from "@/components/auth/session-card";
 import { SessionManagementPanel } from "@/components/auth/session-management-panel";
 import { TwoFactorPanel } from "@/components/auth/two-factor-panel";
+import { CommunitiesPanel } from "@/components/communities/communities-panel";
 import { adminRoles } from "@/lib/api";
 
 const modules = [
@@ -83,6 +84,7 @@ export function DashboardWorkspace() {
               <TwoFactorPanel accessToken={accessToken} onUserChange={setUser} user={user} />
               <VerificationRequestPanel accessToken={accessToken} />
               <DirectorySearchPanel accessToken={accessToken} />
+              <CommunitiesPanel accessToken={accessToken} canCreate={hasAdminRole} />
               <SessionManagementPanel
                 accessToken={accessToken}
                 onCurrentSessionRevoked={clearSession}

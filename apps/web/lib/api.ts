@@ -252,6 +252,46 @@ export type AlumniDirectorySearchResponse = {
   total: number;
 };
 
+export type Community = {
+  id: string;
+  name: string;
+  slug: string;
+  community_type: string;
+  description: string | null;
+  country: string | null;
+  city: string | null;
+  sector: string | null;
+  program_name: string | null;
+  cohort_year: number | null;
+  visibility: string;
+  join_policy: string;
+  member_count: number;
+  membership_status: string | null;
+  membership_role: string | null;
+  created_at: string;
+};
+
+export type CommunityListResponse = {
+  communities: Community[];
+  total: number;
+  limit: number;
+  offset: number;
+  has_more: boolean;
+};
+
+export type CommunityCreatePayload = {
+  name: string;
+  community_type?: string;
+  description?: string | null;
+  country?: string | null;
+  city?: string | null;
+  sector?: string | null;
+  program_name?: string | null;
+  cohort_year?: number | null;
+  visibility?: string;
+  join_policy?: string;
+};
+
 export const adminRoles: readonly string[] = [
   "SUPER_ADMIN",
   "PLATFORM_ADMIN",
@@ -746,4 +786,73 @@ export function getAlumniDirectoryProfile(
       headers: authHeaders(accessToken)
     }
   );
+}
+
+export function listCommunities(
+  accessToken: string,
+  params: {
+    communityType?: string;
+    country?: string;
+    limit?: number;
+    membership?: string;
+    offset?: number;
+    q?: string;
+    sector?: string;
+  } = {}
+): Promise<CommunityListResponse> {
+  const searchParams = new URLSearchParams();
+  if (params.q) {
+    searchParams.set("q", params.q);
+  }
+  if (params.communityType) {
+    searchParams.set("community_type", params.communityType);
+  }
+  if (params.country) {
+    searchParams.set("country", params.country);
+  }
+  if (params.sector) {
+    searchParams.set("sector", params.sector);
+  }
+  if (params.membership) {
+    searchParams.set("membership", params.membership);
+  }
+  if (params.limit) {
+    searchParams.set("limit", String(params.limit));
+  }
+  if (params.offset) {
+    searchParams.set("offset", String(params.offset));
+  }
+
+  const query = searchParams.toString();
+  return protectedApiFetch<CommunityListResponse>(
+    `/api/v1/communities${query ? `?${query}` : ""}`,
+    {
+      headers: authHeaders(accessToken)
+    }
+  );
+}
+
+export function createCommunity(
+  accessToken: string,
+  payload: CommunityCreatePayload
+): Promise<Community> {
+  return protectedApiFetch<Community>("/api/v1/communities", {
+    body: JSON.stringify(payload),
+    headers: authHeaders(accessToken),
+    method: "POST"
+  });
+}
+
+export function joinCommunity(accessToken: string, communityId: string): Promise<Community> {
+  return protectedApiFetch<Community>(`/api/v1/communities/${communityId}/join`, {
+    headers: authHeaders(accessToken),
+    method: "POST"
+  });
+}
+
+export function leaveCommunity(accessToken: string, communityId: string): Promise<Community> {
+  return protectedApiFetch<Community>(`/api/v1/communities/${communityId}/leave`, {
+    headers: authHeaders(accessToken),
+    method: "POST"
+  });
 }
