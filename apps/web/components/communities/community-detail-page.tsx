@@ -1,5 +1,6 @@
 "use client";
 
+import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 
 import {
@@ -7,11 +8,14 @@ import {
   LogIn,
   LogOut,
   MapPin,
+  Save,
+  Settings,
   ShieldCheck,
   ShieldMinus,
   ShieldPlus,
   UserMinus,
-  Users
+  Users,
+  X
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -29,6 +33,8 @@ import {
   listCommunityMembers,
   rejectCommunityMember,
   removeCommunityMember,
+  updateCommunity,
+  CommunityUpdatePayload,
   updateCommunityMemberRole
 } from "@/lib/api";
 import { ProtectedRoute } from "@/components/auth/protected-route";
@@ -49,6 +55,28 @@ type DetailState =
 
 const rosterPageSize = 12;
 const pendingPageSize = 6;
+const communityTypeOptions = [
+  "COUNTRY_CHAPTER",
+  "CITY_CHAPTER",
+  "PROGRAM_COHORT",
+  "SECTOR_GROUP",
+  "WORKING_GROUP"
+];
+const visibilityOptions = ["MEMBER_ONLY", "PRIVATE"];
+const joinPolicyOptions = ["OPEN", "REQUEST"];
+
+type CommunitySettingsForm = {
+  city: string;
+  cohort_year: string;
+  community_type: string;
+  country: string;
+  description: string;
+  join_policy: string;
+  name: string;
+  program_name: string;
+  sector: string;
+  visibility: string;
+};
 
 export function CommunityDetailPage({ communityId }: CommunityDetailPageProps) {
   return (
@@ -85,6 +113,11 @@ function CommunityDetailContent({
   const [busyMemberId, setBusyMemberId] = useState<string | null>(null);
   const [busyMemberAction, setBusyMemberAction] = useState<"remove" | "review" | "role" | null>(
     null
+  );
+  const [isEditingSettings, setIsEditingSettings] = useState(false);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [settingsForm, setSettingsForm] = useState<CommunitySettingsForm>(
+    createEmptySettingsForm
   );
 
   useEffect(() => {
@@ -136,6 +169,50 @@ function CommunityDetailContent({
     pendingOffset = state.status === "ready" ? state.pendingMembers?.offset ?? 0 : 0
   ) {
     setState(await loadDetail(activeOffset, pendingOffset));
+  }
+
+  function handleStartSettingsEdit(community: Community) {
+    setMessage(null);
+    setActionError(null);
+    setSettingsForm(createSettingsForm(community));
+    setIsEditingSettings(true);
+  }
+
+  function handleSettingsChange(field: keyof CommunitySettingsForm, value: string) {
+    setSettingsForm((current) => ({ ...current, [field]: value }));
+  }
+
+  async function handleSettingsSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (state.status !== "ready") {
+      return;
+    }
+
+    const payload = buildCommunitySettingsPayload(settingsForm);
+    if (!payload.name) {
+      setActionError("Community name is required.");
+      return;
+    }
+    if (settingsForm.cohort_year.trim() && payload.cohort_year === null) {
+      setActionError("Cohort year must be a valid number.");
+      return;
+    }
+
+    setMessage(null);
+    setActionError(null);
+    setIsSavingSettings(true);
+    try {
+      const updatedCommunity = await updateCommunity(accessToken, communityId, payload);
+      setMessage(`${updatedCommunity.name} settings saved.`);
+      setIsEditingSettings(false);
+      await refresh();
+    } catch (caught) {
+      setActionError(
+        caught instanceof ApiError ? caught.message : "Community settings could not be saved."
+      );
+    } finally {
+      setIsSavingSettings(false);
+    }
   }
 
   async function handleJoin() {
@@ -270,6 +347,7 @@ function CommunityDetailContent({
   const owner = community.membership_role === "OWNER";
   const location = [community.city, community.country].filter(Boolean).join(", ");
   const canManage = canManageCommunity(userRoles, community);
+  const canEditSettings = canEditCommunitySettings(userRoles, community);
 
   return (
     <CommunityShell>
@@ -301,6 +379,16 @@ function CommunityDetailContent({
                 <ShieldCheck aria-hidden="true" className="h-4 w-4 text-secondary" />
                 {formatLabel(community.membership_role ?? "MEMBER")}
               </span>
+            ) : null}
+            {canEditSettings ? (
+              <button
+                className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-lg border border-border px-4 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary"
+                onClick={() => handleStartSettingsEdit(community)}
+                type="button"
+              >
+                <Settings aria-hidden="true" className="h-4 w-4" />
+                Edit settings
+              </button>
             ) : null}
             {activeMember ? (
               <button
@@ -351,6 +439,16 @@ function CommunityDetailContent({
         <p className="mt-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
           {actionError}
         </p>
+      ) : null}
+
+      {isEditingSettings ? (
+        <CommunitySettingsPanel
+          form={settingsForm}
+          isSaving={isSavingSettings}
+          onCancel={() => setIsEditingSettings(false)}
+          onChange={handleSettingsChange}
+          onSubmit={handleSettingsSubmit}
+        />
       ) : null}
 
       <section className="mt-8">
@@ -598,6 +696,237 @@ function CommunityMetric({
   );
 }
 
+function CommunitySettingsPanel({
+  form,
+  isSaving,
+  onCancel,
+  onChange,
+  onSubmit
+}: {
+  form: CommunitySettingsForm;
+  isSaving: boolean;
+  onCancel: () => void;
+  onChange: (field: keyof CommunitySettingsForm, value: string) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <section className="mt-8 border-y border-border bg-white px-4 py-5 shadow-soft sm:px-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-secondary">
+            Community settings
+          </p>
+          <h2 className="mt-2 font-display text-2xl font-semibold text-ink">
+            Edit chapter details
+          </h2>
+        </div>
+        <button
+          className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-lg border border-border px-4 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary"
+          onClick={onCancel}
+          type="button"
+        >
+          <X aria-hidden="true" className="h-4 w-4" />
+          Close
+        </button>
+      </div>
+      <form className="mt-5 grid gap-4 lg:grid-cols-2" onSubmit={onSubmit}>
+        <label className="text-sm font-semibold text-ink">
+          Name
+          <input
+            className="focus-ring mt-2 min-h-11 w-full rounded-lg border border-border bg-surface px-3 text-sm text-ink"
+            maxLength={140}
+            minLength={2}
+            onChange={(event) => onChange("name", event.target.value)}
+            required
+            type="text"
+            value={form.name}
+          />
+        </label>
+        <label className="text-sm font-semibold text-ink">
+          Type
+          <select
+            className="focus-ring mt-2 min-h-11 w-full rounded-lg border border-border bg-surface px-3 text-sm text-ink"
+            onChange={(event) => onChange("community_type", event.target.value)}
+            value={form.community_type}
+          >
+            {communityTypeOptions.map((option) => (
+              <option key={option} value={option}>
+                {formatLabel(option)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-sm font-semibold text-ink lg:col-span-2">
+          Description
+          <textarea
+            className="focus-ring mt-2 min-h-28 w-full rounded-lg border border-border bg-surface px-3 py-3 text-sm leading-6 text-ink"
+            maxLength={1200}
+            onChange={(event) => onChange("description", event.target.value)}
+            value={form.description}
+          />
+        </label>
+        <label className="text-sm font-semibold text-ink">
+          Country
+          <input
+            className="focus-ring mt-2 min-h-11 w-full rounded-lg border border-border bg-surface px-3 text-sm text-ink"
+            maxLength={80}
+            onChange={(event) => onChange("country", event.target.value)}
+            type="text"
+            value={form.country}
+          />
+        </label>
+        <label className="text-sm font-semibold text-ink">
+          City
+          <input
+            className="focus-ring mt-2 min-h-11 w-full rounded-lg border border-border bg-surface px-3 text-sm text-ink"
+            maxLength={100}
+            onChange={(event) => onChange("city", event.target.value)}
+            type="text"
+            value={form.city}
+          />
+        </label>
+        <label className="text-sm font-semibold text-ink">
+          Sector
+          <input
+            className="focus-ring mt-2 min-h-11 w-full rounded-lg border border-border bg-surface px-3 text-sm text-ink"
+            maxLength={120}
+            onChange={(event) => onChange("sector", event.target.value)}
+            type="text"
+            value={form.sector}
+          />
+        </label>
+        <label className="text-sm font-semibold text-ink">
+          Program
+          <input
+            className="focus-ring mt-2 min-h-11 w-full rounded-lg border border-border bg-surface px-3 text-sm text-ink"
+            maxLength={120}
+            onChange={(event) => onChange("program_name", event.target.value)}
+            type="text"
+            value={form.program_name}
+          />
+        </label>
+        <label className="text-sm font-semibold text-ink">
+          Cohort year
+          <input
+            className="focus-ring mt-2 min-h-11 w-full rounded-lg border border-border bg-surface px-3 text-sm text-ink"
+            max={2100}
+            min={2000}
+            onChange={(event) => onChange("cohort_year", event.target.value)}
+            type="number"
+            value={form.cohort_year}
+          />
+        </label>
+        <label className="text-sm font-semibold text-ink">
+          Visibility
+          <select
+            className="focus-ring mt-2 min-h-11 w-full rounded-lg border border-border bg-surface px-3 text-sm text-ink"
+            onChange={(event) => onChange("visibility", event.target.value)}
+            value={form.visibility}
+          >
+            {visibilityOptions.map((option) => (
+              <option key={option} value={option}>
+                {formatLabel(option)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-sm font-semibold text-ink">
+          Join policy
+          <select
+            className="focus-ring mt-2 min-h-11 w-full rounded-lg border border-border bg-surface px-3 text-sm text-ink"
+            onChange={(event) => onChange("join_policy", event.target.value)}
+            value={form.join_policy}
+          >
+            {joinPolicyOptions.map((option) => (
+              <option key={option} value={option}>
+                {formatLabel(option)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="flex flex-wrap gap-2 lg:col-span-2">
+          <button
+            className="focus-ring inline-flex min-h-11 items-center gap-2 rounded-lg bg-primary px-5 text-sm font-semibold text-white transition hover:bg-[#003d7d] disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={isSaving}
+            type="submit"
+          >
+            <Save aria-hidden="true" className="h-4 w-4" />
+            {isSaving ? "Saving..." : "Save changes"}
+          </button>
+          <button
+            className="focus-ring inline-flex min-h-11 items-center gap-2 rounded-lg border border-border px-5 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={isSaving}
+            onClick={onCancel}
+            type="button"
+          >
+            <X aria-hidden="true" className="h-4 w-4" />
+            Cancel
+          </button>
+        </div>
+      </form>
+    </section>
+  );
+}
+
+function createEmptySettingsForm(): CommunitySettingsForm {
+  return {
+    city: "",
+    cohort_year: "",
+    community_type: "COUNTRY_CHAPTER",
+    country: "",
+    description: "",
+    join_policy: "OPEN",
+    name: "",
+    program_name: "",
+    sector: "",
+    visibility: "MEMBER_ONLY"
+  };
+}
+
+function createSettingsForm(community: Community): CommunitySettingsForm {
+  return {
+    city: community.city ?? "",
+    cohort_year: community.cohort_year ? String(community.cohort_year) : "",
+    community_type: community.community_type,
+    country: community.country ?? "",
+    description: community.description ?? "",
+    join_policy: community.join_policy,
+    name: community.name,
+    program_name: community.program_name ?? "",
+    sector: community.sector ?? "",
+    visibility: community.visibility
+  };
+}
+
+function buildCommunitySettingsPayload(
+  form: CommunitySettingsForm
+): CommunityUpdatePayload {
+  const cohortYear = form.cohort_year.trim();
+  const parsedCohortYear = cohortYear ? Number(cohortYear) : null;
+  const validCohortYear =
+    parsedCohortYear !== null && Number.isFinite(parsedCohortYear)
+      ? parsedCohortYear
+      : null;
+
+  return {
+    city: nullableText(form.city),
+    cohort_year: validCohortYear,
+    community_type: form.community_type,
+    country: nullableText(form.country),
+    description: nullableText(form.description),
+    join_policy: form.join_policy,
+    name: form.name.trim(),
+    program_name: nullableText(form.program_name),
+    sector: nullableText(form.sector),
+    visibility: form.visibility
+  };
+}
+
+function nullableText(value: string): string | null {
+  const trimmed = value.trim();
+  return trimmed || null;
+}
+
 function formatLabel(value: string): string {
   return value
     .toLowerCase()
@@ -618,6 +947,13 @@ function canManageCommunity(userRoles: string[], community: Community): boolean 
   return (
     community.membership_role === "OWNER" ||
     community.membership_role === "MANAGER" ||
+    userRoles.some((role) => adminRoles.includes(role))
+  );
+}
+
+function canEditCommunitySettings(userRoles: string[], community: Community): boolean {
+  return (
+    community.membership_role === "OWNER" ||
     userRoles.some((role) => adminRoles.includes(role))
   );
 }

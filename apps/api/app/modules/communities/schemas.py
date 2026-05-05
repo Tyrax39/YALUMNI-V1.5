@@ -40,6 +40,44 @@ class CommunityCreate(BaseModel):
         return value.strip().upper().replace(" ", "_")
 
 
+class CommunityUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=140)
+    community_type: str | None = Field(default=None, max_length=40)
+    description: str | None = Field(default=None, max_length=1200)
+    country: str | None = Field(default=None, max_length=80)
+    city: str | None = Field(default=None, max_length=100)
+    sector: str | None = Field(default=None, max_length=120)
+    program_name: str | None = Field(default=None, max_length=120)
+    cohort_year: int | None = Field(default=None, ge=2000, le=2100)
+    visibility: str | None = Field(default=None, max_length=40)
+    join_policy: str | None = Field(default=None, max_length=40)
+
+    @field_validator(
+        "name",
+        "description",
+        "country",
+        "city",
+        "sector",
+        "program_name",
+        "community_type",
+        "visibility",
+        "join_policy",
+    )
+    @classmethod
+    def normalize_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        return value or None
+
+    @field_validator("community_type", "visibility", "join_policy")
+    @classmethod
+    def normalize_enums(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return value.strip().upper().replace(" ", "_")
+
+
 class CommunityResponse(BaseModel):
     id: uuid.UUID
     name: str

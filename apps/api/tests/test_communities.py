@@ -406,6 +406,86 @@ def test_community_manager_can_review_pending_join_requests(client: TestClient) 
     assert manager_approval.json()["status"] == "ACTIVE"
 
 
+def test_community_owner_can_update_settings_and_manager_cannot(client: TestClient) -> None:
+    admin_headers = create_admin(client)
+    community = create_community(
+        client,
+        admin_headers,
+        name="Senegal Alumni Chapter",
+        country="Senegal",
+        sector="Public management",
+    )
+
+    manager_user = register_user(client, "settings.manager@example.com")
+    manager_headers = auth_headers(manager_user["access_token"])
+    join_response = client.post(
+        f"/api/v1/communities/{community['id']}/join",
+        headers=manager_headers,
+    )
+    assert join_response.status_code == 200
+    roster_response = client.get(
+        f"/api/v1/communities/{community['id']}/members",
+        headers=admin_headers,
+    )
+    manager_membership = next(
+        member
+        for member in roster_response.json()["members"]
+        if member["email"] == "settings.manager@example.com"
+    )
+    promotion_response = client.patch(
+        f"/api/v1/communities/{community['id']}/members/{manager_membership['id']}",
+        headers=admin_headers,
+        json={"role": "MANAGER"},
+    )
+    assert promotion_response.status_code == 200
+
+    manager_denied = client.patch(
+        f"/api/v1/communities/{community['id']}",
+        headers=manager_headers,
+        json={"name": "Manager Renamed Chapter"},
+    )
+    assert manager_denied.status_code == 403
+
+    update_response = client.patch(
+        f"/api/v1/communities/{community['id']}",
+        headers=admin_headers,
+        json={
+            "name": "Senegal Civic Leadership Chapter",
+            "community_type": "CITY_CHAPTER",
+            "description": "Updated chapter remit.",
+            "country": "Senegal",
+            "city": "Dakar",
+            "sector": "Civic technology",
+            "program_name": "Regional Leadership Center",
+            "cohort_year": 2024,
+            "visibility": "PRIVATE",
+            "join_policy": "REQUEST",
+        },
+    )
+    assert update_response.status_code == 200
+    updated = update_response.json()
+    assert updated["name"] == "Senegal Civic Leadership Chapter"
+    assert updated["slug"] == "senegal-alumni-chapter"
+    assert updated["community_type"] == "CITY_CHAPTER"
+    assert updated["city"] == "Dakar"
+    assert updated["visibility"] == "PRIVATE"
+    assert updated["join_policy"] == "REQUEST"
+
+    filtered_response = client.get(
+        "/api/v1/communities?community_type=CITY_CHAPTER&country=Senegal&sector=technology",
+        headers=admin_headers,
+    )
+    assert filtered_response.status_code == 200
+    assert filtered_response.json()["total"] == 1
+
+    invalid_response = client.patch(
+        f"/api/v1/communities/{community['id']}",
+        headers=admin_headers,
+        json={"join_policy": "INVITE_ONLY"},
+    )
+    assert invalid_response.status_code == 400
+
+
 def test_community_filters_and_pagination(client: TestClient) -> None:
     admin_headers = create_admin(client)
     create_community(

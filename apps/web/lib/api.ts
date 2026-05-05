@@ -311,6 +311,8 @@ export type CommunityCreatePayload = {
   join_policy?: string;
 };
 
+export type CommunityUpdatePayload = Partial<CommunityCreatePayload>;
+
 export const adminRoles: readonly string[] = [
   "SUPER_ADMIN",
   "PLATFORM_ADMIN",
@@ -867,6 +869,21 @@ export function getCommunity(accessToken: string, communityId: string): Promise<
     `/api/v1/communities/${encodeURIComponent(communityId)}`,
     {
       headers: authHeaders(accessToken)
+    }
+  );
+}
+
+export function updateCommunity(
+  accessToken: string,
+  communityId: string,
+  payload: CommunityUpdatePayload
+): Promise<Community> {
+  return protectedApiFetch<Community>(
+    `/api/v1/communities/${encodeURIComponent(communityId)}`,
+    {
+      body: JSON.stringify(payload),
+      headers: authHeaders(accessToken),
+      method: "PATCH"
     }
   );
 }

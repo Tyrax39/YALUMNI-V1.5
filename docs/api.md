@@ -48,6 +48,7 @@ GET  /api/v1/alumni/{user_id}
 GET  /api/v1/communities
 POST /api/v1/communities
 GET  /api/v1/communities/{community_id}
+PATCH /api/v1/communities/{community_id}
 GET  /api/v1/communities/{community_id}/members
 POST /api/v1/communities/{community_id}/members/{membership_id}/approve
 POST /api/v1/communities/{community_id}/members/{membership_id}/reject
@@ -110,6 +111,14 @@ community managers can manage ordinary members only. Community owners cannot be
 demoted or removed through these endpoints; ownership transfer remains a
 separate planned workflow.
 
+Community settings management supports:
+
+- `PATCH /api/v1/communities/{community_id}` for owner/admin updates to name,
+  type, description, location/focus metadata, visibility, and join policy.
+- Community slugs remain stable after rename so existing links do not break.
+- Active community managers can review/member-manage, but cannot edit
+  community settings.
+
 ## Phase 3: Alumni
 
 ```text
@@ -120,7 +129,6 @@ PATCH  /api/v1/alumni/me/visibility
 ## Phase 4: Communities
 
 ```text
-PATCH  /api/v1/communities/{community_id}
 POST   /api/v1/communities/{community_id}/invitations
 POST   /api/v1/communities/{community_id}/ownership-transfer
 ```

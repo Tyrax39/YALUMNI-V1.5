@@ -64,6 +64,7 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
 - Membership request review. Implemented for admins, community owners, and active community managers.
 - Chapter admin roles. Started with active `MANAGER` memberships.
 - Member management. Started with manager promotion/demotion and active non-owner member removal.
+- Community settings editing. Implemented for admins and community owners.
 - Invitations and ownership transfer. Planned.
 - Private content gates. Planned.
 

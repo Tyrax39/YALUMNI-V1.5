@@ -19,6 +19,7 @@ from app.modules.communities.schemas import (
     CommunityMemberResponse,
     CommunityMemberRoleUpdate,
     CommunityResponse,
+    CommunityUpdate,
 )
 
 router = APIRouter()
@@ -77,16 +78,24 @@ def _unique_slug(db: Session, name: str) -> str:
     return slug
 
 
-def _validate_payload(payload: CommunityCreate) -> None:
-    if payload.community_type not in COMMUNITY_TYPES:
+def _validate_settings(
+    community_type: str | None,
+    visibility: str | None,
+    join_policy: str | None,
+) -> None:
+    if community_type is not None and community_type not in COMMUNITY_TYPES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid community type",
         )
-    if payload.visibility not in COMMUNITY_VISIBILITY:
+    if visibility is not None and visibility not in COMMUNITY_VISIBILITY:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid visibility")
-    if payload.join_policy not in JOIN_POLICIES:
+    if join_policy is not None and join_policy not in JOIN_POLICIES:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid join policy")
+
+
+def _validate_payload(payload: CommunityCreate) -> None:
+    _validate_settings(payload.community_type, payload.visibility, payload.join_policy)
 
 
 def _active_member_count(community: Community) -> int:
@@ -123,6 +132,13 @@ def _can_manage_community(user: User, community: Community) -> bool:
         return True
 
     return _active_membership_role(user, community) in {"OWNER", "MANAGER"}
+
+
+def _can_edit_community_settings(user: User, community: Community) -> bool:
+    if _has_admin_role(user):
+        return True
+
+    return _active_membership_role(user, community) == "OWNER"
 
 
 def _can_manage_membership(
@@ -308,6 +324,83 @@ def get_community(
     db: Annotated[Session, Depends(get_db_session)],
 ) -> CommunityResponse:
     community = _get_community_or_404(db, community_id)
+    return _serialize_community(community, current_user)
+
+
+@router.patch("/{community_id}", response_model=CommunityResponse)
+def update_community(
+    community_id: uuid.UUID,
+    payload: CommunityUpdate,
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> CommunityResponse:
+    community = _get_community_or_404(db, community_id)
+    if not _can_edit_community_settings(current_user, community):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to edit this community",
+        )
+
+    required_fields = {"community_type", "join_policy", "name", "visibility"}
+    missing_required = [
+        field
+        for field in required_fields
+        if field in payload.model_fields_set and getattr(payload, field) is None
+    ]
+    if missing_required:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"{missing_required[0]} cannot be empty",
+        )
+
+    _validate_settings(payload.community_type, payload.visibility, payload.join_policy)
+
+    editable_fields = (
+        "name",
+        "community_type",
+        "description",
+        "country",
+        "city",
+        "sector",
+        "program_name",
+        "cohort_year",
+        "visibility",
+        "join_policy",
+    )
+    changed_fields: list[str] = []
+    previous_values: dict[str, str | int | None] = {}
+    next_values: dict[str, str | int | None] = {}
+    for field in editable_fields:
+        if field not in payload.model_fields_set:
+            continue
+        next_value = getattr(payload, field)
+        previous_value = getattr(community, field)
+        if previous_value == next_value:
+            continue
+        setattr(community, field, next_value)
+        changed_fields.append(field)
+        previous_values[field] = previous_value
+        next_values[field] = next_value
+
+    if changed_fields:
+        _create_security_event(
+            db,
+            request,
+            current_user,
+            "community.updated",
+            metadata={
+                "changed_fields": changed_fields,
+                "community_id": str(community.id),
+                "next_values": next_values,
+                "previous_values": previous_values,
+            },
+        )
+        db.commit()
+    else:
+        db.rollback()
+
+    community = _get_community_or_404(db, community.id)
     return _serialize_community(community, current_user)
 
 
