@@ -2,7 +2,8 @@ import { NextRequest } from "next/server";
 
 import {
   fetchAuthenticatedBackend,
-  proxyBackendResponse
+  proxyBackendResponse,
+  validateCsrfToken
 } from "@/lib/server/auth-session";
 
 type BackendProxyContext = {
@@ -12,6 +13,11 @@ type BackendProxyContext = {
 };
 
 async function proxy(request: NextRequest, context: BackendProxyContext) {
+  const csrfError = validateCsrfToken(request);
+  if (csrfError) {
+    return csrfError;
+  }
+
   const { path } = await context.params;
   const backendPath = `/${path.map((segment) => encodeURIComponent(segment)).join("/")}${request.nextUrl.search}`;
   const body =

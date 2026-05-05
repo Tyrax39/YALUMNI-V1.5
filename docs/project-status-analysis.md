@@ -533,6 +533,60 @@ Next possible implementation slices:
 - Dedicated admin audit log viewer.
 - Admin 2FA policy placeholder and enforcement gate.
 
+## Current V1.5 Implementation Update: 2026-05-05 CSRF Protection Slice
+
+Completed after the secure web session proxy slice:
+
+- A CSRF endpoint was added at `/api/session/csrf`.
+- The web app now issues a same-site `yalumni_csrf_token` cookie for browser mutations.
+- Cookie-authenticated session and backend proxy mutations now require a matching `X-CSRF-Token` header.
+- The shared web API wrapper automatically attaches CSRF tokens for POST, PATCH, PUT, and DELETE requests.
+- JSON requests, form-data uploads, and session revocation all use the same CSRF enforcement path.
+- Logout clears access, refresh, and CSRF cookies.
+- Anonymous GET access remains unaffected, while anonymous protected routes still redirect to login.
+
+Current plan position:
+
+- Phase 1 remains functionally complete for local foundation.
+- Phase 2 is now roughly 95% complete because cookie-session transport and CSRF protection are implemented for MVP-local use.
+- Phase 3 remains roughly 53% complete.
+- Phase 4 remains roughly 18% complete.
+- Overall 24-week MVP implementation is roughly 28% complete.
+
+Implemented now:
+
+- Native landing page.
+- Monorepo foundation, CI, docs, Docker Compose.
+- FastAPI health/status and request middleware.
+- Identity auth, refresh sessions, account recovery, email verification, protected platform owner, local test accounts, role-gated admin overview, session management, MVP-local rate limiting, HttpOnly cookie-backed web sessions, and CSRF-protected web mutations.
+- Protected dashboard/admin route behavior with a Next route-entry proxy and server-side backend API proxy.
+- Alumni current-user profile model/API/UI with profile photo upload/display/delete.
+- Program affiliation model/API/UI.
+- Verification request submission, member status history, admin queue, review actions, alumni-member role grant, and local/S3-ready evidence upload/review.
+- Verified member directory search/profile detail with privacy-aware serializers and authenticated profile-photo display.
+- Admin audit event API and admin audit log viewer.
+
+Main gaps now:
+
+- Admin 2FA is still not implemented.
+- Real email provider/templates are not wired.
+- Production cookie/domain/SameSite review and per-session CSRF rotation policy are still pending.
+- Production object storage needs real bucket credentials, bucket policy validation, malware scanning, signed URL policy, image processing, CDN policy, and retention policy.
+- Directory search is database-backed MVP search, not Meilisearch/OpenSearch.
+- Public profile pages, saved searches, pagination UI, and advanced filters are not implemented.
+- Test accounts are local/dev seed data only; there is no production-safe demo identity lifecycle yet.
+- Skills are stored as MVP JSON rather than normalized skill tables.
+- Redis-backed rate limiting and background jobs are not wired yet.
+
+Next possible implementation slices:
+
+- Admin 2FA policy placeholder and enforcement gate.
+- Directory pagination/advanced filters and profile detail page.
+- Communities module foundation.
+- Real email provider/template integration.
+- Redis-backed rate limits and background jobs.
+- Production cookie/domain hardening and end-to-end browser tests.
+
 ## Current V1.5 Implementation Update: 2026-05-05 Secure Web Session Slice
 
 Completed after the admin audit log, shared upload storage, profile photo, and verification evidence slices:
@@ -570,7 +624,6 @@ Implemented now:
 
 Main gaps now:
 
-- CSRF protection is not yet implemented for cookie-authenticated state-changing requests.
 - Admin 2FA is still not implemented.
 - Real email provider/templates are not wired.
 - Production object storage needs real bucket credentials, bucket policy validation, malware scanning, signed URL policy, image processing, CDN policy, and retention policy.

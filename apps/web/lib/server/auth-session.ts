@@ -1,8 +1,11 @@
 import "server-only";
 
+import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 
 export const accessTokenCookieName = "yalumni_access_token";
+export const csrfCookieName = "yalumni_csrf_token";
+export const csrfHeaderName = "x-csrf-token";
 export const refreshTokenCookieName = "yalumni_refresh_token";
 
 const fallbackApiBaseUrl = "http://127.0.0.1:8002";
@@ -43,12 +46,56 @@ const cookieOptions = {
   secure: process.env.NODE_ENV === "production"
 };
 
+const csrfCookieOptions = {
+  httpOnly: false,
+  path: "/",
+  sameSite: "lax" as const,
+  secure: process.env.NODE_ENV === "production"
+};
+
 export function getAccessToken(request: NextRequest): string | null {
   return request.cookies.get(accessTokenCookieName)?.value ?? null;
 }
 
 export function getRefreshToken(request: NextRequest): string | null {
   return request.cookies.get(refreshTokenCookieName)?.value ?? null;
+}
+
+export function getCsrfToken(request: NextRequest): string | null {
+  return request.cookies.get(csrfCookieName)?.value ?? null;
+}
+
+export function setCsrfCookie(response: NextResponse, token: string) {
+  response.cookies.set(csrfCookieName, token, {
+    ...csrfCookieOptions,
+    maxAge: Math.max(1, refreshCookieDays) * 24 * 60 * 60
+  });
+}
+
+export function csrfTokenForRequest(request: NextRequest): string {
+  return getCsrfToken(request) ?? randomUUID();
+}
+
+export function issueCsrfToken(request: NextRequest, response: NextResponse): string {
+  const token = csrfTokenForRequest(request);
+  setCsrfCookie(response, token);
+
+  return token;
+}
+
+export function validateCsrfToken(request: NextRequest): NextResponse | null {
+  const method = request.method.toUpperCase();
+  if (method === "GET" || method === "HEAD" || method === "OPTIONS") {
+    return null;
+  }
+
+  const csrfCookie = getCsrfToken(request);
+  const csrfHeader = request.headers.get(csrfHeaderName);
+  if (!csrfCookie || !csrfHeader || csrfCookie !== csrfHeader) {
+    return NextResponse.json({ detail: "CSRF token missing or invalid" }, { status: 403 });
+  }
+
+  return null;
 }
 
 export function sanitizeAuthResponse(auth: BackendAuthResponse): SanitizedAuthResponse {
@@ -77,6 +124,10 @@ export function clearAuthCookies(response: NextResponse) {
   });
   response.cookies.set(refreshTokenCookieName, "", {
     ...cookieOptions,
+    maxAge: 0
+  });
+  response.cookies.set(csrfCookieName, "", {
+    ...csrfCookieOptions,
     maxAge: 0
   });
 }

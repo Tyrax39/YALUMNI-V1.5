@@ -4,7 +4,8 @@ import {
   clearAuthCookies,
   fetchAuthenticatedBackend,
   proxyBackendResponse,
-  setAuthCookies
+  setAuthCookies,
+  validateCsrfToken
 } from "@/lib/server/auth-session";
 
 type SessionRouteContext = {
@@ -14,6 +15,11 @@ type SessionRouteContext = {
 };
 
 export async function DELETE(request: NextRequest, context: SessionRouteContext) {
+  const csrfError = validateCsrfToken(request);
+  if (csrfError) {
+    return csrfError;
+  }
+
   const { sessionId } = await context.params;
   const { backendResponse, clearSession, refreshedAuth } = await fetchAuthenticatedBackend(
     request,

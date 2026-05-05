@@ -4,10 +4,16 @@ import {
   backendUrl,
   buildBackendHeaders,
   clearAuthCookies,
-  getRefreshToken
+  getRefreshToken,
+  validateCsrfToken
 } from "@/lib/server/auth-session";
 
 export async function POST(request: NextRequest) {
+  const csrfError = validateCsrfToken(request);
+  if (csrfError) {
+    return csrfError;
+  }
+
   const refreshToken = getRefreshToken(request);
 
   if (refreshToken) {

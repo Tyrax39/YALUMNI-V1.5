@@ -4,10 +4,16 @@ import {
   clearAuthCookies,
   refreshSession,
   sanitizeAuthResponse,
-  setAuthCookies
+  setAuthCookies,
+  validateCsrfToken
 } from "@/lib/server/auth-session";
 
 export async function POST(request: NextRequest) {
+  const csrfError = validateCsrfToken(request);
+  if (csrfError) {
+    return csrfError;
+  }
+
   const auth = await refreshSession(request);
   if (!auth) {
     const response = NextResponse.json({ detail: "Session could not be refreshed" }, { status: 401 });

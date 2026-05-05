@@ -28,6 +28,10 @@ export type LoginPayload = {
   password: string;
 };
 
+type CsrfResponse = {
+  csrf_token: string;
+};
+
 export type DevTokenResponse = {
   message: string;
   dev_token: string | null;
@@ -293,15 +297,57 @@ async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   return (await response.json()) as T;
 }
 
+const csrfCookieName = "yalumni_csrf_token";
+const csrfHeaderName = "X-CSRF-Token";
+const csrfProtectedMethods = new Set(["DELETE", "PATCH", "POST", "PUT"]);
+
+function readCookie(name: string): string | null {
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  const prefix = `${name}=`;
+  const cookie = document.cookie
+    .split("; ")
+    .find((item) => item.startsWith(prefix));
+
+  return cookie ? decodeURIComponent(cookie.slice(prefix.length)) : null;
+}
+
+async function getCsrfToken(): Promise<string> {
+  const existingToken = readCookie(csrfCookieName);
+  if (existingToken) {
+    return existingToken;
+  }
+
+  const response = await fetch("/api/session/csrf", {
+    cache: "no-store",
+    credentials: "same-origin"
+  });
+
+  if (!response.ok) {
+    throw new ApiError(await readError(response), response.status);
+  }
+
+  const body = (await response.json()) as CsrfResponse;
+  return body.csrf_token;
+}
+
 async function webApiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const hasFormDataBody = typeof FormData !== "undefined" && init.body instanceof FormData;
+  const method = (init.method ?? "GET").toUpperCase();
+  const headers = new Headers(init.headers);
+  if (!hasFormDataBody && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+  if (csrfProtectedMethods.has(method)) {
+    headers.set(csrfHeaderName, await getCsrfToken());
+  }
+
   const response = await fetch(path, {
     ...init,
     credentials: "same-origin",
-    headers: {
-      ...(hasFormDataBody ? {} : { "Content-Type": "application/json" }),
-      ...init.headers
-    }
+    headers
   });
 
   if (!response.ok) {

@@ -75,6 +75,7 @@ Users must control visibility of:
 - Add shared local/S3 upload storage adapter. Done; production still needs real bucket credentials and bucket policy validation.
 - Add admin audit log viewer. Done for recorded `security_events`.
 - Move web auth transport out of browser local storage. Done with HttpOnly access/refresh cookies, web session routes, protected backend proxy routes, and Next proxy guards for dashboard/admin entry points.
+- Add CSRF protection for cookie-authenticated web mutations. Done with a same-site double-submit token endpoint and required `X-CSRF-Token` header on session/proxy mutations.
 - Add tests for auth denial and basic IDOR prevention.
 
 ## File Storage Controls
@@ -91,6 +92,8 @@ Users must control visibility of:
 - `/api/session/login`, `/api/session/register`, `/api/session/logout`, and `/api/session/refresh` manage HttpOnly cookies.
 - `/api/backend/*` forwards authenticated web requests to FastAPI with server-side bearer headers.
 - The proxy refreshes access tokens once on protected 401 responses when a valid refresh cookie is available.
+- `/api/session/csrf` issues a same-site CSRF token cookie for browser mutations.
+- Cookie-authenticated POST, PATCH, PUT, and DELETE requests require the matching `X-CSRF-Token` header.
 - Dashboard and admin routes are guarded by the Next `proxy.ts` entry guard before client rendering.
 - Legacy local-storage token keys are removed during auth transitions for migration cleanup.
-- Remaining production work: CSRF tokens for state-changing web API calls, role-aware server guards, stricter cookie domain/SameSite review, and end-to-end browser tests.
+- Remaining production work: role-aware server guards, stricter cookie domain/SameSite review, per-session CSRF rotation policy, and end-to-end browser tests.

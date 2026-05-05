@@ -6,10 +6,16 @@ import {
   backendUrl,
   buildBackendHeaders,
   sanitizeAuthResponse,
-  setAuthCookies
+  setAuthCookies,
+  validateCsrfToken
 } from "@/lib/server/auth-session";
 
 export async function POST(request: NextRequest) {
+  const csrfError = validateCsrfToken(request);
+  if (csrfError) {
+    return csrfError;
+  }
+
   const body = await request.text();
   const backendResponse = await fetch(backendUrl("/api/v1/auth/register"), {
     body,

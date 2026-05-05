@@ -27,7 +27,7 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
 - Role-aware admin overview. Implemented API guard and web console summary.
 - Session/device management. Implemented API and dashboard UI for refresh-token sessions.
 - Login/reset/admin action rate limiting. Implemented in-process API guard for MVP hardening.
-- Secure cookie auth hardening. Implemented for the web app foundation; remaining hardening includes CSRF protection, SSR role checks, and production cookie/domain review.
+- Secure cookie auth hardening. Implemented for the web app foundation with CSRF protection; remaining hardening includes SSR role checks, admin 2FA, and production cookie/domain review.
 - Admin 2FA requirement.
 
 ## Phase 3: Alumni Profiles And Verification
