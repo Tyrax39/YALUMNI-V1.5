@@ -107,6 +107,61 @@ def complete_alumni_profile(client: TestClient, access_token: str) -> dict:
     return affiliation_response.json()
 
 
+def create_verified_alumni(
+    client: TestClient,
+    admin_headers: dict[str, str],
+    *,
+    city: str,
+    country: str,
+    email: str,
+    program_name: str,
+    sector: str,
+    skills: list[str],
+    year: int,
+) -> dict:
+    registered = register_user(client, email=email)
+    headers = auth_headers(registered["access_token"])
+    update_response = client.patch(
+        "/api/v1/alumni/me/profile",
+        headers=headers,
+        json={
+            "headline": f"{sector} leader",
+            "bio": "Coordinating alumni action and cross-border collaboration.",
+            "country": country,
+            "city": city,
+            "sector": sector,
+            "organization": f"{city} Alumni Lab",
+            "job_title": "Program Lead",
+            "skills": skills,
+        },
+    )
+    assert update_response.status_code == 200
+    affiliation_response = client.post(
+        "/api/v1/alumni/me/program-affiliations",
+        headers=headers,
+        json={
+            "program_name": program_name,
+            "cohort_year": year,
+            "country": country,
+            "city": city,
+        },
+    )
+    assert affiliation_response.status_code == 201
+    submit_response = client.post(
+        "/api/v1/alumni/me/verification-requests",
+        headers=headers,
+        json={"submitted_note": "Ready for directory verification."},
+    )
+    assert submit_response.status_code == 201
+    approve_response = client.post(
+        f"/api/v1/alumni/admin/verification-requests/{submit_response.json()['id']}/approve",
+        headers=admin_headers,
+        json={"reviewer_note": "Verified for directory testing."},
+    )
+    assert approve_response.status_code == 200
+    return registered
+
+
 def test_register_login_me_refresh_and_logout(client: TestClient) -> None:
     registered = register_user(client)
 
@@ -885,6 +940,89 @@ def test_verification_request_admin_approval_grants_alumni_role(
         json={"reviewer_note": "Already reviewed."},
     )
     assert second_approval.status_code == 409
+
+
+def test_directory_search_supports_advanced_filters_and_pagination(
+    client: TestClient,
+) -> None:
+    admin = register_user(client, email="directory-admin@example.com")
+    admin_headers = auth_headers(admin["access_token"])
+    bootstrap_response = client.post("/api/v1/auth/dev/bootstrap-admin", headers=admin_headers)
+    assert bootstrap_response.status_code == 200
+
+    ghana_member = create_verified_alumni(
+        client,
+        admin_headers,
+        city="Accra",
+        country="Ghana",
+        email="directory-ghana@example.com",
+        program_name="YALI Regional Leadership Center",
+        sector="Civic technology",
+        skills=["Governance", "Data"],
+        year=2024,
+    )
+    create_verified_alumni(
+        client,
+        admin_headers,
+        city="Kumasi",
+        country="Ghana",
+        email="directory-kumasi@example.com",
+        program_name="Mandela Washington Fellowship",
+        sector="Public management",
+        skills=["Budgeting", "Policy"],
+        year=2023,
+    )
+    create_verified_alumni(
+        client,
+        admin_headers,
+        city="Nairobi",
+        country="Kenya",
+        email="directory-kenya@example.com",
+        program_name="YALI Regional Leadership Center",
+        sector="Education",
+        skills=["Mentorship", "Data"],
+        year=2024,
+    )
+
+    member_headers = auth_headers(ghana_member["access_token"])
+    first_page_response = client.get(
+        "/api/v1/alumni/search?country=Ghana&limit=1&offset=0",
+        headers=member_headers,
+    )
+    assert first_page_response.status_code == 200
+    first_page = first_page_response.json()
+    assert first_page["total"] == 2
+    assert first_page["limit"] == 1
+    assert first_page["offset"] == 0
+    assert first_page["has_more"] is True
+    assert len(first_page["profiles"]) == 1
+
+    second_page_response = client.get(
+        "/api/v1/alumni/search?country=Ghana&limit=1&offset=1",
+        headers=member_headers,
+    )
+    assert second_page_response.status_code == 200
+    second_page = second_page_response.json()
+    assert second_page["total"] == 2
+    assert second_page["has_more"] is False
+    assert len(second_page["profiles"]) == 1
+
+    city_response = client.get("/api/v1/alumni/search?city=Accra", headers=member_headers)
+    assert city_response.status_code == 200
+    assert city_response.json()["total"] == 1
+    assert city_response.json()["profiles"][0]["city"] == "Accra"
+
+    program_response = client.get(
+        "/api/v1/alumni/search?program_name=Regional&cohort_year=2024&sort=country",
+        headers=member_headers,
+    )
+    assert program_response.status_code == 200
+    assert program_response.json()["total"] == 2
+
+    skill_response = client.get("/api/v1/alumni/search?skill=Budget", headers=member_headers)
+    assert skill_response.status_code == 200
+    assert skill_response.json()["total"] == 1
+    assert skill_response.json()["profiles"][0]["country"] == "Ghana"
 
 
 def test_verification_admin_can_request_more_information(client: TestClient) -> None:

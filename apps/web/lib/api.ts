@@ -245,6 +245,9 @@ export type AlumniDirectoryProfile = {
 };
 
 export type AlumniDirectorySearchResponse = {
+  has_more: boolean;
+  limit: number;
+  offset: number;
   profiles: AlumniDirectoryProfile[];
   total: number;
 };
@@ -679,7 +682,18 @@ export async function downloadVerificationEvidence(
 
 export function searchAlumniDirectory(
   accessToken: string,
-  params: { country?: string; q?: string; sector?: string } = {}
+  params: {
+    city?: string;
+    cohortYear?: number | null;
+    country?: string;
+    limit?: number;
+    offset?: number;
+    programName?: string;
+    q?: string;
+    sector?: string;
+    skill?: string;
+    sort?: string;
+  } = {}
 ): Promise<AlumniDirectorySearchResponse> {
   const searchParams = new URLSearchParams();
   if (params.q) {
@@ -688,8 +702,29 @@ export function searchAlumniDirectory(
   if (params.country) {
     searchParams.set("country", params.country);
   }
+  if (params.city) {
+    searchParams.set("city", params.city);
+  }
   if (params.sector) {
     searchParams.set("sector", params.sector);
+  }
+  if (params.programName) {
+    searchParams.set("program_name", params.programName);
+  }
+  if (params.cohortYear) {
+    searchParams.set("cohort_year", String(params.cohortYear));
+  }
+  if (params.skill) {
+    searchParams.set("skill", params.skill);
+  }
+  if (params.limit) {
+    searchParams.set("limit", String(params.limit));
+  }
+  if (params.offset) {
+    searchParams.set("offset", String(params.offset));
+  }
+  if (params.sort) {
+    searchParams.set("sort", params.sort);
   }
 
   const query = searchParams.toString();

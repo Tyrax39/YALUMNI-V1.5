@@ -533,6 +533,62 @@ Next possible implementation slices:
 - Dedicated admin audit log viewer.
 - Admin 2FA policy placeholder and enforcement gate.
 
+## Current V1.5 Implementation Update: 2026-05-05 Directory Advanced Search Slice
+
+Completed after the admin 2FA slice:
+
+- Directory search responses now return `limit`, `offset`, and `has_more` metadata.
+- Directory API filtering now supports query, country, city, sector, program name, cohort year, and skill.
+- Directory API sorting now supports name, recently verified, country, and sector ordering.
+- Search now checks display name, headline, organization, role, sector, location, skills, and program affiliation names.
+- Country and sector filters now support partial matching instead of exact-only matching.
+- Dashboard directory UI now includes advanced filters, sort selection, reset, and previous/next pagination controls.
+- Web API client types were updated for the expanded directory contract.
+- Backend tests cover advanced filters and paginated result metadata.
+
+Current plan position:
+
+- Phase 1 remains functionally complete for local foundation.
+- Phase 2 remains roughly 97% complete.
+- Phase 3 remains roughly 53% complete.
+- Phase 4 is now roughly 35% complete because member directory discovery now has usable paging, filtering, and sorting.
+- Overall 24-week MVP implementation is roughly 30% complete.
+
+Implemented now:
+
+- Native landing page.
+- Monorepo foundation, CI, docs, Docker Compose.
+- FastAPI health/status and request middleware.
+- Identity auth, refresh sessions, account recovery, email verification, protected platform owner, local test accounts, role-gated admin overview, session management, MVP-local rate limiting, HttpOnly cookie-backed web sessions, CSRF-protected web mutations, and TOTP 2FA enrollment.
+- Config-gated admin 2FA enforcement for privileged API routes.
+- Protected dashboard/admin route behavior with a Next route-entry proxy and server-side backend API proxy.
+- Alumni current-user profile model/API/UI with profile photo upload/display/delete.
+- Program affiliation model/API/UI.
+- Verification request submission, member status history, admin queue, review actions, alumni-member role grant, and local/S3-ready evidence upload/review.
+- Verified member directory search/profile detail with privacy-aware serializers, authenticated profile-photo display, advanced filters, sort options, and pagination.
+- Admin audit event API and admin audit log viewer.
+
+Main gaps now:
+
+- Directory search is still database-backed MVP search, not Meilisearch/OpenSearch.
+- Directory profile detail exists as an API, but a dedicated rich web profile detail page is not implemented.
+- Saved searches, recommended alumni, normalized skill taxonomy, and directory facets/counts are not implemented.
+- 2FA backup codes, forced enrollment grace period, and support recovery workflows are not implemented.
+- Real email provider/templates are not wired.
+- Production cookie/domain/SameSite review and per-session CSRF rotation policy are still pending.
+- Production object storage needs real bucket credentials, bucket policy validation, malware scanning, signed URL policy, image processing, CDN policy, and retention policy.
+- Test accounts are local/dev seed data only; there is no production-safe demo identity lifecycle yet.
+- Redis-backed rate limiting and background jobs are not wired yet.
+
+Next possible implementation slices:
+
+- Dedicated web directory profile detail page.
+- Communities module foundation.
+- 2FA backup/recovery codes and forced-enrollment rollout workflow.
+- Real email provider/template integration.
+- Redis-backed rate limits and background jobs.
+- Directory facets/saved searches and Meilisearch/OpenSearch indexing plan.
+
 ## Current V1.5 Implementation Update: 2026-05-05 Admin 2FA Slice
 
 Completed after the CSRF protection slice:

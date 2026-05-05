@@ -15,25 +15,68 @@ type DirectorySearchPanelProps = {
 
 type DirectoryState =
   | { status: "loading" }
-  | { status: "ready"; profiles: AlumniDirectoryProfile[]; total: number }
+  | {
+      hasMore: boolean;
+      limit: number;
+      offset: number;
+      profiles: AlumniDirectoryProfile[];
+      status: "ready";
+      total: number;
+    }
   | { status: "error"; message: string };
+
+type DirectoryFilters = {
+  city: string;
+  cohortYear: string;
+  country: string;
+  programName: string;
+  q: string;
+  sector: string;
+  skill: string;
+  sort: string;
+};
+
+const pageSize = 6;
+const initialFilters: DirectoryFilters = {
+  city: "",
+  cohortYear: "",
+  country: "",
+  programName: "",
+  q: "",
+  sector: "",
+  skill: "",
+  sort: "name"
+};
 
 export function DirectorySearchPanel({ accessToken }: DirectorySearchPanelProps) {
   const [state, setState] = useState<DirectoryState>({ status: "loading" });
-  const [query, setQuery] = useState("");
-  const [country, setCountry] = useState("");
-  const [sector, setSector] = useState("");
+  const [filters, setFilters] = useState<DirectoryFilters>(initialFilters);
+  const [appliedFilters, setAppliedFilters] = useState<DirectoryFilters>(initialFilters);
 
   useEffect(() => {
-    loadDirectory({});
+    void loadDirectory(initialFilters, 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accessToken]);
 
-  async function loadDirectory(params: { country?: string; q?: string; sector?: string }) {
+  async function loadDirectory(params: DirectoryFilters, offset: number) {
     setState({ status: "loading" });
     try {
-      const response = await searchAlumniDirectory(accessToken, params);
+      const response = await searchAlumniDirectory(accessToken, {
+        city: params.city.trim(),
+        cohortYear: params.cohortYear ? Number(params.cohortYear) : null,
+        country: params.country.trim(),
+        limit: pageSize,
+        offset,
+        programName: params.programName.trim(),
+        q: params.q.trim(),
+        sector: params.sector.trim(),
+        skill: params.skill.trim(),
+        sort: params.sort
+      });
       setState({
+        hasMore: response.has_more,
+        limit: response.limit,
+        offset: response.offset,
         status: "ready",
         profiles: response.profiles,
         total: response.total
@@ -49,11 +92,22 @@ export function DirectorySearchPanel({ accessToken }: DirectorySearchPanelProps)
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    void loadDirectory({
-      country: country.trim(),
-      q: query.trim(),
-      sector: sector.trim()
-    });
+    setAppliedFilters(filters);
+    void loadDirectory(filters, 0);
+  }
+
+  function updateFilter(key: keyof DirectoryFilters, value: string) {
+    setFilters((current) => ({ ...current, [key]: value }));
+  }
+
+  function handleReset() {
+    setFilters(initialFilters);
+    setAppliedFilters(initialFilters);
+    void loadDirectory(initialFilters, 0);
+  }
+
+  function handlePageChange(nextOffset: number) {
+    void loadDirectory(appliedFilters, Math.max(0, nextOffset));
   }
 
   return (
@@ -73,32 +127,107 @@ export function DirectorySearchPanel({ accessToken }: DirectorySearchPanelProps)
         </div>
 
         <div className="grid gap-5">
-          <form className="grid gap-3 md:grid-cols-[1fr_0.7fr_0.7fr_auto]" onSubmit={handleSubmit}>
+          <form className="grid gap-3 md:grid-cols-2 xl:grid-cols-4" onSubmit={handleSubmit}>
             <DirectoryInput
               label="Search"
-              onChange={setQuery}
+              onChange={(value) => updateFilter("q", value)}
               placeholder="Name, headline, organization"
-              value={query}
+              value={filters.q}
             />
             <DirectoryInput
               label="Country"
-              onChange={setCountry}
+              onChange={(value) => updateFilter("country", value)}
               placeholder="Ghana"
-              value={country}
+              value={filters.country}
+            />
+            <DirectoryInput
+              label="City"
+              onChange={(value) => updateFilter("city", value)}
+              placeholder="Accra"
+              value={filters.city}
             />
             <DirectoryInput
               label="Sector"
-              onChange={setSector}
+              onChange={(value) => updateFilter("sector", value)}
               placeholder="Civic technology"
-              value={sector}
+              value={filters.sector}
             />
-            <button
-              className="focus-ring h-12 self-end rounded-lg bg-primary px-5 text-sm font-semibold text-white transition hover:bg-[#003d7d]"
-              type="submit"
-            >
-              Search
-            </button>
+            <DirectoryInput
+              label="Program"
+              onChange={(value) => updateFilter("programName", value)}
+              placeholder="Mandela Washington Fellowship"
+              value={filters.programName}
+            />
+            <DirectoryInput
+              label="Cohort year"
+              onChange={(value) => updateFilter("cohortYear", value)}
+              placeholder="2024"
+              type="number"
+              value={filters.cohortYear}
+            />
+            <DirectoryInput
+              label="Skill"
+              onChange={(value) => updateFilter("skill", value)}
+              placeholder="Governance"
+              value={filters.skill}
+            />
+            <label className="grid gap-2 text-sm font-semibold text-ink">
+              Sort
+              <select
+                className="h-12 rounded-lg border border-border bg-white px-4 text-sm font-normal text-ink outline-none transition focus:border-primary"
+                onChange={(event) => updateFilter("sort", event.target.value)}
+                value={filters.sort}
+              >
+                <option value="name">Name</option>
+                <option value="recent">Recently verified</option>
+                <option value="country">Country</option>
+                <option value="sector">Sector</option>
+              </select>
+            </label>
+            <div className="flex gap-2 md:col-span-2 xl:col-span-4">
+              <button
+                className="focus-ring min-h-11 rounded-lg bg-primary px-5 text-sm font-semibold text-white transition hover:bg-[#003d7d]"
+                type="submit"
+              >
+                Search
+              </button>
+              <button
+                className="focus-ring min-h-11 rounded-lg border border-border px-5 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary"
+                onClick={handleReset}
+                type="button"
+              >
+                Reset
+              </button>
+            </div>
           </form>
+
+          {state.status === "ready" ? (
+            <div className="grid gap-3 rounded-lg border border-border bg-surface px-4 py-3 text-sm font-semibold text-muted sm:grid-cols-[1fr_auto] sm:items-center">
+              <p>
+                {state.total === 0
+                  ? "No verified alumni profiles found"
+                  : `Showing ${state.offset + 1}-${state.offset + state.profiles.length} of ${state.total}`}
+              </p>
+              <div className="flex gap-2">
+                <button
+                  className="focus-ring min-h-10 rounded-lg border border-border bg-white px-4 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={state.offset === 0}
+                  onClick={() => handlePageChange(state.offset - state.limit)}
+                  type="button"
+                >
+                  Previous
+                </button>
+                <button
+                  className="focus-ring min-h-10 rounded-lg border border-border bg-white px-4 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={!state.hasMore}
+                  onClick={() => handlePageChange(state.offset + state.limit)}
+                  type="button"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          ) : null}
 
           {state.status === "loading" ? (
             <p className="text-sm font-semibold text-muted">Loading verified alumni...</p>
@@ -111,25 +240,20 @@ export function DirectorySearchPanel({ accessToken }: DirectorySearchPanelProps)
           ) : null}
 
           {state.status === "ready" ? (
-            <>
-              <p className="text-sm font-semibold text-muted">
-                {state.total} verified alumni profile{state.total === 1 ? "" : "s"} found
-              </p>
-              <div className="grid gap-4 lg:grid-cols-2">
-                {state.profiles.length === 0 ? (
-                  <p className="rounded-lg border border-border bg-surface px-4 py-6 text-sm font-semibold text-muted lg:col-span-2">
-                    No verified alumni match the current filters.
-                  </p>
-                ) : null}
-                {state.profiles.map((profile) => (
-                  <DirectoryResultCard
-                    accessToken={accessToken}
-                    key={profile.user_id}
-                    profile={profile}
-                  />
-                ))}
-              </div>
-            </>
+            <div className="grid gap-4 lg:grid-cols-2">
+              {state.profiles.length === 0 ? (
+                <p className="rounded-lg border border-border bg-surface px-4 py-6 text-sm font-semibold text-muted lg:col-span-2">
+                  No verified alumni match the current filters.
+                </p>
+              ) : null}
+              {state.profiles.map((profile) => (
+                <DirectoryResultCard
+                  accessToken={accessToken}
+                  key={profile.user_id}
+                  profile={profile}
+                />
+              ))}
+            </div>
           ) : null}
         </div>
       </div>
@@ -141,11 +265,13 @@ function DirectoryInput({
   label,
   onChange,
   placeholder,
+  type = "text",
   value
 }: {
   label: string;
   onChange: (value: string) => void;
   placeholder: string;
+  type?: string;
   value: string;
 }) {
   return (
@@ -153,8 +279,11 @@ function DirectoryInput({
       {label}
       <input
         className="h-12 rounded-lg border border-border bg-white px-4 text-sm font-normal text-ink outline-none transition focus:border-primary"
+        min={type === "number" ? 2000 : undefined}
+        max={type === "number" ? 2100 : undefined}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
+        type={type}
         value={value}
       />
     </label>

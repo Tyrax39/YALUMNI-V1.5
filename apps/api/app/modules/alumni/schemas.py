@@ -200,3 +200,6 @@ class AlumniDirectoryProfileResponse(BaseModel):
 class AlumniDirectorySearchResponse(BaseModel):
     profiles: list[AlumniDirectoryProfileResponse]
     total: int
+    limit: int
+    offset: int
+    has_more: bool

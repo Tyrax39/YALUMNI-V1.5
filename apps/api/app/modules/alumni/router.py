@@ -13,7 +13,7 @@ from fastapi import (
     UploadFile,
     status,
 )
-from sqlalchemy import func, or_, select
+from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.core.database import get_db_session
@@ -532,9 +532,14 @@ def search_alumni_directory(
     db: Annotated[Session, Depends(get_db_session)],
     q: Annotated[str | None, Query(max_length=120)] = None,
     country: Annotated[str | None, Query(max_length=80)] = None,
+    city: Annotated[str | None, Query(max_length=100)] = None,
     sector: Annotated[str | None, Query(max_length=120)] = None,
+    program_name: Annotated[str | None, Query(max_length=120)] = None,
+    cohort_year: Annotated[int | None, Query(ge=2000, le=2100)] = None,
+    skill: Annotated[str | None, Query(max_length=60)] = None,
     limit: Annotated[int, Query(ge=1, le=50)] = 20,
     offset: Annotated[int, Query(ge=0)] = 0,
+    sort: Annotated[str, Query(pattern="^(name|recent|country|sector)$")] = "name",
 ) -> AlumniDirectorySearchResponse:
     _ = current_user
     query = _directory_base_query()
@@ -546,20 +551,54 @@ def search_alumni_directory(
                 User.display_name.ilike(search_term),
                 AlumniProfile.headline.ilike(search_term),
                 AlumniProfile.organization.ilike(search_term),
+                AlumniProfile.job_title.ilike(search_term),
                 AlumniProfile.sector.ilike(search_term),
+                AlumniProfile.country.ilike(search_term),
+                AlumniProfile.city.ilike(search_term),
+                cast(AlumniProfile.skills, String).ilike(search_term),
+                AlumniProfile.program_affiliations.any(
+                    ProgramAffiliation.program_name.ilike(search_term)
+                ),
             )
         )
     if country:
-        query = query.where(AlumniProfile.country.ilike(country.strip()))
+        query = query.where(AlumniProfile.country.ilike(f"%{country.strip()}%"))
+    if city:
+        query = query.where(AlumniProfile.city.ilike(f"%{city.strip()}%"))
     if sector:
-        query = query.where(AlumniProfile.sector.ilike(sector.strip()))
+        query = query.where(AlumniProfile.sector.ilike(f"%{sector.strip()}%"))
+    if program_name:
+        query = query.where(
+            AlumniProfile.program_affiliations.any(
+                ProgramAffiliation.program_name.ilike(f"%{program_name.strip()}%")
+            )
+        )
+    if cohort_year:
+        query = query.where(
+            AlumniProfile.program_affiliations.any(
+                ProgramAffiliation.cohort_year == cohort_year
+            )
+        )
+    if skill:
+        query = query.where(cast(AlumniProfile.skills, String).ilike(f"%{skill.strip()}%"))
 
     count_query = select(func.count()).select_from(query.subquery())
     total = db.scalar(count_query) or 0
-    profiles = db.scalars(query.order_by(User.display_name.asc()).offset(offset).limit(limit)).all()
+    sort_columns = {
+        "country": (AlumniProfile.country.asc(), User.display_name.asc()),
+        "name": (User.display_name.asc(),),
+        "recent": (AlumniProfile.profile_completed_at.desc(), User.display_name.asc()),
+        "sector": (AlumniProfile.sector.asc(), User.display_name.asc()),
+    }
+    profiles = db.scalars(
+        query.order_by(*sort_columns[sort]).offset(offset).limit(limit)
+    ).all()
     return AlumniDirectorySearchResponse(
         profiles=[_serialize_directory_profile(profile) for profile in profiles],
         total=total,
+        limit=limit,
+        offset=offset,
+        has_more=offset + len(profiles) < total,
     )
 
 

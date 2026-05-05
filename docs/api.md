@@ -24,6 +24,10 @@ POST /api/v1/auth/email/verify
 POST /api/v1/auth/dev/bootstrap-admin
 GET  /api/v1/auth/admin/overview
 GET  /api/v1/auth/admin/audit-events
+GET  /api/v1/auth/me/security
+POST /api/v1/auth/me/2fa/setup
+POST /api/v1/auth/me/2fa/confirm
+POST /api/v1/auth/me/2fa/disable
 GET  /api/v1/alumni/me/profile
 PATCH /api/v1/alumni/me/profile
 POST /api/v1/alumni/me/profile-photo
@@ -50,14 +54,18 @@ admins can continue the review loop.
 Profile photo uploads accept JPEG, PNG, and WebP files with authenticated
 download through the profile photo endpoint.
 
-## Phase 2: Auth
+Directory search supports:
 
-Remaining auth endpoints:
-
-```text
-POST /api/v1/auth/2fa/setup
-POST /api/v1/auth/2fa/verify
-```
+- `q`
+- `country`
+- `city`
+- `sector`
+- `program_name`
+- `cohort_year`
+- `skill`
+- `limit`
+- `offset`
+- `sort=name|recent|country|sector`
 
 ## Phase 3: Alumni
 
