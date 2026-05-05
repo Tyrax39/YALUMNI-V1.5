@@ -3,6 +3,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field, field_validator
 
+EMAIL_PATTERN = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
+
 
 class CommunityCreate(BaseModel):
     name: str = Field(min_length=2, max_length=140)
@@ -114,6 +116,25 @@ class CommunityMemberRoleUpdate(BaseModel):
         return value.strip().upper().replace(" ", "_")
 
 
+class CommunityInvitationCreate(BaseModel):
+    email: str = Field(max_length=320, pattern=EMAIL_PATTERN)
+    role: str = Field(default="MEMBER", max_length=40)
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        return value.strip().lower()
+
+    @field_validator("role")
+    @classmethod
+    def normalize_role(cls, value: str) -> str:
+        return value.strip().upper().replace(" ", "_")
+
+
+class CommunityInvitationAccept(BaseModel):
+    token: str = Field(min_length=20, max_length=256)
+
+
 class CommunityMemberResponse(BaseModel):
     id: uuid.UUID
     user_id: uuid.UUID
@@ -127,6 +148,29 @@ class CommunityMemberResponse(BaseModel):
 
 class CommunityMemberListResponse(BaseModel):
     members: list[CommunityMemberResponse]
+    total: int
+    limit: int
+    offset: int
+    has_more: bool
+
+
+class CommunityInvitationResponse(BaseModel):
+    id: uuid.UUID
+    community_id: uuid.UUID
+    invited_email: str
+    invited_role: str
+    status: str
+    invited_by_user_id: uuid.UUID | None
+    accepted_by_user_id: uuid.UUID | None
+    accepted_at: datetime | None
+    canceled_at: datetime | None
+    expires_at: datetime
+    created_at: datetime
+    dev_invitation_token: str | None = None
+
+
+class CommunityInvitationListResponse(BaseModel):
+    invitations: list[CommunityInvitationResponse]
     total: int
     limit: int
     offset: int

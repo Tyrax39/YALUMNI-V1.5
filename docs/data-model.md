@@ -34,11 +34,10 @@
 
 ### Communities
 
-- `communities`
-- `community_members`
-- `community_join_requests`
-- `community_role_assignments`
-- `community_settings`
+- `communities` - implemented with chapter/group metadata, visibility, and join policy.
+- `community_memberships` - implemented with active, pending, left, rejected statuses plus owner/member/manager roles.
+- `community_invitations` - implemented with invited email, invited role, pending/accepted/canceled/expired status, hashed token, expiry, inviter, and acceptance metadata.
+- `community_settings` - folded into `communities` for MVP settings editing.
 
 ### Feed
 

@@ -486,6 +486,167 @@ def test_community_owner_can_update_settings_and_manager_cannot(client: TestClie
     assert invalid_response.status_code == 400
 
 
+def test_community_manager_can_invite_member_and_invited_user_can_accept(
+    client: TestClient,
+) -> None:
+    admin_headers = create_admin(client)
+    community = create_community(
+        client,
+        admin_headers,
+        name="Togo Youth Leadership Chapter",
+        country="Togo",
+    )
+
+    manager_user = register_user(client, "invite.manager@example.com")
+    manager_headers = auth_headers(manager_user["access_token"])
+    join_response = client.post(
+        f"/api/v1/communities/{community['id']}/join",
+        headers=manager_headers,
+    )
+    assert join_response.status_code == 200
+    roster_response = client.get(
+        f"/api/v1/communities/{community['id']}/members",
+        headers=admin_headers,
+    )
+    manager_membership = next(
+        member
+        for member in roster_response.json()["members"]
+        if member["email"] == "invite.manager@example.com"
+    )
+    promotion_response = client.patch(
+        f"/api/v1/communities/{community['id']}/members/{manager_membership['id']}",
+        headers=admin_headers,
+        json={"role": "MANAGER"},
+    )
+    assert promotion_response.status_code == 200
+
+    invite_response = client.post(
+        f"/api/v1/communities/{community['id']}/invitations",
+        headers=manager_headers,
+        json={"email": "Invited.Member@example.com"},
+    )
+    assert invite_response.status_code == 201
+    invitation = invite_response.json()
+    assert invitation["invited_email"] == "invited.member@example.com"
+    assert invitation["invited_role"] == "MEMBER"
+    assert invitation["status"] == "PENDING"
+    assert invitation["dev_invitation_token"]
+
+    duplicate_invite = client.post(
+        f"/api/v1/communities/{community['id']}/invitations",
+        headers=manager_headers,
+        json={"email": "invited.member@example.com"},
+    )
+    assert duplicate_invite.status_code == 409
+
+    pending_invitations = client.get(
+        f"/api/v1/communities/{community['id']}/invitations?status=PENDING",
+        headers=manager_headers,
+    )
+    assert pending_invitations.status_code == 200
+    assert pending_invitations.json()["total"] == 1
+    assert pending_invitations.json()["invitations"][0]["dev_invitation_token"] is None
+
+    wrong_user = register_user(client, "wrong.invited@example.com")
+    wrong_accept = client.post(
+        "/api/v1/communities/invitations/accept",
+        headers=auth_headers(wrong_user["access_token"]),
+        json={"token": invitation["dev_invitation_token"]},
+    )
+    assert wrong_accept.status_code == 403
+
+    invited_user = register_user(client, "invited.member@example.com")
+    accept_response = client.post(
+        "/api/v1/communities/invitations/accept",
+        headers=auth_headers(invited_user["access_token"]),
+        json={"token": invitation["dev_invitation_token"]},
+    )
+    assert accept_response.status_code == 200
+    accepted_community = accept_response.json()
+    assert accepted_community["membership_status"] == "ACTIVE"
+    assert accepted_community["membership_role"] == "MEMBER"
+    assert accepted_community["member_count"] == 3
+
+    accepted_invitations = client.get(
+        f"/api/v1/communities/{community['id']}/invitations?status=ACCEPTED",
+        headers=manager_headers,
+    )
+    assert accepted_invitations.status_code == 200
+    assert accepted_invitations.json()["total"] == 1
+
+    active_member_invite = client.post(
+        f"/api/v1/communities/{community['id']}/invitations",
+        headers=manager_headers,
+        json={"email": "invited.member@example.com"},
+    )
+    assert active_member_invite.status_code == 409
+
+
+def test_community_owner_can_invite_manager_and_cancel_invitation(
+    client: TestClient,
+) -> None:
+    admin_headers = create_admin(client)
+    community = create_community(
+        client,
+        admin_headers,
+        name="Benin Alumni Chapter",
+        country="Benin",
+    )
+
+    manager_user = register_user(client, "invite.only.member@example.com")
+    manager_headers = auth_headers(manager_user["access_token"])
+    join_response = client.post(
+        f"/api/v1/communities/{community['id']}/join",
+        headers=manager_headers,
+    )
+    assert join_response.status_code == 200
+    roster_response = client.get(
+        f"/api/v1/communities/{community['id']}/members",
+        headers=admin_headers,
+    )
+    manager_membership = next(
+        member
+        for member in roster_response.json()["members"]
+        if member["email"] == "invite.only.member@example.com"
+    )
+    promotion_response = client.patch(
+        f"/api/v1/communities/{community['id']}/members/{manager_membership['id']}",
+        headers=admin_headers,
+        json={"role": "MANAGER"},
+    )
+    assert promotion_response.status_code == 200
+
+    denied_manager_invite = client.post(
+        f"/api/v1/communities/{community['id']}/invitations",
+        headers=manager_headers,
+        json={"email": "manager.invitee@example.com", "role": "MANAGER"},
+    )
+    assert denied_manager_invite.status_code == 403
+
+    manager_invite = client.post(
+        f"/api/v1/communities/{community['id']}/invitations",
+        headers=admin_headers,
+        json={"email": "manager.invitee@example.com", "role": "MANAGER"},
+    )
+    assert manager_invite.status_code == 201
+    invitation_id = manager_invite.json()["id"]
+
+    cancel_response = client.post(
+        f"/api/v1/communities/{community['id']}/invitations/{invitation_id}/cancel",
+        headers=admin_headers,
+    )
+    assert cancel_response.status_code == 200
+    assert cancel_response.json()["status"] == "CANCELED"
+
+    canceled_accept_user = register_user(client, "manager.invitee@example.com")
+    canceled_accept = client.post(
+        "/api/v1/communities/invitations/accept",
+        headers=auth_headers(canceled_accept_user["access_token"]),
+        json={"token": manager_invite.json()["dev_invitation_token"]},
+    )
+    assert canceled_accept.status_code == 409
+
+
 def test_community_filters_and_pagination(client: TestClient) -> None:
     admin_headers = create_admin(client)
     create_community(

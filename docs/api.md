@@ -54,6 +54,10 @@ POST /api/v1/communities/{community_id}/members/{membership_id}/approve
 POST /api/v1/communities/{community_id}/members/{membership_id}/reject
 PATCH /api/v1/communities/{community_id}/members/{membership_id}
 POST /api/v1/communities/{community_id}/members/{membership_id}/remove
+GET  /api/v1/communities/{community_id}/invitations
+POST /api/v1/communities/{community_id}/invitations
+POST /api/v1/communities/{community_id}/invitations/{invitation_id}/cancel
+POST /api/v1/communities/invitations/accept
 POST /api/v1/communities/{community_id}/join
 POST /api/v1/communities/{community_id}/leave
 ```
@@ -119,6 +123,21 @@ Community settings management supports:
 - Active community managers can review/member-manage, but cannot edit
   community settings.
 
+Community invitations support:
+
+- `GET /api/v1/communities/{community_id}/invitations` with
+  `status=PENDING|ACCEPTED|CANCELED|EXPIRED|ALL`.
+- `POST /api/v1/communities/{community_id}/invitations` for manager/owner/admin
+  invitation creation. Managers can invite ordinary members. Owners/admins can
+  invite members or managers.
+- `POST /api/v1/communities/{community_id}/invitations/{invitation_id}/cancel`
+  for canceling pending invitations.
+- `POST /api/v1/communities/invitations/accept` for token-based invitation
+  acceptance by the invited account email.
+
+Local/dev invitation creation responses include `dev_invitation_token` until a
+real email provider is wired. List responses do not repeat invitation tokens.
+
 ## Phase 3: Alumni
 
 ```text
@@ -129,7 +148,6 @@ PATCH  /api/v1/alumni/me/visibility
 ## Phase 4: Communities
 
 ```text
-POST   /api/v1/communities/{community_id}/invitations
 POST   /api/v1/communities/{community_id}/ownership-transfer
 ```
 

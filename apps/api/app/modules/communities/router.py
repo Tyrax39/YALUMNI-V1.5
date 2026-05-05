@@ -1,19 +1,25 @@
 import re
 import uuid
+from datetime import timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import String, and_, cast, func, or_, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
+from app.core.config import get_settings
 from app.core.database import get_db_session
 from app.core.permissions import ADMIN_ROLE_NAMES
-from app.core.security import utcnow
+from app.core.security import create_refresh_token, hash_token, utcnow
 from app.modules.auth.dependencies import get_current_user, require_roles
 from app.modules.auth.models import SecurityEvent, User
-from app.modules.communities.models import Community, CommunityMembership
+from app.modules.communities.models import Community, CommunityInvitation, CommunityMembership
 from app.modules.communities.schemas import (
     CommunityCreate,
+    CommunityInvitationAccept,
+    CommunityInvitationCreate,
+    CommunityInvitationListResponse,
+    CommunityInvitationResponse,
     CommunityListResponse,
     CommunityMemberListResponse,
     CommunityMemberResponse,
@@ -35,6 +41,8 @@ COMMUNITY_TYPES = {
 COMMUNITY_VISIBILITY = {"MEMBER_ONLY", "PRIVATE"}
 JOIN_POLICIES = {"OPEN", "REQUEST"}
 COMMUNITY_MEMBER_ROLES = {"MEMBER", "MANAGER"}
+COMMUNITY_INVITATION_STATUSES = {"ACCEPTED", "CANCELED", "EXPIRED", "PENDING"}
+COMMUNITY_INVITATION_DAYS = 14
 
 
 def _request_context(request: Request) -> tuple[str | None, str | None]:
@@ -61,6 +69,10 @@ def _create_security_event(
             metadata_json=metadata,
         )
     )
+
+
+def _is_local_environment() -> bool:
+    return get_settings().app_env.lower() in {"dev", "development", "local", "test"}
 
 
 def _slugify(value: str) -> str:
@@ -192,8 +204,39 @@ def _serialize_member(membership: CommunityMembership) -> CommunityMemberRespons
     )
 
 
+def _invitation_status(invitation: CommunityInvitation) -> str:
+    now = utcnow()
+    expires_at = invitation.expires_at
+    if expires_at.tzinfo is None:
+        now = now.replace(tzinfo=None)
+    if invitation.status == "PENDING" and expires_at <= now:
+        return "EXPIRED"
+    return invitation.status
+
+
+def _serialize_invitation(
+    invitation: CommunityInvitation,
+    *,
+    dev_invitation_token: str | None = None,
+) -> CommunityInvitationResponse:
+    return CommunityInvitationResponse(
+        id=invitation.id,
+        community_id=invitation.community_id,
+        invited_email=invitation.invited_email,
+        invited_role=invitation.invited_role,
+        status=_invitation_status(invitation),
+        invited_by_user_id=invitation.invited_by_user_id,
+        accepted_by_user_id=invitation.accepted_by_user_id,
+        accepted_at=invitation.accepted_at,
+        canceled_at=invitation.canceled_at,
+        expires_at=invitation.expires_at,
+        created_at=invitation.created_at,
+        dev_invitation_token=dev_invitation_token if _is_local_environment() else None,
+    )
+
+
 def _community_options():
-    return (selectinload(Community.memberships),)
+    return (selectinload(Community.memberships), selectinload(Community.invitations))
 
 
 def _get_community_or_404(db: Session, community_id: uuid.UUID) -> Community:
@@ -311,6 +354,83 @@ def create_community(
         current_user,
         "community.created",
         metadata={"community_id": str(community.id), "community_type": community.community_type},
+    )
+    db.commit()
+    community = _get_community_or_404(db, community.id)
+    return _serialize_community(community, current_user)
+
+
+@router.post("/invitations/accept", response_model=CommunityResponse)
+def accept_community_invitation(
+    payload: CommunityInvitationAccept,
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> CommunityResponse:
+    invitation = db.scalar(
+        select(CommunityInvitation).where(
+            CommunityInvitation.token_hash == hash_token(payload.token)
+        )
+    )
+    if invitation is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired invitation",
+        )
+
+    if _invitation_status(invitation) == "EXPIRED":
+        invitation.status = "EXPIRED"
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired invitation",
+        )
+    if invitation.status != "PENDING":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Invitation is no longer pending",
+        )
+    if current_user.email.strip().lower() != invitation.invited_email:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This invitation belongs to another email address",
+        )
+
+    community = _get_community_or_404(db, invitation.community_id)
+    membership = _membership_for_user(community, current_user.id)
+    if membership and membership.status == "ACTIVE":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="You are already an active member of this community",
+        )
+
+    if membership:
+        membership.role = invitation.invited_role
+        membership.status = "ACTIVE"
+        membership.joined_at = utcnow()
+    else:
+        db.add(
+            CommunityMembership(
+                community_id=community.id,
+                user_id=current_user.id,
+                role=invitation.invited_role,
+                status="ACTIVE",
+                joined_at=utcnow(),
+            )
+        )
+    invitation.status = "ACCEPTED"
+    invitation.accepted_by_user_id = current_user.id
+    invitation.accepted_at = utcnow()
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "community.invitation_accepted",
+        metadata={
+            "community_id": str(community.id),
+            "invitation_id": str(invitation.id),
+            "invited_role": invitation.invited_role,
+        },
     )
     db.commit()
     community = _get_community_or_404(db, community.id)
@@ -451,6 +571,115 @@ def list_community_members(
     )
 
 
+@router.get("/{community_id}/invitations", response_model=CommunityInvitationListResponse)
+def list_community_invitations(
+    community_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+    status_filter: Annotated[
+        str,
+        Query(alias="status", pattern="^(ACCEPTED|CANCELED|EXPIRED|PENDING|ALL)$"),
+    ] = "PENDING",
+    limit: Annotated[int, Query(ge=1, le=50)] = 20,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> CommunityInvitationListResponse:
+    community = _get_community_or_404(db, community_id)
+    if not _can_manage_community(current_user, community):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to view community invitations",
+        )
+
+    invitations = db.scalars(
+        select(CommunityInvitation)
+        .where(CommunityInvitation.community_id == community.id)
+        .order_by(CommunityInvitation.created_at.desc())
+    ).all()
+    normalized_status = status_filter.strip().upper()
+    filtered_invitations = [
+        invitation
+        for invitation in invitations
+        if normalized_status == "ALL" or _invitation_status(invitation) == normalized_status
+    ]
+    page = filtered_invitations[offset : offset + limit]
+    return CommunityInvitationListResponse(
+        invitations=[_serialize_invitation(invitation) for invitation in page],
+        total=len(filtered_invitations),
+        limit=limit,
+        offset=offset,
+        has_more=offset + len(page) < len(filtered_invitations),
+    )
+
+
+@router.post(
+    "/{community_id}/invitations",
+    response_model=CommunityInvitationResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_community_invitation(
+    community_id: uuid.UUID,
+    payload: CommunityInvitationCreate,
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> CommunityInvitationResponse:
+    community = _get_community_or_404(db, community_id)
+    if not _can_manage_community(current_user, community):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to create community invitations",
+        )
+    if payload.role not in COMMUNITY_MEMBER_ROLES:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid invite role")
+    if payload.role == "MANAGER" and not _can_edit_community_settings(current_user, community):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only community owners and admins can invite managers",
+        )
+
+    invited_user = db.scalar(select(User).where(func.lower(User.email) == payload.email))
+    if invited_user:
+        existing_membership = _membership_for_user(community, invited_user.id)
+        if existing_membership and existing_membership.status == "ACTIVE":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="That email is already an active member",
+            )
+
+    existing_invitation = _active_pending_invitation_for_email(community, payload.email)
+    if existing_invitation:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A pending invitation already exists for that email",
+        )
+
+    invitation_token = create_refresh_token()
+    invitation = CommunityInvitation(
+        community_id=community.id,
+        invited_email=payload.email,
+        invited_role=payload.role,
+        status="PENDING",
+        token_hash=hash_token(invitation_token),
+        invited_by_user_id=current_user.id,
+        expires_at=utcnow() + timedelta(days=COMMUNITY_INVITATION_DAYS),
+    )
+    db.add(invitation)
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "community.invitation_created",
+        metadata={
+            "community_id": str(community.id),
+            "invited_email": invitation.invited_email,
+            "invited_role": invitation.invited_role,
+        },
+    )
+    db.commit()
+    db.refresh(invitation)
+    return _serialize_invitation(invitation, dev_invitation_token=invitation_token)
+
+
 def _get_membership_or_404(
     db: Session,
     community: Community,
@@ -468,6 +697,37 @@ def _get_membership_or_404(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
 
     return membership
+
+
+def _get_invitation_or_404(
+    db: Session,
+    community: Community,
+    invitation_id: uuid.UUID,
+) -> CommunityInvitation:
+    invitation = db.scalar(
+        select(CommunityInvitation).where(
+            CommunityInvitation.id == invitation_id,
+            CommunityInvitation.community_id == community.id,
+        )
+    )
+    if invitation is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invitation not found")
+
+    return invitation
+
+
+def _active_pending_invitation_for_email(
+    community: Community,
+    email: str,
+) -> CommunityInvitation | None:
+    return next(
+        (
+            invitation
+            for invitation in community.invitations
+            if invitation.invited_email == email and _invitation_status(invitation) == "PENDING"
+        ),
+        None,
+    )
 
 
 @router.post(
@@ -657,6 +917,49 @@ def remove_community_member(
     db.commit()
     db.refresh(membership)
     return _serialize_member(membership)
+
+
+@router.post(
+    "/{community_id}/invitations/{invitation_id}/cancel",
+    response_model=CommunityInvitationResponse,
+)
+def cancel_community_invitation(
+    community_id: uuid.UUID,
+    invitation_id: uuid.UUID,
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> CommunityInvitationResponse:
+    community = _get_community_or_404(db, community_id)
+    if not _can_manage_community(current_user, community):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to cancel community invitations",
+        )
+
+    invitation = _get_invitation_or_404(db, community, invitation_id)
+    if _invitation_status(invitation) != "PENDING":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only pending invitations can be canceled",
+        )
+
+    invitation.status = "CANCELED"
+    invitation.canceled_at = utcnow()
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "community.invitation_canceled",
+        metadata={
+            "community_id": str(community.id),
+            "invitation_id": str(invitation.id),
+            "invited_email": invitation.invited_email,
+        },
+    )
+    db.commit()
+    db.refresh(invitation)
+    return _serialize_invitation(invitation)
 
 
 @router.post("/{community_id}/join", response_model=CommunityResponse)

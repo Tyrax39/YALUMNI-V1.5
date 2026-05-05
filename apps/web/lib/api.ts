@@ -298,6 +298,29 @@ export type CommunityMemberListResponse = {
   has_more: boolean;
 };
 
+export type CommunityInvitation = {
+  id: string;
+  community_id: string;
+  invited_email: string;
+  invited_role: string;
+  status: string;
+  invited_by_user_id: string | null;
+  accepted_by_user_id: string | null;
+  accepted_at: string | null;
+  canceled_at: string | null;
+  expires_at: string;
+  created_at: string;
+  dev_invitation_token: string | null;
+};
+
+export type CommunityInvitationListResponse = {
+  invitations: CommunityInvitation[];
+  total: number;
+  limit: number;
+  offset: number;
+  has_more: boolean;
+};
+
 export type CommunityCreatePayload = {
   name: string;
   community_type?: string;
@@ -312,6 +335,11 @@ export type CommunityCreatePayload = {
 };
 
 export type CommunityUpdatePayload = Partial<CommunityCreatePayload>;
+
+export type CommunityInvitationCreatePayload = {
+  email: string;
+  role?: "MANAGER" | "MEMBER";
+};
 
 export const adminRoles: readonly string[] = [
   "SUPER_ADMIN",
@@ -911,6 +939,71 @@ export function listCommunityMembers(
       headers: authHeaders(accessToken)
     }
   );
+}
+
+export function listCommunityInvitations(
+  accessToken: string,
+  communityId: string,
+  params: { limit?: number; offset?: number; status?: string } = {}
+): Promise<CommunityInvitationListResponse> {
+  const searchParams = new URLSearchParams();
+  if (params.status) {
+    searchParams.set("status", params.status);
+  }
+  if (params.limit) {
+    searchParams.set("limit", String(params.limit));
+  }
+  if (params.offset) {
+    searchParams.set("offset", String(params.offset));
+  }
+
+  const query = searchParams.toString();
+  return protectedApiFetch<CommunityInvitationListResponse>(
+    `/api/v1/communities/${encodeURIComponent(communityId)}/invitations${query ? `?${query}` : ""}`,
+    {
+      headers: authHeaders(accessToken)
+    }
+  );
+}
+
+export function createCommunityInvitation(
+  accessToken: string,
+  communityId: string,
+  payload: CommunityInvitationCreatePayload
+): Promise<CommunityInvitation> {
+  return protectedApiFetch<CommunityInvitation>(
+    `/api/v1/communities/${encodeURIComponent(communityId)}/invitations`,
+    {
+      body: JSON.stringify(payload),
+      headers: authHeaders(accessToken),
+      method: "POST"
+    }
+  );
+}
+
+export function cancelCommunityInvitation(
+  accessToken: string,
+  communityId: string,
+  invitationId: string
+): Promise<CommunityInvitation> {
+  return protectedApiFetch<CommunityInvitation>(
+    `/api/v1/communities/${encodeURIComponent(communityId)}/invitations/${encodeURIComponent(invitationId)}/cancel`,
+    {
+      headers: authHeaders(accessToken),
+      method: "POST"
+    }
+  );
+}
+
+export function acceptCommunityInvitation(
+  accessToken: string,
+  token: string
+): Promise<Community> {
+  return protectedApiFetch<Community>("/api/v1/communities/invitations/accept", {
+    body: JSON.stringify({ token }),
+    headers: authHeaders(accessToken),
+    method: "POST"
+  });
 }
 
 export function approveCommunityMember(

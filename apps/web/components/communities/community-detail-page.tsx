@@ -5,8 +5,10 @@ import { useEffect, useState } from "react";
 
 import {
   ArrowLeft,
+  Ban,
   LogIn,
   LogOut,
+  MailPlus,
   MapPin,
   Save,
   Settings,
@@ -24,12 +26,17 @@ import {
   ApiError,
   approveCommunityMember,
   adminRoles,
+  cancelCommunityInvitation,
   Community,
+  CommunityInvitation,
+  CommunityInvitationListResponse,
   CommunityMember,
   CommunityMemberListResponse,
+  createCommunityInvitation,
   getCommunity,
   joinCommunity,
   leaveCommunity,
+  listCommunityInvitations,
   listCommunityMembers,
   rejectCommunityMember,
   removeCommunityMember,
@@ -47,6 +54,7 @@ type DetailState =
   | { status: "loading" }
   | {
       community: Community;
+      invitations: CommunityInvitationListResponse | null;
       members: CommunityMemberListResponse;
       status: "ready";
       pendingMembers: CommunityMemberListResponse | null;
@@ -55,6 +63,7 @@ type DetailState =
 
 const rosterPageSize = 12;
 const pendingPageSize = 6;
+const invitationPageSize = 6;
 const communityTypeOptions = [
   "COUNTRY_CHAPTER",
   "CITY_CHAPTER",
@@ -119,10 +128,13 @@ function CommunityDetailContent({
   const [settingsForm, setSettingsForm] = useState<CommunitySettingsForm>(
     createEmptySettingsForm
   );
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<"MANAGER" | "MEMBER">("MEMBER");
+  const [latestInvitation, setLatestInvitation] = useState<CommunityInvitation | null>(null);
 
   useEffect(() => {
     let isMounted = true;
-    loadDetail(0, 0)
+    loadDetail(0, 0, 0)
       .then((nextState) => {
         if (isMounted) {
           setState(nextState);
@@ -144,7 +156,11 @@ function CommunityDetailContent({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accessToken, communityId]);
 
-  async function loadDetail(activeOffset: number, pendingOffset: number): Promise<DetailState> {
+  async function loadDetail(
+    activeOffset: number,
+    pendingOffset: number,
+    invitationOffset: number
+  ): Promise<DetailState> {
     const [community, members] = await Promise.all([
       getCommunity(accessToken, communityId),
       listCommunityMembers(accessToken, communityId, {
@@ -154,21 +170,29 @@ function CommunityDetailContent({
       })
     ]);
     const canManage = canManageCommunity(userRoles, community);
-    const pendingMembers = canManage
-      ? await listCommunityMembers(accessToken, communityId, {
-          limit: pendingPageSize,
-          offset: pendingOffset,
-          status: "PENDING"
-        })
-      : null;
-    return { community, members, pendingMembers, status: "ready" };
+    const [pendingMembers, invitations] = canManage
+      ? await Promise.all([
+          listCommunityMembers(accessToken, communityId, {
+            limit: pendingPageSize,
+            offset: pendingOffset,
+            status: "PENDING"
+          }),
+          listCommunityInvitations(accessToken, communityId, {
+            limit: invitationPageSize,
+            offset: invitationOffset,
+            status: "PENDING"
+          })
+        ])
+      : [null, null];
+    return { community, invitations, members, pendingMembers, status: "ready" };
   }
 
   async function refresh(
     activeOffset = state.status === "ready" ? state.members.offset : 0,
-    pendingOffset = state.status === "ready" ? state.pendingMembers?.offset ?? 0 : 0
+    pendingOffset = state.status === "ready" ? state.pendingMembers?.offset ?? 0 : 0,
+    invitationOffset = state.status === "ready" ? state.invitations?.offset ?? 0 : 0
   ) {
-    setState(await loadDetail(activeOffset, pendingOffset));
+    setState(await loadDetail(activeOffset, pendingOffset, invitationOffset));
   }
 
   function handleStartSettingsEdit(community: Community) {
@@ -212,6 +236,55 @@ function CommunityDetailContent({
       );
     } finally {
       setIsSavingSettings(false);
+    }
+  }
+
+  async function handleCreateInvitation(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setMessage(null);
+    setActionError(null);
+    setIsSubmitting(true);
+    try {
+      const invitation = await createCommunityInvitation(accessToken, communityId, {
+        email: inviteEmail,
+        role:
+          state.status === "ready" && canEditCommunitySettings(userRoles, state.community)
+            ? inviteRole
+            : "MEMBER"
+      });
+      setInviteEmail("");
+      setInviteRole("MEMBER");
+      setLatestInvitation(invitation);
+      setMessage(`${invitation.invited_email} invited as ${formatLabel(invitation.invited_role)}.`);
+      await refresh();
+    } catch (caught) {
+      setActionError(caught instanceof ApiError ? caught.message : "Invitation could not be sent.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleCancelInvitation(invitation: CommunityInvitation) {
+    setMessage(null);
+    setActionError(null);
+    setBusyMemberId(invitation.id);
+    setBusyMemberAction("review");
+    try {
+      const canceledInvitation = await cancelCommunityInvitation(
+        accessToken,
+        communityId,
+        invitation.id
+      );
+      setMessage(`${canceledInvitation.invited_email} invitation canceled.`);
+      if (latestInvitation?.id === invitation.id) {
+        setLatestInvitation(null);
+      }
+      await refresh();
+    } catch (caught) {
+      setActionError(caught instanceof ApiError ? caught.message : "Invitation could not be canceled.");
+    } finally {
+      setBusyMemberId(null);
+      setBusyMemberAction(null);
     }
   }
 
@@ -341,13 +414,14 @@ function CommunityDetailContent({
     );
   }
 
-  const { community, members, pendingMembers } = state;
+  const { community, invitations, members, pendingMembers } = state;
   const activeMember = community.membership_status === "ACTIVE";
   const pendingMember = community.membership_status === "PENDING";
   const owner = community.membership_role === "OWNER";
   const location = [community.city, community.country].filter(Boolean).join(", ");
   const canManage = canManageCommunity(userRoles, community);
   const canEditSettings = canEditCommunitySettings(userRoles, community);
+  const canInviteManagers = canEditCommunitySettings(userRoles, community);
 
   return (
     <CommunityShell>
@@ -636,6 +710,152 @@ function CommunityDetailContent({
                 className="focus-ring min-h-10 rounded-lg border border-border px-4 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={!pendingMembers.has_more}
                 onClick={() => void refresh(members.offset, pendingMembers.offset + pendingMembers.limit)}
+                type="button"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      {canManage && invitations ? (
+        <section className="mt-8">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-secondary">
+                Invitations
+              </p>
+              <h2 className="mt-2 font-display text-2xl font-semibold text-ink">
+                Invite members
+              </h2>
+            </div>
+            <p className="text-sm font-semibold text-muted">
+              {invitations.total} pending invitations
+            </p>
+          </div>
+          <form
+            className="mt-5 grid gap-3 border-y border-border bg-white px-4 py-4 shadow-soft md:grid-cols-[1fr_180px_auto]"
+            onSubmit={handleCreateInvitation}
+          >
+            <label className="text-sm font-semibold text-ink">
+              Email
+              <input
+                className="focus-ring mt-2 min-h-11 w-full rounded-lg border border-border bg-surface px-3 text-sm text-ink"
+                maxLength={320}
+                onChange={(event) => setInviteEmail(event.target.value)}
+                required
+                type="email"
+                value={inviteEmail}
+              />
+            </label>
+            <label className="text-sm font-semibold text-ink">
+              Role
+              <select
+                className="focus-ring mt-2 min-h-11 w-full rounded-lg border border-border bg-surface px-3 text-sm text-ink disabled:opacity-65"
+                disabled={!canInviteManagers}
+                onChange={(event) => setInviteRole(event.target.value as "MANAGER" | "MEMBER")}
+                value={canInviteManagers ? inviteRole : "MEMBER"}
+              >
+                <option value="MEMBER">Member</option>
+                {canInviteManagers ? <option value="MANAGER">Manager</option> : null}
+              </select>
+            </label>
+            <div className="flex items-end">
+              <button
+                className="focus-ring inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white transition hover:bg-[#003d7d] disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={isSubmitting}
+                type="submit"
+              >
+                <MailPlus aria-hidden="true" className="h-4 w-4" />
+                {isSubmitting ? "Inviting..." : "Invite"}
+              </button>
+            </div>
+          </form>
+          {latestInvitation?.dev_invitation_token ? (
+            <div className="mt-4 border-y border-emerald-200 bg-emerald-50 px-4 py-3">
+              <p className="text-sm font-semibold text-emerald-800">
+                Local invite link ready for {latestInvitation.invited_email}.
+              </p>
+              <Link
+                className="focus-ring mt-2 inline-flex min-h-10 items-center rounded-lg border border-emerald-300 px-3 text-sm font-semibold text-emerald-800 transition hover:bg-white"
+                href={`/communities/invitations/accept?token=${encodeURIComponent(
+                  latestInvitation.dev_invitation_token
+                )}`}
+              >
+                Open accept link
+              </Link>
+            </div>
+          ) : null}
+          <div className="mt-5 grid gap-3 lg:grid-cols-2">
+            {invitations.invitations.length === 0 ? (
+              <p className="border-y border-border bg-white px-4 py-6 text-sm font-semibold text-muted lg:col-span-2">
+                No pending invitations.
+              </p>
+            ) : null}
+            {invitations.invitations.map((invitation) => (
+              <article
+                className="rounded-lg border border-border bg-white p-4 shadow-soft"
+                key={invitation.id}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="font-display text-xl font-semibold text-ink">
+                      {invitation.invited_email}
+                    </h3>
+                    <p className="mt-1 text-sm font-semibold text-muted">
+                      Expires {formatDate(invitation.expires_at)}
+                    </p>
+                  </div>
+                  <span className="rounded-md bg-surface px-2.5 py-1 text-xs font-bold text-secondary">
+                    {formatLabel(invitation.invited_role)}
+                  </span>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-lg border border-red-200 px-3 text-sm font-semibold text-red-700 transition hover:border-red-300 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={busyMemberId === invitation.id}
+                    onClick={() => void handleCancelInvitation(invitation)}
+                    type="button"
+                  >
+                    <Ban aria-hidden="true" className="h-4 w-4" />
+                    {busyMemberId === invitation.id ? "Canceling..." : "Cancel"}
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+          <div className="mt-5 flex flex-col gap-3 border-y border-border bg-white px-4 py-3 text-sm font-semibold text-muted sm:flex-row sm:items-center sm:justify-between">
+            <p>
+              {invitations.total === 0
+                ? "No invitations"
+                : `Showing ${invitations.offset + 1}-${invitations.offset + invitations.invitations.length} of ${invitations.total}`}
+            </p>
+            <div className="flex gap-2">
+              <button
+                className="focus-ring min-h-10 rounded-lg border border-border px-4 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={invitations.offset === 0}
+                onClick={() =>
+                  void refresh(
+                    members.offset,
+                    pendingMembers?.offset ?? 0,
+                    Math.max(0, invitations.offset - invitations.limit)
+                  )
+                }
+                type="button"
+              >
+                Previous
+              </button>
+              <button
+                className="focus-ring min-h-10 rounded-lg border border-border px-4 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={!invitations.has_more}
+                onClick={() =>
+                  void refresh(
+                    members.offset,
+                    pendingMembers?.offset ?? 0,
+                    invitations.offset + invitations.limit
+                  )
+                }
                 type="button"
               >
                 Next
