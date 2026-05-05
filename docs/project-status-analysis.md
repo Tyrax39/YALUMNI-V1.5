@@ -533,6 +533,62 @@ Next possible implementation slices:
 - Dedicated admin audit log viewer.
 - Admin 2FA policy placeholder and enforcement gate.
 
+## Current V1.5 Implementation Update: 2026-05-05 Admin 2FA Slice
+
+Completed after the CSRF protection slice:
+
+- TOTP generation and verification utilities were added using standard 30-second, 6-digit codes.
+- User records now support encrypted two-factor shared secrets and enabled timestamps.
+- Alembic migration `20260505_0007` adds the two-factor fields to `users`.
+- New authenticated API endpoints support 2FA status, setup, confirmation, and disable flows.
+- Admin role dependencies can enforce enabled 2FA when `ADMIN_TWO_FACTOR_REQUIRED=true`.
+- The member dashboard now has an Account Security panel for starting setup, confirming a code, and disabling 2FA.
+- `AuthUser` responses now include `two_factor_enabled`.
+- Backend tests cover setup/confirm/disable and policy-gated admin blocking until 2FA is enabled.
+
+Current plan position:
+
+- Phase 1 remains functionally complete for local foundation.
+- Phase 2 is now roughly 97% complete because TOTP enrollment and config-gated admin enforcement are implemented.
+- Phase 3 remains roughly 53% complete.
+- Phase 4 remains roughly 18% complete.
+- Overall 24-week MVP implementation is roughly 29% complete.
+
+Implemented now:
+
+- Native landing page.
+- Monorepo foundation, CI, docs, Docker Compose.
+- FastAPI health/status and request middleware.
+- Identity auth, refresh sessions, account recovery, email verification, protected platform owner, local test accounts, role-gated admin overview, session management, MVP-local rate limiting, HttpOnly cookie-backed web sessions, CSRF-protected web mutations, and TOTP 2FA enrollment.
+- Config-gated admin 2FA enforcement for privileged API routes.
+- Protected dashboard/admin route behavior with a Next route-entry proxy and server-side backend API proxy.
+- Alumni current-user profile model/API/UI with profile photo upload/display/delete.
+- Program affiliation model/API/UI.
+- Verification request submission, member status history, admin queue, review actions, alumni-member role grant, and local/S3-ready evidence upload/review.
+- Verified member directory search/profile detail with privacy-aware serializers and authenticated profile-photo display.
+- Admin audit event API and admin audit log viewer.
+
+Main gaps now:
+
+- 2FA backup codes, forced enrollment grace period, and support recovery workflows are not implemented.
+- Real email provider/templates are not wired.
+- Production cookie/domain/SameSite review and per-session CSRF rotation policy are still pending.
+- Production object storage needs real bucket credentials, bucket policy validation, malware scanning, signed URL policy, image processing, CDN policy, and retention policy.
+- Directory search is database-backed MVP search, not Meilisearch/OpenSearch.
+- Public profile pages, saved searches, pagination UI, and advanced filters are not implemented.
+- Test accounts are local/dev seed data only; there is no production-safe demo identity lifecycle yet.
+- Skills are stored as MVP JSON rather than normalized skill tables.
+- Redis-backed rate limiting and background jobs are not wired yet.
+
+Next possible implementation slices:
+
+- Directory pagination/advanced filters and profile detail page.
+- 2FA backup/recovery codes and forced-enrollment rollout workflow.
+- Communities module foundation.
+- Real email provider/template integration.
+- Redis-backed rate limits and background jobs.
+- Production cookie/domain hardening and end-to-end browser tests.
+
 ## Current V1.5 Implementation Update: 2026-05-05 CSRF Protection Slice
 
 Completed after the secure web session proxy slice:

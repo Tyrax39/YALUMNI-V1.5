@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     password_reset_rate_limit_window_seconds: int = 900
     admin_action_rate_limit_attempts: int = 10
     admin_action_rate_limit_window_seconds: int = 300
+    admin_two_factor_required: bool = False
     password_hash_scheme: str = "argon2id"
     platform_owner_email: str = "t.shiva@yalumni.org"
     platform_owner_aliases: str = "tshiva@yalumni.org"

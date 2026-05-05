@@ -6,6 +6,7 @@ export type AuthUser = {
   last_name: string | null;
   status: string;
   email_verified_at: string | null;
+  two_factor_enabled: boolean;
   roles: string[];
 };
 
@@ -26,6 +27,18 @@ export type RegisterPayload = {
 export type LoginPayload = {
   email: string;
   password: string;
+};
+
+export type TwoFactorStatus = {
+  enabled: boolean;
+  admin_two_factor_required: boolean;
+  admin_two_factor_satisfied: boolean;
+};
+
+export type TwoFactorSetup = {
+  secret: string;
+  otpauth_url: string;
+  enabled: boolean;
 };
 
 type CsrfResponse = {
@@ -382,6 +395,42 @@ export function login(payload: LoginPayload): Promise<AuthResponse> {
 export function getMe(accessToken?: string): Promise<AuthUser> {
   void accessToken;
   return protectedApiFetch<AuthUser>("/api/v1/auth/me");
+}
+
+export function getTwoFactorStatus(accessToken: string): Promise<TwoFactorStatus> {
+  return protectedApiFetch<TwoFactorStatus>("/api/v1/auth/me/security", {
+    headers: authHeaders(accessToken)
+  });
+}
+
+export function setupTwoFactor(
+  accessToken: string,
+  password: string
+): Promise<TwoFactorSetup> {
+  return protectedApiFetch<TwoFactorSetup>("/api/v1/auth/me/2fa/setup", {
+    body: JSON.stringify({ password }),
+    headers: authHeaders(accessToken),
+    method: "POST"
+  });
+}
+
+export function confirmTwoFactor(accessToken: string, code: string): Promise<AuthUser> {
+  return protectedApiFetch<AuthUser>("/api/v1/auth/me/2fa/confirm", {
+    body: JSON.stringify({ code }),
+    headers: authHeaders(accessToken),
+    method: "POST"
+  });
+}
+
+export function disableTwoFactor(
+  accessToken: string,
+  payload: { code: string; password: string }
+): Promise<AuthUser> {
+  return protectedApiFetch<AuthUser>("/api/v1/auth/me/2fa/disable", {
+    body: JSON.stringify(payload),
+    headers: authHeaders(accessToken),
+    method: "POST"
+  });
 }
 
 function authHeaders(accessToken: string, refreshToken?: string | null) {

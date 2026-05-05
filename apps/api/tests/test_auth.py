@@ -6,9 +6,11 @@ from sqlalchemy import create_engine, delete, func, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.core.config import get_settings
 from app.core.database import Base, get_db_session
 from app.core.rate_limit import clear_rate_limits
 from app.core.security import hash_password
+from app.core.totp import generate_totp_code
 from app.main import app
 from app.modules.alumni import models as alumni_models
 from app.modules.auth import models as auth_models
@@ -429,6 +431,101 @@ def test_admin_overview_requires_role_and_local_bootstrap_grants_access(
     assert overview["admin_users"] == 1
     assert overview["pending_verification_users"] == 1
     assert overview["latest_security_events"][0]["event_type"] == "auth.dev_admin_bootstrapped"
+
+
+def test_two_factor_setup_confirm_and_disable(client: TestClient) -> None:
+    registered = register_user(client, email="two-factor@example.com")
+    headers = auth_headers(registered["access_token"])
+
+    status_response = client.get("/api/v1/auth/me/security", headers=headers)
+    assert status_response.status_code == 200
+    assert status_response.json()["enabled"] is False
+
+    invalid_setup = client.post(
+        "/api/v1/auth/me/2fa/setup",
+        headers=headers,
+        json={"password": "wrong-password"},
+    )
+    assert invalid_setup.status_code == 401
+
+    setup_response = client.post(
+        "/api/v1/auth/me/2fa/setup",
+        headers=headers,
+        json={"password": "SecurePass123!"},
+    )
+    assert setup_response.status_code == 200
+    setup = setup_response.json()
+    assert setup["enabled"] is False
+    assert setup["secret"]
+    assert setup["otpauth_url"].startswith("otpauth://totp/")
+
+    invalid_confirm = client.post(
+        "/api/v1/auth/me/2fa/confirm",
+        headers=headers,
+        json={"code": "000000"},
+    )
+    assert invalid_confirm.status_code == 400
+
+    confirm_response = client.post(
+        "/api/v1/auth/me/2fa/confirm",
+        headers=headers,
+        json={"code": generate_totp_code(setup["secret"])},
+    )
+    assert confirm_response.status_code == 200
+    assert confirm_response.json()["two_factor_enabled"] is True
+
+    enabled_status = client.get("/api/v1/auth/me/security", headers=headers)
+    assert enabled_status.status_code == 200
+    assert enabled_status.json()["enabled"] is True
+
+    disable_response = client.post(
+        "/api/v1/auth/me/2fa/disable",
+        headers=headers,
+        json={"password": "SecurePass123!", "code": generate_totp_code(setup["secret"])},
+    )
+    assert disable_response.status_code == 200
+    assert disable_response.json()["two_factor_enabled"] is False
+
+
+def test_admin_two_factor_policy_blocks_admin_until_enabled(client: TestClient) -> None:
+    settings = get_settings()
+    previous_requirement = settings.admin_two_factor_required
+    settings.admin_two_factor_required = True
+    try:
+        registered = register_user(client, email="two-factor-admin@example.com")
+        headers = auth_headers(registered["access_token"])
+
+        bootstrap_response = client.post("/api/v1/auth/dev/bootstrap-admin", headers=headers)
+        assert bootstrap_response.status_code == 200
+
+        blocked_overview = client.get("/api/v1/auth/admin/overview", headers=headers)
+        assert blocked_overview.status_code == 403
+        assert blocked_overview.json()["detail"] == "Admin two-factor authentication required"
+
+        security_response = client.get("/api/v1/auth/me/security", headers=headers)
+        assert security_response.status_code == 200
+        assert security_response.json()["admin_two_factor_required"] is True
+        assert security_response.json()["admin_two_factor_satisfied"] is False
+
+        setup_response = client.post(
+            "/api/v1/auth/me/2fa/setup",
+            headers=headers,
+            json={"password": "SecurePass123!"},
+        )
+        assert setup_response.status_code == 200
+        secret = setup_response.json()["secret"]
+
+        confirm_response = client.post(
+            "/api/v1/auth/me/2fa/confirm",
+            headers=headers,
+            json={"code": generate_totp_code(secret)},
+        )
+        assert confirm_response.status_code == 200
+
+        overview_response = client.get("/api/v1/auth/admin/overview", headers=headers)
+        assert overview_response.status_code == 200
+    finally:
+        settings.admin_two_factor_required = previous_requirement
 
 
 def test_admin_audit_events_requires_role_and_supports_filters(client: TestClient) -> None:

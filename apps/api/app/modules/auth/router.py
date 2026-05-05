@@ -18,6 +18,13 @@ from app.core.security import (
     utcnow,
     verify_password,
 )
+from app.core.totp import (
+    build_otpauth_url,
+    decrypt_totp_secret,
+    encrypt_totp_secret,
+    generate_totp_secret,
+    verify_totp_code,
+)
 from app.modules.auth.dependencies import get_current_user, require_roles
 from app.modules.auth.models import (
     AccountToken,
@@ -48,6 +55,11 @@ from app.modules.auth.schemas import (
     RegisterRequest,
     ResetPasswordRequest,
     SessionRevocationResponse,
+    TwoFactorConfirmRequest,
+    TwoFactorDisableRequest,
+    TwoFactorSetupRequest,
+    TwoFactorSetupResponse,
+    TwoFactorStatusResponse,
     VerifyEmailRequest,
 )
 
@@ -113,6 +125,7 @@ def _serialize_user(user: User) -> AuthUser:
         last_name=user.last_name,
         status=user.status,
         email_verified_at=user.email_verified_at,
+        two_factor_enabled=user.two_factor_enabled_at is not None,
         roles=_role_names(user),
     )
 
@@ -156,6 +169,10 @@ def _ensure_role(db: Session, role_name: str) -> Role:
     db.add(role)
     db.flush()
     return role
+
+
+def _is_admin_user(user: User) -> bool:
+    return bool(set(_role_names(user)).intersection(ADMIN_ROLE_NAMES))
 
 
 def _create_security_event(
@@ -374,6 +391,121 @@ def logout(
 
 @router.get("/me", response_model=AuthUser)
 def me(current_user: Annotated[User, Depends(get_current_user)]) -> AuthUser:
+    return _serialize_user(current_user)
+
+
+@router.get("/me/security", response_model=TwoFactorStatusResponse)
+def two_factor_status(
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> TwoFactorStatusResponse:
+    admin_two_factor_required = get_settings().admin_two_factor_required and _is_admin_user(
+        current_user
+    )
+    enabled = current_user.two_factor_enabled_at is not None
+    return TwoFactorStatusResponse(
+        enabled=enabled,
+        admin_two_factor_required=admin_two_factor_required,
+        admin_two_factor_satisfied=not admin_two_factor_required or enabled,
+    )
+
+
+@router.post("/me/2fa/setup", response_model=TwoFactorSetupResponse)
+def setup_two_factor(
+    payload: TwoFactorSetupRequest,
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> TwoFactorSetupResponse:
+    if not verify_password(payload.password, current_user.password_hash):
+        _create_security_event(db, request, current_user, "auth.two_factor_setup_failed")
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Current password is invalid",
+        )
+
+    if current_user.two_factor_enabled_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Two-factor authentication is already enabled",
+        )
+
+    secret = generate_totp_secret()
+    current_user.two_factor_secret_encrypted = encrypt_totp_secret(secret)
+    _create_security_event(db, request, current_user, "auth.two_factor_setup_started")
+    db.commit()
+
+    return TwoFactorSetupResponse(
+        secret=secret,
+        otpauth_url=build_otpauth_url(secret, current_user.email),
+        enabled=False,
+    )
+
+
+@router.post("/me/2fa/confirm", response_model=AuthUser)
+def confirm_two_factor(
+    payload: TwoFactorConfirmRequest,
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> AuthUser:
+    if not current_user.two_factor_secret_encrypted:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Two-factor setup has not been started",
+        )
+
+    secret = decrypt_totp_secret(current_user.two_factor_secret_encrypted)
+    if not verify_totp_code(secret, payload.code):
+        _create_security_event(db, request, current_user, "auth.two_factor_confirm_failed")
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid two-factor code",
+        )
+
+    current_user.two_factor_enabled_at = utcnow()
+    _create_security_event(db, request, current_user, "auth.two_factor_enabled")
+    db.commit()
+    db.refresh(current_user)
+    return _serialize_user(current_user)
+
+
+@router.post("/me/2fa/disable", response_model=AuthUser)
+def disable_two_factor(
+    payload: TwoFactorDisableRequest,
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> AuthUser:
+    if current_user.two_factor_enabled_at is None or not current_user.two_factor_secret_encrypted:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Two-factor authentication is not enabled",
+        )
+
+    if not verify_password(payload.password, current_user.password_hash):
+        _create_security_event(db, request, current_user, "auth.two_factor_disable_failed")
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Current password is invalid",
+        )
+
+    secret = decrypt_totp_secret(current_user.two_factor_secret_encrypted)
+    if not verify_totp_code(secret, payload.code):
+        _create_security_event(db, request, current_user, "auth.two_factor_disable_failed")
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid two-factor code",
+        )
+
+    current_user.two_factor_secret_encrypted = None
+    current_user.two_factor_enabled_at = None
+    _create_security_event(db, request, current_user, "auth.two_factor_disabled")
+    db.commit()
+    db.refresh(current_user)
     return _serialize_user(current_user)
 
 

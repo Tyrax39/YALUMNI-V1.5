@@ -76,6 +76,7 @@ Users must control visibility of:
 - Add admin audit log viewer. Done for recorded `security_events`.
 - Move web auth transport out of browser local storage. Done with HttpOnly access/refresh cookies, web session routes, protected backend proxy routes, and Next proxy guards for dashboard/admin entry points.
 - Add CSRF protection for cookie-authenticated web mutations. Done with a same-site double-submit token endpoint and required `X-CSRF-Token` header on session/proxy mutations.
+- Add admin 2FA requirement. Done as TOTP setup/confirm/disable with encrypted shared-secret storage and config-gated admin route enforcement through `ADMIN_TWO_FACTOR_REQUIRED`.
 - Add tests for auth denial and basic IDOR prevention.
 
 ## File Storage Controls
@@ -97,3 +98,11 @@ Users must control visibility of:
 - Dashboard and admin routes are guarded by the Next `proxy.ts` entry guard before client rendering.
 - Legacy local-storage token keys are removed during auth transitions for migration cleanup.
 - Remaining production work: role-aware server guards, stricter cookie domain/SameSite review, per-session CSRF rotation policy, and end-to-end browser tests.
+
+## Two-Factor Controls
+
+- Users can start, confirm, and disable TOTP-based two-factor authentication from the member dashboard.
+- TOTP shared secrets are encrypted before storage using an application-derived Fernet key.
+- Admin route dependencies can require enabled 2FA when `ADMIN_TWO_FACTOR_REQUIRED=true`.
+- Admin enforcement applies to role-protected API endpoints, including overview, audit logs, and verification queues.
+- Current gaps: backup/recovery codes, forced enrollment grace periods, support recovery workflows, and audit metadata for factor changes.

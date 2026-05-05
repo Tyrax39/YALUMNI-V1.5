@@ -9,6 +9,7 @@ import { VerificationRequestPanel } from "@/components/alumni/verification-reque
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { SessionCard } from "@/components/auth/session-card";
 import { SessionManagementPanel } from "@/components/auth/session-management-panel";
+import { TwoFactorPanel } from "@/components/auth/two-factor-panel";
 import { adminRoles } from "@/lib/api";
 
 const modules = [
@@ -79,6 +80,7 @@ export function DashboardWorkspace() {
                 />
               </div>
               <ProfilePanel accessToken={accessToken} displayName={user.display_name} />
+              <TwoFactorPanel accessToken={accessToken} onUserChange={setUser} user={user} />
               <VerificationRequestPanel accessToken={accessToken} />
               <DirectorySearchPanel accessToken={accessToken} />
               <SessionManagementPanel

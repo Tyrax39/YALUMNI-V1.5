@@ -33,6 +33,8 @@ class User(Base, TimestampMixin):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     status: Mapped[str] = mapped_column(String(40), default="ACTIVE", nullable=False)
     email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    two_factor_secret_encrypted: Mapped[str | None] = mapped_column(String(512))
+    two_factor_enabled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     sessions: Mapped[list["AuthSession"]] = relationship(
         back_populates="user",

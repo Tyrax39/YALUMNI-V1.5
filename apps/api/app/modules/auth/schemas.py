@@ -61,6 +61,19 @@ class VerifyEmailRequest(BaseModel):
     token: str = Field(min_length=32)
 
 
+class TwoFactorSetupRequest(BaseModel):
+    password: str = Field(min_length=1, max_length=128)
+
+
+class TwoFactorConfirmRequest(BaseModel):
+    code: str = Field(min_length=6, max_length=16)
+
+
+class TwoFactorDisableRequest(BaseModel):
+    password: str = Field(min_length=1, max_length=128)
+    code: str = Field(min_length=6, max_length=16)
+
+
 class DevTokenResponse(BaseModel):
     message: str
     dev_token: str | None = None
@@ -125,6 +138,18 @@ class AdminOverview(BaseModel):
     latest_security_events: list[AdminSecurityEvent]
 
 
+class TwoFactorStatusResponse(BaseModel):
+    enabled: bool
+    admin_two_factor_required: bool
+    admin_two_factor_satisfied: bool
+
+
+class TwoFactorSetupResponse(BaseModel):
+    secret: str
+    otpauth_url: str
+    enabled: bool
+
+
 class AuthUser(BaseModel):
     id: uuid.UUID
     email: str
@@ -133,6 +158,7 @@ class AuthUser(BaseModel):
     last_name: str | None
     status: str
     email_verified_at: datetime | None
+    two_factor_enabled: bool
     roles: list[str]
 
     model_config = ConfigDict(from_attributes=True)
