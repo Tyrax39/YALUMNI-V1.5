@@ -67,13 +67,14 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
 - Community settings editing. Implemented for admins and community owners.
 - Invitations. Implemented for manager/owner/admin creation, cancellation, and token acceptance.
 - Ownership transfer. Implemented for owner/admin succession to active non-owner members.
-- Private content gates. Planned.
+- Private content gates. Started with active-member community posts and moderation removal.
 
 ## Phase 6: Feed And Moderation
 
-- Posts, comments, reactions.
+- Community-scoped posts. Implemented for active community members with gated reads/creates.
+- Comments, reactions.
 - Reports.
-- Moderator actions.
+- Moderator actions. Started with manager/owner/admin post removal inside communities.
 - Admin moderation queue.
 
 ## Phase 7: Messaging And Notifications

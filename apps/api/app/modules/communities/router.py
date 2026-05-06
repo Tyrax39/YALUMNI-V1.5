@@ -13,7 +13,12 @@ from app.core.permissions import ADMIN_ROLE_NAMES
 from app.core.security import create_refresh_token, hash_token, utcnow
 from app.modules.auth.dependencies import get_current_user, require_roles
 from app.modules.auth.models import SecurityEvent, User
-from app.modules.communities.models import Community, CommunityInvitation, CommunityMembership
+from app.modules.communities.models import (
+    Community,
+    CommunityInvitation,
+    CommunityMembership,
+    CommunityPost,
+)
 from app.modules.communities.schemas import (
     CommunityCreate,
     CommunityInvitationAccept,
@@ -25,6 +30,9 @@ from app.modules.communities.schemas import (
     CommunityMemberResponse,
     CommunityMemberRoleUpdate,
     CommunityOwnershipTransfer,
+    CommunityPostCreate,
+    CommunityPostListResponse,
+    CommunityPostResponse,
     CommunityResponse,
     CommunityUpdate,
 )
@@ -44,6 +52,7 @@ JOIN_POLICIES = {"OPEN", "REQUEST"}
 COMMUNITY_MEMBER_ROLES = {"MEMBER", "MANAGER"}
 COMMUNITY_INVITATION_STATUSES = {"ACCEPTED", "CANCELED", "EXPIRED", "PENDING"}
 COMMUNITY_INVITATION_DAYS = 14
+COMMUNITY_POST_STATUSES = {"ACTIVE", "REMOVED"}
 
 
 def _request_context(request: Request) -> tuple[str | None, str | None]:
@@ -155,6 +164,10 @@ def _can_manage_community(user: User, community: Community) -> bool:
     return _active_membership_role(user, community) in {"OWNER", "MANAGER"}
 
 
+def _can_access_community_content(user: User, community: Community) -> bool:
+    return _has_admin_role(user) or _active_membership_role(user, community) is not None
+
+
 def _can_edit_community_settings(user: User, community: Community) -> bool:
     if _has_admin_role(user):
         return True
@@ -210,6 +223,21 @@ def _serialize_member(membership: CommunityMembership) -> CommunityMemberRespons
         status=membership.status,
         joined_at=membership.joined_at,
         created_at=membership.created_at,
+    )
+
+
+def _serialize_post(post: CommunityPost) -> CommunityPostResponse:
+    return CommunityPostResponse(
+        id=post.id,
+        community_id=post.community_id,
+        author_user_id=post.author_user_id,
+        author_display_name=post.author.display_name if post.author else "Removed user",
+        body=post.body,
+        status=post.status,
+        removed_by_user_id=post.removed_by_user_id,
+        removed_at=post.removed_at,
+        created_at=post.created_at,
+        updated_at=post.updated_at,
     )
 
 
@@ -533,6 +561,139 @@ def update_community(
     return _serialize_community(community, current_user)
 
 
+@router.get("/{community_id}/posts", response_model=CommunityPostListResponse)
+def list_community_posts(
+    community_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+    status_filter: Annotated[
+        str,
+        Query(alias="status", pattern="^(ACTIVE|REMOVED|ALL)$"),
+    ] = "ACTIVE",
+    limit: Annotated[int, Query(ge=1, le=30)] = 10,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> CommunityPostListResponse:
+    community = _get_community_or_404(db, community_id)
+    if not _can_access_community_content(current_user, community):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Community posts are available to active members",
+        )
+
+    normalized_status = status_filter.strip().upper()
+    if normalized_status != "ACTIVE" and not _can_manage_community(current_user, community):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to view moderated posts",
+        )
+
+    query = (
+        select(CommunityPost)
+        .options(joinedload(CommunityPost.author))
+        .where(CommunityPost.community_id == community.id)
+    )
+    if normalized_status != "ALL":
+        query = query.where(CommunityPost.status == normalized_status)
+
+    total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+    posts = db.scalars(
+        query.order_by(CommunityPost.created_at.desc()).offset(offset).limit(limit)
+    ).all()
+    return CommunityPostListResponse(
+        posts=[_serialize_post(post) for post in posts],
+        total=total,
+        limit=limit,
+        offset=offset,
+        has_more=offset + len(posts) < total,
+    )
+
+
+@router.post(
+    "/{community_id}/posts",
+    response_model=CommunityPostResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_community_post(
+    community_id: uuid.UUID,
+    payload: CommunityPostCreate,
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> CommunityPostResponse:
+    community = _get_community_or_404(db, community_id)
+    if not _can_access_community_content(current_user, community):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Community posts are available to active members",
+        )
+
+    post = CommunityPost(
+        community_id=community.id,
+        author_user_id=current_user.id,
+        body=payload.body,
+        status="ACTIVE",
+    )
+    db.add(post)
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "community.post_created",
+        metadata={"community_id": str(community.id)},
+    )
+    db.commit()
+    db.refresh(post)
+    post = _get_post_or_404(db, community, post.id)
+    return _serialize_post(post)
+
+
+@router.post("/{community_id}/posts/{post_id}/remove", response_model=CommunityPostResponse)
+def remove_community_post(
+    community_id: uuid.UUID,
+    post_id: uuid.UUID,
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> CommunityPostResponse:
+    community = _get_community_or_404(db, community_id)
+    if not _can_access_community_content(current_user, community):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Community posts are available to active members",
+        )
+
+    post = _get_post_or_404(db, community, post_id)
+    actor_is_author = post.author_user_id == current_user.id
+    if not actor_is_author and not _can_manage_community(current_user, community):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to remove this post",
+        )
+    if post.status != "ACTIVE":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only active posts can be removed",
+        )
+
+    post.status = "REMOVED"
+    post.removed_by_user_id = current_user.id
+    post.removed_at = utcnow()
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "community.post_removed",
+        metadata={
+            "community_id": str(community.id),
+            "post_id": str(post.id),
+            "post_author_user_id": str(post.author_user_id) if post.author_user_id else None,
+        },
+    )
+    db.commit()
+    db.refresh(post)
+    return _serialize_post(post)
+
+
 @router.get("/{community_id}/members", response_model=CommunityMemberListResponse)
 def list_community_members(
     community_id: uuid.UUID,
@@ -723,6 +884,25 @@ def _get_invitation_or_404(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invitation not found")
 
     return invitation
+
+
+def _get_post_or_404(
+    db: Session,
+    community: Community,
+    post_id: uuid.UUID,
+) -> CommunityPost:
+    post = db.scalar(
+        select(CommunityPost)
+        .options(joinedload(CommunityPost.author))
+        .where(
+            CommunityPost.id == post_id,
+            CommunityPost.community_id == community.id,
+        )
+    )
+    if post is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
+
+    return post
 
 
 def _active_pending_invitation_for_email(

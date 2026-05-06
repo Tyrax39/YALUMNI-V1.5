@@ -321,6 +321,27 @@ export type CommunityInvitationListResponse = {
   has_more: boolean;
 };
 
+export type CommunityPost = {
+  id: string;
+  community_id: string;
+  author_user_id: string | null;
+  author_display_name: string;
+  body: string;
+  status: string;
+  removed_by_user_id: string | null;
+  removed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CommunityPostListResponse = {
+  posts: CommunityPost[];
+  total: number;
+  limit: number;
+  offset: number;
+  has_more: boolean;
+};
+
 export type CommunityCreatePayload = {
   name: string;
   community_type?: string;
@@ -343,6 +364,10 @@ export type CommunityInvitationCreatePayload = {
 
 export type CommunityOwnershipTransferPayload = {
   new_owner_membership_id: string;
+};
+
+export type CommunityPostCreatePayload = {
+  body: string;
 };
 
 export const adminRoles: readonly string[] = [
@@ -1008,6 +1033,60 @@ export function acceptCommunityInvitation(
     headers: authHeaders(accessToken),
     method: "POST"
   });
+}
+
+export function listCommunityPosts(
+  accessToken: string,
+  communityId: string,
+  params: { limit?: number; offset?: number; status?: string } = {}
+): Promise<CommunityPostListResponse> {
+  const searchParams = new URLSearchParams();
+  if (params.status) {
+    searchParams.set("status", params.status);
+  }
+  if (params.limit) {
+    searchParams.set("limit", String(params.limit));
+  }
+  if (params.offset) {
+    searchParams.set("offset", String(params.offset));
+  }
+
+  const query = searchParams.toString();
+  return protectedApiFetch<CommunityPostListResponse>(
+    `/api/v1/communities/${encodeURIComponent(communityId)}/posts${query ? `?${query}` : ""}`,
+    {
+      headers: authHeaders(accessToken)
+    }
+  );
+}
+
+export function createCommunityPost(
+  accessToken: string,
+  communityId: string,
+  payload: CommunityPostCreatePayload
+): Promise<CommunityPost> {
+  return protectedApiFetch<CommunityPost>(
+    `/api/v1/communities/${encodeURIComponent(communityId)}/posts`,
+    {
+      body: JSON.stringify(payload),
+      headers: authHeaders(accessToken),
+      method: "POST"
+    }
+  );
+}
+
+export function removeCommunityPost(
+  accessToken: string,
+  communityId: string,
+  postId: string
+): Promise<CommunityPost> {
+  return protectedApiFetch<CommunityPost>(
+    `/api/v1/communities/${encodeURIComponent(communityId)}/posts/${encodeURIComponent(postId)}/remove`,
+    {
+      headers: authHeaders(accessToken),
+      method: "POST"
+    }
+  );
 }
 
 export function transferCommunityOwnership(

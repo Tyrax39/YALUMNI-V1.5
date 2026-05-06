@@ -148,6 +148,18 @@ Community ownership transfer support:
 - Previous active owners are retained as managers so the community keeps a
   management chain after succession.
 
+Private community posts support:
+
+- `GET /api/v1/communities/{community_id}/posts` with
+  `status=ACTIVE|REMOVED|ALL`.
+- `POST /api/v1/communities/{community_id}/posts` for active community members
+  and platform admins.
+- `POST /api/v1/communities/{community_id}/posts/{post_id}/remove` for post
+  authors, active community managers/owners, and platform admins.
+- Non-members and pending members cannot read or create community posts.
+- Removed posts are hidden from ordinary members; managers/owners/admins can
+  query removed or all posts for moderation review.
+
 ## Phase 3: Alumni
 
 ```text
@@ -164,6 +176,9 @@ POST   /api/v1/communities/{community_id}/ownership-transfer  # implemented
 ## Phase 5: Feed
 
 ```text
+GET    /api/v1/communities/{community_id}/posts                 # implemented
+POST   /api/v1/communities/{community_id}/posts                 # implemented
+POST   /api/v1/communities/{community_id}/posts/{post_id}/remove # implemented
 GET    /api/v1/feed
 POST   /api/v1/posts
 GET    /api/v1/posts/{post_id}

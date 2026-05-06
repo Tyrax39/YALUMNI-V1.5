@@ -120,6 +120,18 @@ class CommunityOwnershipTransfer(BaseModel):
     new_owner_membership_id: uuid.UUID
 
 
+class CommunityPostCreate(BaseModel):
+    body: str = Field(min_length=1, max_length=2000)
+
+    @field_validator("body")
+    @classmethod
+    def normalize_body(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Post body is required")
+        return value
+
+
 class CommunityInvitationCreate(BaseModel):
     email: str = Field(max_length=320, pattern=EMAIL_PATTERN)
     role: str = Field(default="MEMBER", max_length=40)
@@ -175,6 +187,27 @@ class CommunityInvitationResponse(BaseModel):
 
 class CommunityInvitationListResponse(BaseModel):
     invitations: list[CommunityInvitationResponse]
+    total: int
+    limit: int
+    offset: int
+    has_more: bool
+
+
+class CommunityPostResponse(BaseModel):
+    id: uuid.UUID
+    community_id: uuid.UUID
+    author_user_id: uuid.UUID | None
+    author_display_name: str
+    body: str
+    status: str
+    removed_by_user_id: uuid.UUID | None
+    removed_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class CommunityPostListResponse(BaseModel):
+    posts: list[CommunityPostResponse]
     total: int
     limit: int
     offset: int

@@ -42,6 +42,11 @@ class Community(Base, TimestampMixin):
         cascade="all, delete-orphan",
         order_by="CommunityInvitation.created_at.asc()",
     )
+    posts: Mapped[list["CommunityPost"]] = relationship(
+        back_populates="community",
+        cascade="all, delete-orphan",
+        order_by="CommunityPost.created_at.desc()",
+    )
 
 
 class CommunityMembership(Base, TimestampMixin):
@@ -99,3 +104,35 @@ class CommunityInvitation(Base, TimestampMixin):
     community: Mapped[Community] = relationship(back_populates="invitations")
     invited_by_user: Mapped[User | None] = relationship(foreign_keys=[invited_by_user_id])
     accepted_by_user: Mapped[User | None] = relationship(foreign_keys=[accepted_by_user_id])
+
+
+class CommunityPost(Base, TimestampMixin):
+    __tablename__ = "community_posts"
+    __table_args__ = (
+        Index(
+            "ix_community_posts_community_status_created",
+            "community_id",
+            "status",
+            "created_at",
+        ),
+        Index("ix_community_posts_author_created", "author_user_id", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    community_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("communities.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    author_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+    )
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(40), default="ACTIVE", nullable=False)
+    removed_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+    )
+    removed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    community: Mapped[Community] = relationship(back_populates="posts")
+    author: Mapped[User | None] = relationship(foreign_keys=[author_user_id])
+    removed_by_user: Mapped[User | None] = relationship(foreign_keys=[removed_by_user_id])

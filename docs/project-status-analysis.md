@@ -8,6 +8,65 @@ The current Yalumni project is a useful Laravel 9 alumni management platform, bu
 
 The first V1.5 implementation step has started in `D:\YALUMNI-V1.5`. The new repository now contains a platform foundation with a FastAPI backend, Next.js web shell, Docker Compose, CI workflow, shared packages, copied YALUMNI logo assets, and documentation.
 
+## Current V1.5 Implementation Update: 2026-05-06 Private Community Feed Slice
+
+Completed after community ownership transfer:
+
+- Added `community_posts` with author, body, active/removed status, remover, removal timestamp, and indexes for community/status and author timelines.
+- Added Alembic migration `20260506_0010_community_posts`.
+- Added gated community post listing, creation, and removal APIs under `/api/v1/communities/{community_id}/posts`.
+- Active members and platform admins can read/create community posts; non-members and pending members cannot.
+- Post authors can remove their own active posts, and active community managers/owners plus platform admins can remove active posts for moderation.
+- Removed posts are hidden from ordinary members, while managers/owners/admins can query removed/all posts for moderation review.
+- Community detail pages now include a gated member-update feed with post creation, active post list, removal controls, and pagination.
+- API tests cover non-member denial, active-member access, post body normalization, manager moderation, duplicate removal protection, removed-post visibility, and active-feed filtering.
+
+Current plan position:
+
+- Phase 1 remains functionally complete for local foundation.
+- Phase 2 remains roughly 89% complete.
+- Phase 3 remains roughly 52% complete.
+- Phase 4 remains roughly 22% complete.
+- Phase 5 is now roughly 70% complete because community creation, discovery, detail rosters, joins, pending review, manager roles, member management, settings editing, invitations, owner succession, and private community posts are implemented.
+- Overall 24-week MVP implementation is roughly 40% complete.
+
+Implemented now:
+
+- Native landing page.
+- Monorepo foundation, CI, docs, Docker Compose.
+- FastAPI health/status and request middleware.
+- Identity auth, refresh sessions, account recovery, email verification, protected platform owner, role-gated admin overview, session management, admin 2FA policy gate, secure cookie-backed web sessions, CSRF protection, and MVP-local rate limiting.
+- Local-only test-account seeding for role and directory QA.
+- Protected dashboard/admin route behavior.
+- Alumni current-user profile model/API/UI with profile photo upload/display/delete.
+- Shared local/S3 upload storage adapter for profile photos and verification evidence.
+- Program affiliation model/API/UI.
+- Verification request submission, member status history, admin queue, review actions, alumni-member role grant, and evidence upload/review.
+- Verified member directory search/profile detail with privacy-aware serializers and authenticated profile-photo display.
+- Dedicated admin audit log viewer backed by `security_events`.
+- Community discovery, creation, detail pages, active rosters, open/request joins, pending review, manager roles, role updates, non-owner member removal, owner/admin settings editing, invitations, ownership transfer, and gated community posts.
+
+Main gaps now:
+
+- Community feed is post-only; comments, reactions, reports, attachments, pinned posts, mentions, and notification fanout are not implemented.
+- Real email provider/templates are not wired, so invitation delivery is still local/dev-token based.
+- S3 adapter exists, but production still needs real bucket credentials, bucket policy validation, malware scanning, image processing, lifecycle/retention policy, and CDN/signed URL decisions.
+- Directory search is database-backed MVP search, not Meilisearch/OpenSearch.
+- Public profile pages, saved searches, recommendations, and richer dedicated search indexing are not implemented.
+- Test accounts are local/dev seed data only; there is no production-safe demo identity lifecycle yet.
+- Skills are stored as MVP JSON rather than normalized skill tables.
+- Audit data is viewable through `security_events`, but richer immutable compliance audit tables and export tooling are not implemented.
+- Redis-backed rate limiting, background jobs, realtime notifications, messaging, events, initiatives, contributions, and elections are not wired yet.
+- Communities still need content scopes beyond posts, chapter analytics, richer moderation hooks, and notification delivery.
+
+Next possible implementation slices:
+
+- Community comments/reactions/reports on the private post feed.
+- Notification/event hooks for community posts, invitations, join requests, settings updates, role changes, and ownership transfers.
+- Production email delivery for account recovery and invitations.
+- Redis-backed jobs/rate limiting.
+- Global feed aggregation from community posts and future public posts.
+
 ## Current V1.5 Implementation Update: 2026-05-06 Community Ownership Transfer Slice
 
 Completed after community invitations:

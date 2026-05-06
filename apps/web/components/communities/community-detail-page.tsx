@@ -11,11 +11,14 @@ import {
   LogOut,
   MailPlus,
   MapPin,
+  MessageSquare,
   Save,
+  Send,
   Settings,
   ShieldCheck,
   ShieldMinus,
   ShieldPlus,
+  Trash2,
   UserMinus,
   Users,
   X
@@ -33,14 +36,19 @@ import {
   CommunityInvitationListResponse,
   CommunityMember,
   CommunityMemberListResponse,
+  CommunityPost,
+  CommunityPostListResponse,
   createCommunityInvitation,
+  createCommunityPost,
   getCommunity,
   joinCommunity,
   leaveCommunity,
   listCommunityInvitations,
   listCommunityMembers,
+  listCommunityPosts,
   rejectCommunityMember,
   removeCommunityMember,
+  removeCommunityPost,
   transferCommunityOwnership,
   updateCommunity,
   CommunityUpdatePayload,
@@ -58,6 +66,7 @@ type DetailState =
       community: Community;
       invitations: CommunityInvitationListResponse | null;
       members: CommunityMemberListResponse;
+      posts: CommunityPostListResponse | null;
       status: "ready";
       pendingMembers: CommunityMemberListResponse | null;
     }
@@ -66,6 +75,7 @@ type DetailState =
 const rosterPageSize = 12;
 const pendingPageSize = 6;
 const invitationPageSize = 6;
+const postPageSize = 5;
 const communityTypeOptions = [
   "COUNTRY_CHAPTER",
   "CITY_CHAPTER",
@@ -100,6 +110,7 @@ export function CommunityDetailPage({ communityId }: CommunityDetailPageProps) {
           <CommunityDetailContent
             accessToken={accessToken}
             communityId={communityId}
+            userId={user.id}
             userRoles={user.roles}
           />
         )}
@@ -111,10 +122,12 @@ export function CommunityDetailPage({ communityId }: CommunityDetailPageProps) {
 function CommunityDetailContent({
   accessToken,
   communityId,
+  userId,
   userRoles
 }: {
   accessToken: string;
   communityId: string;
+  userId: string;
   userRoles: string[];
 }) {
   const [state, setState] = useState<DetailState>({ status: "loading" });
@@ -133,10 +146,13 @@ function CommunityDetailContent({
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"MANAGER" | "MEMBER">("MEMBER");
   const [latestInvitation, setLatestInvitation] = useState<CommunityInvitation | null>(null);
+  const [postBody, setPostBody] = useState("");
+  const [isPostSubmitting, setIsPostSubmitting] = useState(false);
+  const [busyPostId, setBusyPostId] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
-    loadDetail(0, 0, 0)
+    loadDetail(0, 0, 0, 0)
       .then((nextState) => {
         if (isMounted) {
           setState(nextState);
@@ -161,7 +177,8 @@ function CommunityDetailContent({
   async function loadDetail(
     activeOffset: number,
     pendingOffset: number,
-    invitationOffset: number
+    invitationOffset: number,
+    postOffset: number
   ): Promise<DetailState> {
     const [community, members] = await Promise.all([
       getCommunity(accessToken, communityId),
@@ -172,29 +189,40 @@ function CommunityDetailContent({
       })
     ]);
     const canManage = canManageCommunity(userRoles, community);
-    const [pendingMembers, invitations] = canManage
-      ? await Promise.all([
-          listCommunityMembers(accessToken, communityId, {
+    const canReadPosts = canAccessCommunityPosts(userRoles, community);
+    const [pendingMembers, invitations, posts] = await Promise.all([
+      canManage
+        ? listCommunityMembers(accessToken, communityId, {
             limit: pendingPageSize,
             offset: pendingOffset,
             status: "PENDING"
-          }),
-          listCommunityInvitations(accessToken, communityId, {
+          })
+        : Promise.resolve(null),
+      canManage
+        ? listCommunityInvitations(accessToken, communityId, {
             limit: invitationPageSize,
             offset: invitationOffset,
             status: "PENDING"
           })
-        ])
-      : [null, null];
-    return { community, invitations, members, pendingMembers, status: "ready" };
+        : Promise.resolve(null),
+      canReadPosts
+        ? listCommunityPosts(accessToken, communityId, {
+            limit: postPageSize,
+            offset: postOffset,
+            status: "ACTIVE"
+          })
+        : Promise.resolve(null)
+    ]);
+    return { community, invitations, members, pendingMembers, posts, status: "ready" };
   }
 
   async function refresh(
     activeOffset = state.status === "ready" ? state.members.offset : 0,
     pendingOffset = state.status === "ready" ? state.pendingMembers?.offset ?? 0 : 0,
-    invitationOffset = state.status === "ready" ? state.invitations?.offset ?? 0 : 0
+    invitationOffset = state.status === "ready" ? state.invitations?.offset ?? 0 : 0,
+    postOffset = state.status === "ready" ? state.posts?.offset ?? 0 : 0
   ) {
-    setState(await loadDetail(activeOffset, pendingOffset, invitationOffset));
+    setState(await loadDetail(activeOffset, pendingOffset, invitationOffset, postOffset));
   }
 
   function handleStartSettingsEdit(community: Community) {
@@ -287,6 +315,53 @@ function CommunityDetailContent({
     } finally {
       setBusyMemberId(null);
       setBusyMemberAction(null);
+    }
+  }
+
+  async function handleCreatePost(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (state.status !== "ready") {
+      return;
+    }
+
+    const body = postBody.trim();
+    if (!body) {
+      setActionError("Post body is required.");
+      return;
+    }
+
+    setMessage(null);
+    setActionError(null);
+    setIsPostSubmitting(true);
+    try {
+      await createCommunityPost(accessToken, communityId, { body });
+      setPostBody("");
+      setMessage("Post shared with the community.");
+      await refresh(
+        state.members.offset,
+        state.pendingMembers?.offset ?? 0,
+        state.invitations?.offset ?? 0,
+        0
+      );
+    } catch (caught) {
+      setActionError(caught instanceof ApiError ? caught.message : "Post could not be shared.");
+    } finally {
+      setIsPostSubmitting(false);
+    }
+  }
+
+  async function handleRemovePost(post: CommunityPost) {
+    setMessage(null);
+    setActionError(null);
+    setBusyPostId(post.id);
+    try {
+      await removeCommunityPost(accessToken, communityId, post.id);
+      setMessage("Post removed from the active feed.");
+      await refresh();
+    } catch (caught) {
+      setActionError(caught instanceof ApiError ? caught.message : "Post could not be removed.");
+    } finally {
+      setBusyPostId(null);
     }
   }
 
@@ -437,7 +512,7 @@ function CommunityDetailContent({
     );
   }
 
-  const { community, invitations, members, pendingMembers } = state;
+  const { community, invitations, members, pendingMembers, posts } = state;
   const activeMember = community.membership_status === "ACTIVE";
   const pendingMember = community.membership_status === "PENDING";
   const owner = community.membership_role === "OWNER";
@@ -445,6 +520,7 @@ function CommunityDetailContent({
   const canManage = canManageCommunity(userRoles, community);
   const canEditSettings = canEditCommunitySettings(userRoles, community);
   const canInviteManagers = canEditCommunitySettings(userRoles, community);
+  const canReadPosts = canAccessCommunityPosts(userRoles, community);
 
   return (
     <CommunityShell>
@@ -547,6 +623,136 @@ function CommunityDetailContent({
           onSubmit={handleSettingsSubmit}
         />
       ) : null}
+
+      <section className="mt-8">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-secondary">
+              Community feed
+            </p>
+            <h2 className="mt-2 font-display text-2xl font-semibold text-ink">
+              Member updates
+            </h2>
+          </div>
+          {posts ? (
+            <p className="text-sm font-semibold text-muted">{posts.total} active posts</p>
+          ) : null}
+        </div>
+
+        {canReadPosts && posts ? (
+          <>
+            <form
+              className="mt-5 border-y border-border bg-white px-4 py-4 shadow-soft"
+              onSubmit={handleCreatePost}
+            >
+              <label className="text-sm font-semibold text-ink">
+                New post
+                <textarea
+                  className="focus-ring mt-2 min-h-28 w-full rounded-lg border border-border bg-surface px-3 py-3 text-sm leading-6 text-ink"
+                  maxLength={2000}
+                  onChange={(event) => setPostBody(event.target.value)}
+                  required
+                  value={postBody}
+                />
+              </label>
+              <div className="mt-3 flex justify-end">
+                <button
+                  className="focus-ring inline-flex min-h-11 items-center gap-2 rounded-lg bg-primary px-5 text-sm font-semibold text-white transition hover:bg-[#003d7d] disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={isPostSubmitting}
+                  type="submit"
+                >
+                  <Send aria-hidden="true" className="h-4 w-4" />
+                  {isPostSubmitting ? "Sharing..." : "Share post"}
+                </button>
+              </div>
+            </form>
+
+            <div className="mt-5 grid gap-3">
+              {posts.posts.length === 0 ? (
+                <p className="border-y border-border bg-white px-4 py-6 text-sm font-semibold text-muted">
+                  No posts have been shared yet.
+                </p>
+              ) : null}
+              {posts.posts.map((post) => (
+                <article className="rounded-lg border border-border bg-white p-4 shadow-soft" key={post.id}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h3 className="font-display text-xl font-semibold text-ink">
+                        {post.author_display_name}
+                      </h3>
+                      <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-muted">
+                        {formatDate(post.created_at)}
+                      </p>
+                    </div>
+                    <MessageSquare aria-hidden="true" className="h-5 w-5 text-secondary" />
+                  </div>
+                  <p className="mt-4 whitespace-pre-line text-sm leading-6 text-ink">
+                    {post.body}
+                  </p>
+                  {canRemovePost(userRoles, community, post, userId) ? (
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <button
+                        className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-lg border border-red-200 px-3 text-sm font-semibold text-red-700 transition hover:border-red-300 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={busyPostId === post.id}
+                        onClick={() => void handleRemovePost(post)}
+                        type="button"
+                      >
+                        <Trash2 aria-hidden="true" className="h-4 w-4" />
+                        {busyPostId === post.id ? "Removing..." : "Remove"}
+                      </button>
+                    </div>
+                  ) : null}
+                </article>
+              ))}
+            </div>
+            <div className="mt-5 flex flex-col gap-3 border-y border-border bg-white px-4 py-3 text-sm font-semibold text-muted sm:flex-row sm:items-center sm:justify-between">
+              <p>
+                {posts.total === 0
+                  ? "No posts"
+                  : `Showing ${posts.offset + 1}-${posts.offset + posts.posts.length} of ${posts.total}`}
+              </p>
+              <div className="flex gap-2">
+                <button
+                  className="focus-ring min-h-10 rounded-lg border border-border px-4 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={posts.offset === 0}
+                  onClick={() =>
+                    void refresh(
+                      members.offset,
+                      pendingMembers?.offset ?? 0,
+                      invitations?.offset ?? 0,
+                      Math.max(0, posts.offset - posts.limit)
+                    )
+                  }
+                  type="button"
+                >
+                  Previous
+                </button>
+                <button
+                  className="focus-ring min-h-10 rounded-lg border border-border px-4 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={!posts.has_more}
+                  onClick={() =>
+                    void refresh(
+                      members.offset,
+                      pendingMembers?.offset ?? 0,
+                      invitations?.offset ?? 0,
+                      posts.offset + posts.limit
+                    )
+                  }
+                  type="button"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="mt-5 border-y border-border bg-white px-4 py-6 shadow-soft">
+            <p className="text-sm font-semibold text-muted">
+              Join this community to view and share member updates.
+            </p>
+          </div>
+        )}
+      </section>
 
       <section className="mt-8">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
@@ -1214,6 +1420,13 @@ function canEditCommunitySettings(userRoles: string[], community: Community): bo
   );
 }
 
+function canAccessCommunityPosts(userRoles: string[], community: Community): boolean {
+  return (
+    community.membership_status === "ACTIVE" ||
+    userRoles.some((role) => adminRoles.includes(role))
+  );
+}
+
 function canManageMember(
   userRoles: string[],
   community: Community,
@@ -1240,5 +1453,19 @@ function canTransferOwnership(
     member.status === "ACTIVE" &&
     member.role !== "OWNER" &&
     canEditCommunitySettings(userRoles, community)
+  );
+}
+
+function canRemovePost(
+  userRoles: string[],
+  community: Community,
+  post: CommunityPost,
+  userId: string
+): boolean {
+  return (
+    post.author_user_id === userId ||
+    community.membership_role === "OWNER" ||
+    community.membership_role === "MANAGER" ||
+    userRoles.some((role) => adminRoles.includes(role))
   );
 }

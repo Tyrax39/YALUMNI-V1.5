@@ -448,6 +448,122 @@ def test_community_owner_can_transfer_ownership(client: TestClient) -> None:
     assert former_owner_leave.json()["member_count"] == 2
 
 
+def test_community_posts_are_private_and_moderated(client: TestClient) -> None:
+    admin_headers = create_admin(client)
+    community = create_community(
+        client,
+        admin_headers,
+        name="Mali Private Feed Chapter",
+        country="Mali",
+    )
+
+    outsider_user = register_user(client, "feed.outsider@example.com")
+    member_user = register_user(client, "feed.member@example.com")
+    manager_user = register_user(client, "feed.manager@example.com")
+    outsider_headers = auth_headers(outsider_user["access_token"])
+    member_headers = auth_headers(member_user["access_token"])
+    manager_headers = auth_headers(manager_user["access_token"])
+
+    outsider_posts = client.get(
+        f"/api/v1/communities/{community['id']}/posts",
+        headers=outsider_headers,
+    )
+    assert outsider_posts.status_code == 403
+    outsider_create = client.post(
+        f"/api/v1/communities/{community['id']}/posts",
+        headers=outsider_headers,
+        json={"body": "I should not appear."},
+    )
+    assert outsider_create.status_code == 403
+
+    for headers in (member_headers, manager_headers):
+        join_response = client.post(f"/api/v1/communities/{community['id']}/join", headers=headers)
+        assert join_response.status_code == 200
+
+    roster_response = client.get(
+        f"/api/v1/communities/{community['id']}/members",
+        headers=admin_headers,
+    )
+    assert roster_response.status_code == 200
+    members_by_email = {member["email"]: member for member in roster_response.json()["members"]}
+    manager_membership = members_by_email["feed.manager@example.com"]
+    manager_promotion = client.patch(
+        f"/api/v1/communities/{community['id']}/members/{manager_membership['id']}",
+        headers=admin_headers,
+        json={"role": "MANAGER"},
+    )
+    assert manager_promotion.status_code == 200
+
+    owner_post_response = client.post(
+        f"/api/v1/communities/{community['id']}/posts",
+        headers=admin_headers,
+        json={"body": "  Welcome to the private chapter feed.  "},
+    )
+    assert owner_post_response.status_code == 201
+    owner_post = owner_post_response.json()
+    assert owner_post["body"] == "Welcome to the private chapter feed."
+    assert owner_post["status"] == "ACTIVE"
+    assert owner_post["author_display_name"] == "Admin"
+
+    member_posts = client.get(
+        f"/api/v1/communities/{community['id']}/posts",
+        headers=member_headers,
+    )
+    assert member_posts.status_code == 200
+    assert member_posts.json()["total"] == 1
+    assert member_posts.json()["posts"][0]["id"] == owner_post["id"]
+
+    member_post_response = client.post(
+        f"/api/v1/communities/{community['id']}/posts",
+        headers=member_headers,
+        json={"body": "Member update for the group."},
+    )
+    assert member_post_response.status_code == 201
+    member_post = member_post_response.json()
+
+    member_remove_owner = client.post(
+        f"/api/v1/communities/{community['id']}/posts/{owner_post['id']}/remove",
+        headers=member_headers,
+    )
+    assert member_remove_owner.status_code == 403
+
+    manager_remove_member = client.post(
+        f"/api/v1/communities/{community['id']}/posts/{member_post['id']}/remove",
+        headers=manager_headers,
+    )
+    assert manager_remove_member.status_code == 200
+    assert manager_remove_member.json()["status"] == "REMOVED"
+    assert manager_remove_member.json()["removed_by_user_id"] == manager_user["user"]["id"]
+
+    duplicate_remove = client.post(
+        f"/api/v1/communities/{community['id']}/posts/{member_post['id']}/remove",
+        headers=manager_headers,
+    )
+    assert duplicate_remove.status_code == 409
+
+    member_removed_posts = client.get(
+        f"/api/v1/communities/{community['id']}/posts?status=REMOVED",
+        headers=member_headers,
+    )
+    assert member_removed_posts.status_code == 403
+
+    manager_removed_posts = client.get(
+        f"/api/v1/communities/{community['id']}/posts?status=REMOVED",
+        headers=manager_headers,
+    )
+    assert manager_removed_posts.status_code == 200
+    assert manager_removed_posts.json()["total"] == 1
+    assert manager_removed_posts.json()["posts"][0]["id"] == member_post["id"]
+
+    active_posts = client.get(
+        f"/api/v1/communities/{community['id']}/posts",
+        headers=member_headers,
+    )
+    assert active_posts.status_code == 200
+    assert active_posts.json()["total"] == 1
+    assert active_posts.json()["posts"][0]["id"] == owner_post["id"]
+
+
 def test_community_manager_can_review_pending_join_requests(client: TestClient) -> None:
     admin_headers = create_admin(client)
     community = create_community(
