@@ -136,6 +136,12 @@ export type NotificationReadAllResponse = {
   unread_count: number;
 };
 
+export type NotificationStreamSnapshot = {
+  generated_at: string;
+  latest_notification: NotificationItem | null;
+  unread_count: number;
+};
+
 export type ProgramAffiliation = {
   id: string;
   program_name: string;
@@ -911,6 +917,62 @@ export function markAllNotificationsRead(
     headers: authHeaders(accessToken),
     method: "POST"
   });
+}
+
+export async function streamNotificationSnapshots(
+  accessToken: string,
+  options: {
+    onSnapshot: (snapshot: NotificationStreamSnapshot) => void;
+    pollSeconds?: number;
+    signal?: AbortSignal;
+  }
+): Promise<void> {
+  const searchParams = new URLSearchParams();
+  searchParams.set("poll_seconds", String(options.pollSeconds ?? 8));
+  const response = await fetch(`/api/backend/api/v1/notifications/stream?${searchParams}`, {
+    credentials: "same-origin",
+    headers: authHeaders(accessToken),
+    signal: options.signal
+  });
+
+  if (!response.ok) {
+    throw new ApiError(await readError(response), response.status);
+  }
+  if (!response.body) {
+    throw new ApiError("Notification stream is unavailable", response.status);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+
+    buffer += decoder.decode(value, { stream: true });
+    let eventBoundary = buffer.indexOf("\n\n");
+    while (eventBoundary >= 0) {
+      const eventText = buffer.slice(0, eventBoundary);
+      buffer = buffer.slice(eventBoundary + 2);
+      const data = parseSseData(eventText);
+      if (data) {
+        options.onSnapshot(JSON.parse(data) as NotificationStreamSnapshot);
+      }
+      eventBoundary = buffer.indexOf("\n\n");
+    }
+  }
+}
+
+function parseSseData(eventText: string): string | null {
+  const dataLines = eventText
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith("data:"))
+    .map((line) => line.replace(/^data:\s?/, ""));
+
+  return dataLines.length > 0 ? dataLines.join("\n") : null;
 }
 
 export function getMyAlumniProfile(accessToken: string): Promise<AlumniProfile> {

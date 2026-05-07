@@ -87,6 +87,7 @@ GET  /api/v1/communities/admin/moderation/post-reports
 GET  /api/v1/communities/admin/moderation/removed-posts
 GET  /api/v1/communities/admin/moderation/removed-comments
 GET  /api/v1/notifications
+GET  /api/v1/notifications/stream
 POST /api/v1/notifications/{notification_id}/read
 POST /api/v1/notifications/read-all
 ```
@@ -246,6 +247,11 @@ Notification center support:
 - `GET /api/v1/notifications` returns the current user's paginated
   notifications with `status=UNREAD|READ|ALL`, `limit`, `offset`, total, and
   unread count.
+- `GET /api/v1/notifications/stream` returns authenticated server-sent event
+  snapshots with the current unread count and latest notification metadata. The
+  MVP stream uses a configurable polling interval through
+  `NOTIFICATION_STREAM_POLL_SECONDS`; Redis/WebSocket fanout remains a later
+  production hardening step.
 - `POST /api/v1/notifications/{notification_id}/read` marks a single current
   user notification as read. Other users' notification IDs return 404.
 - `POST /api/v1/notifications/read-all` marks all current-user unread
@@ -324,6 +330,7 @@ DELETE /api/v1/users/{user_id}/block
 
 ```text
 GET    /api/v1/notifications                         # implemented
+GET    /api/v1/notifications/stream                  # implemented
 POST   /api/v1/notifications/{notification_id}/read   # implemented
 POST   /api/v1/notifications/read-all                 # implemented
 ```

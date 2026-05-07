@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import { Bell, Check, CheckCheck, Inbox } from "lucide-react";
+import { Bell, Check, CheckCheck, Inbox, Radio } from "lucide-react";
 import Link from "next/link";
 
 import {
@@ -10,7 +10,8 @@ import {
   listNotifications,
   markAllNotificationsRead,
   markNotificationRead,
-  NotificationListResponse
+  NotificationListResponse,
+  streamNotificationSnapshots
 } from "@/lib/api";
 
 type NotificationCenterProps = {
@@ -28,23 +29,85 @@ export function NotificationCenter({ accessToken }: NotificationCenterProps) {
   const [state, setState] = useState<NotificationState>({ status: "loading" });
   const [busyId, setBusyId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [streamStatus, setStreamStatus] = useState<"connected" | "connecting" | "offline">(
+    "connecting"
+  );
+  const latestNotificationIdRef = useRef<string | null>(null);
+  const unreadCountRef = useRef<number | null>(null);
 
   useEffect(() => {
     void loadNotifications();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accessToken]);
 
-  async function loadNotifications(offset = 0) {
-    setState({ status: "loading" });
-    setMessage(null);
+  useEffect(() => {
+    const abortController = new AbortController();
+
+    async function connectStream() {
+      setStreamStatus("connecting");
+      try {
+        await streamNotificationSnapshots(accessToken, {
+          onSnapshot: (snapshot) => {
+            setStreamStatus("connected");
+            const latestId = snapshot.latest_notification?.id ?? null;
+            const latestChanged = latestId !== latestNotificationIdRef.current;
+            const countChanged = snapshot.unread_count !== unreadCountRef.current;
+            latestNotificationIdRef.current = latestId;
+            unreadCountRef.current = snapshot.unread_count;
+
+            setState((current) => {
+              if (current.status !== "ready") {
+                return current;
+              }
+
+              return {
+                data: {
+                  ...current.data,
+                  unread_count: snapshot.unread_count
+                },
+                status: "ready"
+              };
+            });
+
+            if (latestChanged || countChanged) {
+              void loadNotifications(0, { silent: true });
+            }
+          },
+          signal: abortController.signal
+        });
+      } catch {
+        if (!abortController.signal.aborted) {
+          setStreamStatus("offline");
+        }
+      }
+    }
+
+    void connectStream();
+
+    return () => {
+      abortController.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accessToken]);
+
+  async function loadNotifications(offset = 0, options: { silent?: boolean } = {}) {
+    if (!options.silent) {
+      setState({ status: "loading" });
+      setMessage(null);
+    }
     try {
       const data = await listNotifications(accessToken, {
         limit: pageSize,
         offset,
         status: "UNREAD"
       });
+      latestNotificationIdRef.current = data.notifications[0]?.id ?? null;
+      unreadCountRef.current = data.unread_count;
       setState({ data, status: "ready" });
     } catch (caught) {
+      if (options.silent) {
+        return;
+      }
       setState({
         message:
           caught instanceof ApiError
@@ -110,15 +173,33 @@ export function NotificationCenter({ accessToken }: NotificationCenterProps) {
             </div>
           </div>
         </div>
-        <button
-          className="focus-ring inline-flex items-center justify-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-semibold text-primary disabled:cursor-not-allowed disabled:opacity-60"
-          disabled={busyId === "all" || state.status !== "ready" || state.data.unread_count === 0}
-          onClick={handleMarkAllRead}
-          type="button"
-        >
-          <CheckCheck aria-hidden="true" size={16} />
-          Mark all read
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <span
+            className={`inline-flex min-h-10 items-center gap-2 rounded-lg border px-3 text-sm font-semibold ${
+              streamStatus === "connected"
+                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                : "border-border bg-surface text-muted"
+            }`}
+          >
+            <Radio aria-hidden="true" size={16} />
+            {streamStatus === "connected"
+              ? "Live"
+              : streamStatus === "connecting"
+                ? "Connecting"
+                : "Offline"}
+          </span>
+          <button
+            className="focus-ring inline-flex items-center justify-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-semibold text-primary disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={
+              busyId === "all" || state.status !== "ready" || state.data.unread_count === 0
+            }
+            onClick={handleMarkAllRead}
+            type="button"
+          >
+            <CheckCheck aria-hidden="true" size={16} />
+            Mark all read
+          </button>
+        </div>
       </div>
 
       {message ? (

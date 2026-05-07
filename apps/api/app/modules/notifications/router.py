@@ -1,10 +1,14 @@
+import asyncio
+import json
 import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, sessionmaker
 
+from app.core.config import get_settings
 from app.core.database import get_db_session
 from app.core.security import utcnow
 from app.modules.auth.dependencies import get_current_user
@@ -17,6 +21,7 @@ from app.modules.notifications.schemas import (
 )
 
 router = APIRouter()
+NOTIFICATION_STREAM_MAX_POLL_SECONDS = 60
 
 
 def _serialize_notification(notification: Notification) -> NotificationResponse:
@@ -47,6 +52,38 @@ def _unread_count(db: Session, user: User) -> int:
         )
         or 0
     )
+
+
+def _stream_snapshot(db: Session, user_id: uuid.UUID) -> dict:
+    latest_notification = db.scalar(
+        select(Notification)
+        .options(joinedload(Notification.actor_user))
+        .where(Notification.user_id == user_id)
+        .order_by(Notification.created_at.desc())
+        .limit(1)
+    )
+    unread_count = (
+        db.scalar(
+            select(func.count())
+            .select_from(Notification)
+            .where(Notification.user_id == user_id, Notification.read_at.is_(None))
+        )
+        or 0
+    )
+
+    return {
+        "generated_at": utcnow().isoformat(),
+        "latest_notification": (
+            _serialize_notification(latest_notification).model_dump(mode="json")
+            if latest_notification
+            else None
+        ),
+        "unread_count": unread_count,
+    }
+
+
+def _sse_event(event_name: str, payload: dict) -> str:
+    return f"event: {event_name}\ndata: {json.dumps(payload, separators=(',', ':'))}\n\n"
 
 
 @router.get("", response_model=NotificationListResponse)
@@ -82,6 +119,43 @@ def list_my_notifications(
         limit=limit,
         offset=offset,
         has_more=offset + len(notifications) < total,
+    )
+
+
+@router.get("/stream")
+def stream_my_notifications(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+    poll_seconds: Annotated[
+        int | None, Query(ge=1, le=NOTIFICATION_STREAM_MAX_POLL_SECONDS)
+    ] = None,
+    max_events: Annotated[int | None, Query(ge=1, le=50)] = None,
+) -> StreamingResponse:
+    interval = poll_seconds or get_settings().notification_stream_poll_seconds
+    interval = min(max(1, interval), NOTIFICATION_STREAM_MAX_POLL_SECONDS)
+    stream_session_local = sessionmaker(autocommit=False, autoflush=False, bind=db.get_bind())
+    user_id = current_user.id
+
+    async def events():
+        emitted_events = 0
+        while True:
+            with stream_session_local() as stream_db:
+                yield _sse_event("snapshot", _stream_snapshot(stream_db, user_id))
+
+            emitted_events += 1
+            if max_events is not None and emitted_events >= max_events:
+                break
+
+            await asyncio.sleep(interval)
+
+    return StreamingResponse(
+        events(),
+        headers={
+            "Cache-Control": "no-store",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+        media_type="text/event-stream",
     )
 
 

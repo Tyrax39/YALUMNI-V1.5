@@ -89,11 +89,13 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
   unread/read APIs, dashboard inbox, and community workflow hooks for
   moderation escalations, reports, membership actions, invitations, and content
   removal/restoration.
+- Realtime notification delivery. Started with an authenticated SSE stream for
+  unread-count/latest-notification snapshots and dashboard live refresh.
 - Direct conversations.
 - Message list/send.
 - WebSocket events.
 - Blocks and read receipts.
-- Realtime notification delivery remains open.
+- Redis/WebSocket fanout and push/email delivery remain open.
 
 ## Phase 8: Events
 

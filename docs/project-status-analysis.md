@@ -8,6 +8,69 @@ The current Yalumni project is a useful Laravel 9 alumni management platform, bu
 
 The V1.5 implementation is active in `D:\YALUMNI-V1.5`. The new repository now contains a platform foundation with a FastAPI backend, Next.js web shell, Docker Compose, CI workflow, shared packages, copied YALUMNI logo assets, and documentation.
 
+## Current V1.5 Implementation Update: 2026-05-07 Realtime Notification Stream Slice
+
+Completed after the feed media attachments slice:
+
+- Added an authenticated notification server-sent events endpoint at `GET /api/v1/notifications/stream`.
+- Stream snapshots include the current unread count, latest notification metadata, and generation timestamp.
+- Added configurable stream polling through `NOTIFICATION_STREAM_POLL_SECONDS`.
+- Added dashboard live notification refresh through the existing authenticated backend proxy, with quiet unread-count updates and list refresh when snapshots change.
+- Added API coverage for unauthenticated stream denial, snapshot payloads, unread counts, latest notification metadata, and count refresh after marking notifications read.
+- Updated API, roadmap, and status docs for the realtime notification stream slice.
+
+Current plan position:
+
+- Phase 1 remains functionally complete for local foundation.
+- Phase 2 remains roughly 89% complete.
+- Phase 3 remains roughly 52% complete.
+- Phase 4 remains roughly 31% complete.
+- Phase 5 remains roughly 80% complete.
+- Phase 6 feed/moderation remains roughly 54% complete.
+- Phase 7 messaging/notifications is now roughly 18% complete: persisted notifications, community workflow hooks, dashboard inbox, read APIs, and authenticated SSE snapshots exist. Direct messaging, WebSocket/Redis fanout, read receipts, blocks, notification preferences, and email/push delivery remain open.
+- Overall 24-week MVP implementation is roughly 50% complete.
+
+Implemented now:
+
+- Native landing page.
+- Monorepo foundation, CI, docs, Docker Compose.
+- FastAPI health/status and request middleware.
+- Identity auth, refresh sessions, account recovery, email verification, protected platform owner, role-gated admin overview, session management, admin 2FA policy gate, secure cookie-backed web sessions, CSRF protection, and MVP-local rate limiting.
+- Local-only test-account seeding for role and directory QA.
+- Protected dashboard/admin route behavior.
+- Alumni current-user profile model/API/UI with profile photo upload/display/delete.
+- Shared local/S3 upload storage adapter for profile photos, verification evidence, and community feed media.
+- Program affiliation model/API/UI.
+- Verification request submission, member status history, admin queue, review actions, alumni-member role grant, and evidence upload/review.
+- Verified member directory search/profile detail with privacy-aware serializers and authenticated profile-photo display.
+- Dedicated admin audit log viewer backed by `security_events`.
+- Community discovery, creation, detail pages, active rosters, open/request joins, pending review, manager roles, role updates, non-owner member removal, owner/admin settings editing, invitations, ownership transfer, gated community posts, media attachments, comments, likes, reports, manager-visible report counts, per-community report queues, removed post/comment queues, restore actions, cross-community admin moderation queues, moderation review metadata, notification inbox, community workflow notification hooks, and live notification snapshot streaming.
+
+Main gaps now:
+
+- Notification realtime is SSE polling for MVP, not Redis/WebSocket fanout. Production still needs multi-worker pub/sub, reconnection/backoff policy review, notification preferences, batching, digest controls, and email/push delivery.
+- Community feed still needs pinned posts, mentions, richer formatting, edit history, audit export tooling, and global feed aggregation.
+- Feed media is storage-backed and moderated, but production media hardening still needs malware scanning, image processing, thumbnail generation, CDN/signed URL decisions, and retention policy.
+- Real email provider/templates are not wired, so invitation delivery is still local/dev-token based.
+- S3 adapter exists, but production still needs real bucket credentials and bucket policy validation.
+- Directory search is database-backed MVP search, not Meilisearch/OpenSearch.
+- Public profile pages, saved searches, recommendations, and richer dedicated search indexing are not implemented.
+- Test accounts are local/dev seed data only; there is no production-safe demo identity lifecycle yet.
+- Skills are stored as MVP JSON rather than normalized skill tables.
+- Audit data is viewable through `security_events`, but richer immutable compliance audit tables and export tooling are not implemented.
+- Redis-backed rate limiting, background jobs, direct messaging, events, initiatives, contributions, and elections are not wired yet.
+- Communities still need chapter analytics and richer notification preferences.
+
+Next possible implementation slices:
+
+- Production email delivery for account recovery, invitations, notification digests, and moderation escalations.
+- Notification preferences and digest/suppression controls.
+- Direct messaging foundation with conversations, participants, and message send/list APIs.
+- Feed post editing with audit history and moderator-visible revision records.
+- Pinned/featured posts and announcements for community owners/managers.
+- Global feed aggregation from community posts and future public posts.
+- Moderator audit exports and immutable compliance event tables.
+
 ## Current V1.5 Implementation Update: 2026-05-07 Feed Media Attachments Slice
 
 Completed after the notification center and community hooks slice:

@@ -1,3 +1,4 @@
+import json
 from collections.abc import Generator
 
 import pytest
@@ -99,6 +100,14 @@ def create_community(
     return response.json()
 
 
+def read_sse_snapshot(body: str) -> dict:
+    data_lines = [
+        line.removeprefix("data: ") for line in body.splitlines() if line.startswith("data: ")
+    ]
+    assert data_lines
+    return json.loads("".join(data_lines))
+
+
 def test_notification_center_tracks_community_workflow(client: TestClient) -> None:
     unauthenticated_response = client.get("/api/v1/notifications")
     assert unauthenticated_response.status_code == 401
@@ -178,6 +187,58 @@ def test_notification_center_tracks_community_workflow(client: TestClient) -> No
     member_unread_after_read_all = client.get("/api/v1/notifications", headers=member_headers)
     assert member_unread_after_read_all.status_code == 200
     assert member_unread_after_read_all.json()["total"] == 0
+
+
+def test_notification_stream_returns_live_unread_snapshot(client: TestClient) -> None:
+    unauthenticated_response = client.get("/api/v1/notifications/stream?max_events=1")
+    assert unauthenticated_response.status_code == 401
+
+    admin_headers = create_admin(client)
+    community = create_community(
+        client,
+        admin_headers,
+        name="Realtime Notification Working Group",
+        community_type="WORKING_GROUP",
+        join_policy="REQUEST",
+    )
+    member = register_user(client, "realtime.member@example.com")
+    member_headers = auth_headers(member["access_token"])
+
+    join_response = client.post(
+        f"/api/v1/communities/{community['id']}/join",
+        headers=member_headers,
+    )
+    assert join_response.status_code == 200
+
+    with client.stream(
+        "GET",
+        "/api/v1/notifications/stream?poll_seconds=1&max_events=1",
+        headers=admin_headers,
+    ) as stream_response:
+        assert stream_response.status_code == 200
+        assert stream_response.headers["content-type"].startswith("text/event-stream")
+        stream_body = stream_response.read().decode("utf-8")
+
+    assert "event: snapshot" in stream_body
+    snapshot = read_sse_snapshot(stream_body)
+    assert snapshot["unread_count"] == 1
+    assert snapshot["latest_notification"]["event_type"] == "community.join_requested"
+    assert snapshot["latest_notification"]["target_url"] == f"/communities/{community['id']}"
+
+    mark_all_response = client.post("/api/v1/notifications/read-all", headers=admin_headers)
+    assert mark_all_response.status_code == 200
+
+    with client.stream(
+        "GET",
+        "/api/v1/notifications/stream?poll_seconds=1&max_events=1",
+        headers=admin_headers,
+    ) as stream_response:
+        assert stream_response.status_code == 200
+        stream_body = stream_response.read().decode("utf-8")
+
+    snapshot_after_read = read_sse_snapshot(stream_body)
+    assert snapshot_after_read["unread_count"] == 0
+    assert snapshot_after_read["latest_notification"]["id"] == snapshot["latest_notification"]["id"]
 
 
 def test_community_admin_can_create_and_member_can_join_leave(client: TestClient) -> None:
