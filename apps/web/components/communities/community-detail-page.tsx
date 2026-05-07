@@ -7,6 +7,8 @@ import {
   ArrowLeft,
   Ban,
   Crown,
+  Flag,
+  Heart,
   LogIn,
   LogOut,
   MailPlus,
@@ -37,18 +39,25 @@ import {
   CommunityMember,
   CommunityMemberListResponse,
   CommunityPost,
+  CommunityPostComment,
+  CommunityPostCommentListResponse,
   CommunityPostListResponse,
   createCommunityInvitation,
+  createCommunityPostComment,
   createCommunityPost,
+  createCommunityPostReport,
   getCommunity,
   joinCommunity,
   leaveCommunity,
   listCommunityInvitations,
   listCommunityMembers,
+  listCommunityPostComments,
   listCommunityPosts,
   rejectCommunityMember,
   removeCommunityMember,
+  removeCommunityPostComment,
   removeCommunityPost,
+  toggleCommunityPostReaction,
   transferCommunityOwnership,
   updateCommunity,
   CommunityUpdatePayload,
@@ -76,6 +85,7 @@ const rosterPageSize = 12;
 const pendingPageSize = 6;
 const invitationPageSize = 6;
 const postPageSize = 5;
+const commentPageSize = 5;
 const communityTypeOptions = [
   "COUNTRY_CHAPTER",
   "CITY_CHAPTER",
@@ -149,6 +159,16 @@ function CommunityDetailContent({
   const [postBody, setPostBody] = useState("");
   const [isPostSubmitting, setIsPostSubmitting] = useState(false);
   const [busyPostId, setBusyPostId] = useState<string | null>(null);
+  const [busyPostAction, setBusyPostAction] = useState<
+    "comment" | "reaction" | "remove" | "report" | null
+  >(null);
+  const [busyCommentId, setBusyCommentId] = useState<string | null>(null);
+  const [expandedPostId, setExpandedPostId] = useState<string | null>(null);
+  const [commentsByPost, setCommentsByPost] = useState<
+    Record<string, CommunityPostCommentListResponse>
+  >({});
+  const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
+  const [reportedPostIds, setReportedPostIds] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     let isMounted = true;
@@ -223,6 +243,52 @@ function CommunityDetailContent({
     postOffset = state.status === "ready" ? state.posts?.offset ?? 0 : 0
   ) {
     setState(await loadDetail(activeOffset, pendingOffset, invitationOffset, postOffset));
+  }
+
+  async function refreshCurrentPage(
+    postOffset = state.status === "ready" ? state.posts?.offset ?? 0 : 0
+  ) {
+    if (state.status !== "ready") {
+      return;
+    }
+
+    await refresh(
+      state.members.offset,
+      state.pendingMembers?.offset ?? 0,
+      state.invitations?.offset ?? 0,
+      postOffset
+    );
+  }
+
+  async function loadComments(postId: string, offset = 0) {
+    const comments = await listCommunityPostComments(accessToken, communityId, postId, {
+      limit: commentPageSize,
+      offset,
+      status: "ACTIVE"
+    });
+    setCommentsByPost((current) => ({ ...current, [postId]: comments }));
+  }
+
+  function handleCommentInputChange(postId: string, value: string) {
+    setCommentInputs((current) => ({ ...current, [postId]: value }));
+  }
+
+  function updatePostInState(postId: string, updatePost: (post: CommunityPost) => CommunityPost) {
+    setState((current) => {
+      if (current.status !== "ready" || !current.posts) {
+        return current;
+      }
+
+      return {
+        ...current,
+        posts: {
+          ...current.posts,
+          posts: current.posts.posts.map((post) =>
+            post.id === postId ? updatePost(post) : post
+          )
+        }
+      };
+    });
   }
 
   function handleStartSettingsEdit(community: Community) {
@@ -354,14 +420,155 @@ function CommunityDetailContent({
     setMessage(null);
     setActionError(null);
     setBusyPostId(post.id);
+    setBusyPostAction("remove");
     try {
       await removeCommunityPost(accessToken, communityId, post.id);
       setMessage("Post removed from the active feed.");
+      if (expandedPostId === post.id) {
+        setExpandedPostId(null);
+      }
       await refresh();
     } catch (caught) {
       setActionError(caught instanceof ApiError ? caught.message : "Post could not be removed.");
     } finally {
       setBusyPostId(null);
+      setBusyPostAction(null);
+    }
+  }
+
+  async function handleToggleComments(post: CommunityPost) {
+    setMessage(null);
+    setActionError(null);
+    if (expandedPostId === post.id) {
+      setExpandedPostId(null);
+      return;
+    }
+
+    setExpandedPostId(post.id);
+    if (commentsByPost[post.id]) {
+      return;
+    }
+
+    setBusyPostId(post.id);
+    setBusyPostAction("comment");
+    try {
+      await loadComments(post.id, 0);
+    } catch (caught) {
+      setActionError(caught instanceof ApiError ? caught.message : "Comments could not be loaded.");
+    } finally {
+      setBusyPostId(null);
+      setBusyPostAction(null);
+    }
+  }
+
+  async function handleLoadCommentPage(postId: string, offset: number) {
+    setMessage(null);
+    setActionError(null);
+    setBusyPostId(postId);
+    setBusyPostAction("comment");
+    try {
+      await loadComments(postId, offset);
+    } catch (caught) {
+      setActionError(caught instanceof ApiError ? caught.message : "Comments could not be loaded.");
+    } finally {
+      setBusyPostId(null);
+      setBusyPostAction(null);
+    }
+  }
+
+  async function handleCreateComment(
+    event: FormEvent<HTMLFormElement>,
+    post: CommunityPost
+  ) {
+    event.preventDefault();
+    const body = commentInputs[post.id]?.trim() ?? "";
+    if (!body) {
+      setActionError("Comment body is required.");
+      return;
+    }
+
+    setMessage(null);
+    setActionError(null);
+    setBusyPostId(post.id);
+    setBusyPostAction("comment");
+    try {
+      await createCommunityPostComment(accessToken, communityId, post.id, { body });
+      setCommentInputs((current) => ({ ...current, [post.id]: "" }));
+      await Promise.all([loadComments(post.id, 0), refreshCurrentPage()]);
+      setMessage("Comment added.");
+    } catch (caught) {
+      setActionError(caught instanceof ApiError ? caught.message : "Comment could not be added.");
+    } finally {
+      setBusyPostId(null);
+      setBusyPostAction(null);
+    }
+  }
+
+  async function handleRemoveComment(post: CommunityPost, comment: CommunityPostComment) {
+    const existingComments = commentsByPost[post.id];
+    const nextOffset =
+      existingComments && existingComments.comments.length === 1 && existingComments.offset > 0
+        ? Math.max(0, existingComments.offset - existingComments.limit)
+        : existingComments?.offset ?? 0;
+
+    setMessage(null);
+    setActionError(null);
+    setBusyCommentId(comment.id);
+    try {
+      await removeCommunityPostComment(accessToken, communityId, post.id, comment.id);
+      await Promise.all([loadComments(post.id, nextOffset), refreshCurrentPage()]);
+      setMessage("Comment removed.");
+    } catch (caught) {
+      setActionError(caught instanceof ApiError ? caught.message : "Comment could not be removed.");
+    } finally {
+      setBusyCommentId(null);
+    }
+  }
+
+  async function handleToggleReaction(post: CommunityPost) {
+    setMessage(null);
+    setActionError(null);
+    setBusyPostId(post.id);
+    setBusyPostAction("reaction");
+    try {
+      const reaction = await toggleCommunityPostReaction(accessToken, communityId, post.id);
+      updatePostInState(post.id, (currentPost) => ({
+        ...currentPost,
+        reaction_count: reaction.reaction_count,
+        viewer_reacted: reaction.reacted
+      }));
+    } catch (caught) {
+      setActionError(caught instanceof ApiError ? caught.message : "Reaction could not be updated.");
+    } finally {
+      setBusyPostId(null);
+      setBusyPostAction(null);
+    }
+  }
+
+  async function handleReportPost(post: CommunityPost) {
+    if (reportedPostIds[post.id]) {
+      return;
+    }
+
+    setMessage(null);
+    setActionError(null);
+    setBusyPostId(post.id);
+    setBusyPostAction("report");
+    try {
+      await createCommunityPostReport(accessToken, communityId, post.id, { reason: "OTHER" });
+      setReportedPostIds((current) => ({ ...current, [post.id]: true }));
+      setMessage("Report sent to community moderators.");
+      await refreshCurrentPage();
+    } catch (caught) {
+      if (caught instanceof ApiError && caught.status === 409) {
+        setReportedPostIds((current) => ({ ...current, [post.id]: true }));
+        setMessage("This post has already been reported from your account.");
+      } else {
+        setActionError(caught instanceof ApiError ? caught.message : "Post could not be reported.");
+      }
+    } finally {
+      setBusyPostId(null);
+      setBusyPostAction(null);
     }
   }
 
@@ -673,37 +880,218 @@ function CommunityDetailContent({
                   No posts have been shared yet.
                 </p>
               ) : null}
-              {posts.posts.map((post) => (
-                <article className="rounded-lg border border-border bg-white p-4 shadow-soft" key={post.id}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <h3 className="font-display text-xl font-semibold text-ink">
-                        {post.author_display_name}
-                      </h3>
-                      <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-muted">
-                        {formatDate(post.created_at)}
-                      </p>
+              {posts.posts.map((post) => {
+                const comments = commentsByPost[post.id];
+                const commentsExpanded = expandedPostId === post.id;
+                const postIsBusy = busyPostId === post.id;
+                const canRemoveThisPost = canRemovePost(userRoles, community, post, userId);
+
+                return (
+                  <article className="rounded-lg border border-border bg-white p-4 shadow-soft" key={post.id}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="font-display text-xl font-semibold text-ink">
+                          {post.author_display_name}
+                        </h3>
+                        <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-muted">
+                          {formatDate(post.created_at)}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        {canManage && post.open_report_count > 0 ? (
+                          <span className="inline-flex min-h-8 items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 text-xs font-semibold text-amber-700">
+                            <Flag aria-hidden="true" className="h-4 w-4" />
+                            {post.open_report_count} open report
+                            {post.open_report_count === 1 ? "" : "s"}
+                          </span>
+                        ) : null}
+                        <MessageSquare aria-hidden="true" className="h-5 w-5 text-secondary" />
+                      </div>
                     </div>
-                    <MessageSquare aria-hidden="true" className="h-5 w-5 text-secondary" />
-                  </div>
-                  <p className="mt-4 whitespace-pre-line text-sm leading-6 text-ink">
-                    {post.body}
-                  </p>
-                  {canRemovePost(userRoles, community, post, userId) ? (
+                    <p className="mt-4 whitespace-pre-line text-sm leading-6 text-ink">
+                      {post.body}
+                    </p>
+
                     <div className="mt-4 flex flex-wrap gap-2">
                       <button
-                        className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-lg border border-red-200 px-3 text-sm font-semibold text-red-700 transition hover:border-red-300 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
-                        disabled={busyPostId === post.id}
-                        onClick={() => void handleRemovePost(post)}
+                        className={`focus-ring inline-flex min-h-10 items-center gap-2 rounded-lg border px-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                          post.viewer_reacted
+                            ? "border-primary bg-[#f0f7ff] text-primary"
+                            : "border-border text-ink hover:border-primary hover:text-primary"
+                        }`}
+                        disabled={postIsBusy && busyPostAction === "reaction"}
+                        onClick={() => void handleToggleReaction(post)}
                         type="button"
                       >
-                        <Trash2 aria-hidden="true" className="h-4 w-4" />
-                        {busyPostId === post.id ? "Removing..." : "Remove"}
+                        <Heart
+                          aria-hidden="true"
+                          className={`h-4 w-4 ${post.viewer_reacted ? "fill-primary text-primary" : ""}`}
+                        />
+                        {post.viewer_reacted ? "Liked" : "Like"} ({post.reaction_count})
                       </button>
+                      <button
+                        className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-lg border border-border px-3 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={postIsBusy && busyPostAction === "comment"}
+                        onClick={() => void handleToggleComments(post)}
+                        type="button"
+                      >
+                        <MessageSquare aria-hidden="true" className="h-4 w-4" />
+                        Comments ({post.comment_count})
+                      </button>
+                      <button
+                        className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-lg border border-border px-3 text-sm font-semibold text-ink transition hover:border-amber-300 hover:text-amber-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={
+                          (postIsBusy && busyPostAction === "report") || reportedPostIds[post.id]
+                        }
+                        onClick={() => void handleReportPost(post)}
+                        type="button"
+                      >
+                        <Flag aria-hidden="true" className="h-4 w-4" />
+                        {reportedPostIds[post.id]
+                          ? "Reported"
+                          : postIsBusy && busyPostAction === "report"
+                            ? "Reporting..."
+                            : "Report"}
+                      </button>
+                      {canRemoveThisPost ? (
+                        <button
+                          className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-lg border border-red-200 px-3 text-sm font-semibold text-red-700 transition hover:border-red-300 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                          disabled={postIsBusy && busyPostAction === "remove"}
+                          onClick={() => void handleRemovePost(post)}
+                          type="button"
+                        >
+                          <Trash2 aria-hidden="true" className="h-4 w-4" />
+                          {postIsBusy && busyPostAction === "remove" ? "Removing..." : "Remove"}
+                        </button>
+                      ) : null}
                     </div>
-                  ) : null}
-                </article>
-              ))}
+
+                    {commentsExpanded ? (
+                      <div className="mt-4 border-t border-border pt-4">
+                        <form
+                          className="grid gap-3"
+                          onSubmit={(event) => void handleCreateComment(event, post)}
+                        >
+                          <label className="sr-only" htmlFor={`comment-${post.id}`}>
+                            Add comment
+                          </label>
+                          <textarea
+                            className="focus-ring min-h-20 w-full rounded-lg border border-border bg-surface px-3 py-3 text-sm leading-6 text-ink"
+                            id={`comment-${post.id}`}
+                            maxLength={1000}
+                            onChange={(event) =>
+                              handleCommentInputChange(post.id, event.target.value)
+                            }
+                            placeholder="Add a comment"
+                            required
+                            value={commentInputs[post.id] ?? ""}
+                          />
+                          <div className="flex justify-end">
+                            <button
+                              className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white transition hover:bg-[#003d7d] disabled:cursor-not-allowed disabled:opacity-60"
+                              disabled={postIsBusy && busyPostAction === "comment"}
+                              type="submit"
+                            >
+                              <Send aria-hidden="true" className="h-4 w-4" />
+                              {postIsBusy && busyPostAction === "comment" ? "Posting..." : "Comment"}
+                            </button>
+                          </div>
+                        </form>
+
+                        {postIsBusy && busyPostAction === "comment" && !comments ? (
+                          <p className="mt-4 text-sm font-semibold text-muted">
+                            Loading comments...
+                          </p>
+                        ) : null}
+
+                        {comments ? (
+                          <div className="mt-4">
+                            {comments.comments.length === 0 ? (
+                              <p className="border-y border-border bg-surface px-3 py-4 text-sm font-semibold text-muted">
+                                No comments yet.
+                              </p>
+                            ) : null}
+                            {comments.comments.map((comment) => (
+                              <article
+                                className="border-t border-border py-3 first:border-t-0"
+                                key={comment.id}
+                              >
+                                <div className="flex items-start justify-between gap-3">
+                                  <div>
+                                    <h4 className="text-sm font-semibold text-ink">
+                                      {comment.author_display_name}
+                                    </h4>
+                                    <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-muted">
+                                      {formatDate(comment.created_at)}
+                                    </p>
+                                  </div>
+                                  {canRemoveComment(userRoles, community, comment, userId) ? (
+                                    <button
+                                      className="focus-ring inline-flex min-h-9 items-center gap-2 rounded-lg border border-red-200 px-3 text-xs font-semibold text-red-700 transition hover:border-red-300 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                      disabled={busyCommentId === comment.id}
+                                      onClick={() => void handleRemoveComment(post, comment)}
+                                      type="button"
+                                    >
+                                      <Trash2 aria-hidden="true" className="h-3.5 w-3.5" />
+                                      {busyCommentId === comment.id ? "Removing..." : "Remove"}
+                                    </button>
+                                  ) : null}
+                                </div>
+                                <p className="mt-2 whitespace-pre-line text-sm leading-6 text-ink">
+                                  {comment.body}
+                                </p>
+                              </article>
+                            ))}
+
+                            {comments.total > 0 ? (
+                              <div className="mt-3 flex flex-col gap-3 border-y border-border bg-surface px-3 py-3 text-sm font-semibold text-muted sm:flex-row sm:items-center sm:justify-between">
+                                <p>
+                                  Showing {comments.offset + 1}-
+                                  {comments.offset + comments.comments.length} of {comments.total}
+                                </p>
+                                <div className="flex gap-2">
+                                  <button
+                                    className="focus-ring min-h-9 rounded-lg border border-border px-3 text-xs font-semibold text-ink transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                                    disabled={
+                                      comments.offset === 0 ||
+                                      (postIsBusy && busyPostAction === "comment")
+                                    }
+                                    onClick={() =>
+                                      void handleLoadCommentPage(
+                                        post.id,
+                                        Math.max(0, comments.offset - comments.limit)
+                                      )
+                                    }
+                                    type="button"
+                                  >
+                                    Previous
+                                  </button>
+                                  <button
+                                    className="focus-ring min-h-9 rounded-lg border border-border px-3 text-xs font-semibold text-ink transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                                    disabled={
+                                      !comments.has_more ||
+                                      (postIsBusy && busyPostAction === "comment")
+                                    }
+                                    onClick={() =>
+                                      void handleLoadCommentPage(
+                                        post.id,
+                                        comments.offset + comments.limit
+                                      )
+                                    }
+                                    type="button"
+                                  >
+                                    Next
+                                  </button>
+                                </div>
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </article>
+                );
+              })}
             </div>
             <div className="mt-5 flex flex-col gap-3 border-y border-border bg-white px-4 py-3 text-sm font-semibold text-muted sm:flex-row sm:items-center sm:justify-between">
               <p>
@@ -1464,6 +1852,20 @@ function canRemovePost(
 ): boolean {
   return (
     post.author_user_id === userId ||
+    community.membership_role === "OWNER" ||
+    community.membership_role === "MANAGER" ||
+    userRoles.some((role) => adminRoles.includes(role))
+  );
+}
+
+function canRemoveComment(
+  userRoles: string[],
+  community: Community,
+  comment: CommunityPostComment,
+  userId: string
+): boolean {
+  return (
+    comment.author_user_id === userId ||
     community.membership_role === "OWNER" ||
     community.membership_role === "MANAGER" ||
     userRoles.some((role) => adminRoles.includes(role))

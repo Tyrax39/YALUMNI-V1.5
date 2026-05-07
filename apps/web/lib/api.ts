@@ -330,12 +330,66 @@ export type CommunityPost = {
   status: string;
   removed_by_user_id: string | null;
   removed_at: string | null;
+  comment_count: number;
+  reaction_count: number;
+  viewer_reacted: boolean;
+  open_report_count: number;
   created_at: string;
   updated_at: string;
 };
 
 export type CommunityPostListResponse = {
   posts: CommunityPost[];
+  total: number;
+  limit: number;
+  offset: number;
+  has_more: boolean;
+};
+
+export type CommunityPostComment = {
+  id: string;
+  post_id: string;
+  author_user_id: string | null;
+  author_display_name: string;
+  body: string;
+  status: string;
+  removed_by_user_id: string | null;
+  removed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CommunityPostCommentListResponse = {
+  comments: CommunityPostComment[];
+  total: number;
+  limit: number;
+  offset: number;
+  has_more: boolean;
+};
+
+export type CommunityPostReactionResponse = {
+  post_id: string;
+  reaction_type: string;
+  reacted: boolean;
+  reaction_count: number;
+};
+
+export type CommunityPostReport = {
+  id: string;
+  post_id: string;
+  reporter_user_id: string | null;
+  reporter_display_name: string;
+  reason: string;
+  note: string | null;
+  status: string;
+  resolved_by_user_id: string | null;
+  resolved_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CommunityPostReportListResponse = {
+  reports: CommunityPostReport[];
   total: number;
   limit: number;
   offset: number;
@@ -368,6 +422,19 @@ export type CommunityOwnershipTransferPayload = {
 
 export type CommunityPostCreatePayload = {
   body: string;
+};
+
+export type CommunityPostCommentCreatePayload = {
+  body: string;
+};
+
+export type CommunityPostReactionPayload = {
+  reaction_type?: "LIKE";
+};
+
+export type CommunityPostReportCreatePayload = {
+  note?: string | null;
+  reason?: "HARASSMENT" | "MISINFORMATION" | "OTHER" | "SPAM" | "UNRELATED";
 };
 
 export const adminRoles: readonly string[] = [
@@ -1082,6 +1149,136 @@ export function removeCommunityPost(
 ): Promise<CommunityPost> {
   return protectedApiFetch<CommunityPost>(
     `/api/v1/communities/${encodeURIComponent(communityId)}/posts/${encodeURIComponent(postId)}/remove`,
+    {
+      headers: authHeaders(accessToken),
+      method: "POST"
+    }
+  );
+}
+
+export function listCommunityPostComments(
+  accessToken: string,
+  communityId: string,
+  postId: string,
+  params: { limit?: number; offset?: number; status?: string } = {}
+): Promise<CommunityPostCommentListResponse> {
+  const searchParams = new URLSearchParams();
+  if (params.status) {
+    searchParams.set("status", params.status);
+  }
+  if (params.limit) {
+    searchParams.set("limit", String(params.limit));
+  }
+  if (params.offset) {
+    searchParams.set("offset", String(params.offset));
+  }
+
+  const query = searchParams.toString();
+  return protectedApiFetch<CommunityPostCommentListResponse>(
+    `/api/v1/communities/${encodeURIComponent(communityId)}/posts/${encodeURIComponent(postId)}/comments${query ? `?${query}` : ""}`,
+    {
+      headers: authHeaders(accessToken)
+    }
+  );
+}
+
+export function createCommunityPostComment(
+  accessToken: string,
+  communityId: string,
+  postId: string,
+  payload: CommunityPostCommentCreatePayload
+): Promise<CommunityPostComment> {
+  return protectedApiFetch<CommunityPostComment>(
+    `/api/v1/communities/${encodeURIComponent(communityId)}/posts/${encodeURIComponent(postId)}/comments`,
+    {
+      body: JSON.stringify(payload),
+      headers: authHeaders(accessToken),
+      method: "POST"
+    }
+  );
+}
+
+export function removeCommunityPostComment(
+  accessToken: string,
+  communityId: string,
+  postId: string,
+  commentId: string
+): Promise<CommunityPostComment> {
+  return protectedApiFetch<CommunityPostComment>(
+    `/api/v1/communities/${encodeURIComponent(communityId)}/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}/remove`,
+    {
+      headers: authHeaders(accessToken),
+      method: "POST"
+    }
+  );
+}
+
+export function toggleCommunityPostReaction(
+  accessToken: string,
+  communityId: string,
+  postId: string,
+  payload: CommunityPostReactionPayload = { reaction_type: "LIKE" }
+): Promise<CommunityPostReactionResponse> {
+  return protectedApiFetch<CommunityPostReactionResponse>(
+    `/api/v1/communities/${encodeURIComponent(communityId)}/posts/${encodeURIComponent(postId)}/reaction`,
+    {
+      body: JSON.stringify(payload),
+      headers: authHeaders(accessToken),
+      method: "POST"
+    }
+  );
+}
+
+export function createCommunityPostReport(
+  accessToken: string,
+  communityId: string,
+  postId: string,
+  payload: CommunityPostReportCreatePayload
+): Promise<CommunityPostReport> {
+  return protectedApiFetch<CommunityPostReport>(
+    `/api/v1/communities/${encodeURIComponent(communityId)}/posts/${encodeURIComponent(postId)}/reports`,
+    {
+      body: JSON.stringify(payload),
+      headers: authHeaders(accessToken),
+      method: "POST"
+    }
+  );
+}
+
+export function listCommunityPostReports(
+  accessToken: string,
+  communityId: string,
+  postId: string,
+  params: { limit?: number; offset?: number; status?: string } = {}
+): Promise<CommunityPostReportListResponse> {
+  const searchParams = new URLSearchParams();
+  if (params.status) {
+    searchParams.set("status", params.status);
+  }
+  if (params.limit) {
+    searchParams.set("limit", String(params.limit));
+  }
+  if (params.offset) {
+    searchParams.set("offset", String(params.offset));
+  }
+
+  const query = searchParams.toString();
+  return protectedApiFetch<CommunityPostReportListResponse>(
+    `/api/v1/communities/${encodeURIComponent(communityId)}/posts/${encodeURIComponent(postId)}/reports${query ? `?${query}` : ""}`,
+    {
+      headers: authHeaders(accessToken)
+    }
+  );
+}
+
+export function resolveCommunityPostReport(
+  accessToken: string,
+  communityId: string,
+  postId: string,
+  reportId: string
+): Promise<CommunityPostReport> {
+  return protectedApiFetch<CommunityPostReport>(
+    `/api/v1/communities/${encodeURIComponent(communityId)}/posts/${encodeURIComponent(postId)}/reports/${encodeURIComponent(reportId)}/resolve`,
     {
       headers: authHeaders(accessToken),
       method: "POST"

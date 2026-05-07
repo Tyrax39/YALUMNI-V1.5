@@ -564,6 +564,182 @@ def test_community_posts_are_private_and_moderated(client: TestClient) -> None:
     assert active_posts.json()["posts"][0]["id"] == owner_post["id"]
 
 
+def test_community_post_comments_reactions_and_reports(client: TestClient) -> None:
+    admin_headers = create_admin(client)
+    community = create_community(
+        client,
+        admin_headers,
+        name="Uganda Feed Engagement Chapter",
+        country="Uganda",
+    )
+
+    member_user = register_user(client, "engagement.member@example.com")
+    manager_user = register_user(client, "engagement.manager@example.com")
+    outsider_user = register_user(client, "engagement.outsider@example.com")
+    member_headers = auth_headers(member_user["access_token"])
+    manager_headers = auth_headers(manager_user["access_token"])
+    outsider_headers = auth_headers(outsider_user["access_token"])
+
+    for headers in (member_headers, manager_headers):
+        join_response = client.post(f"/api/v1/communities/{community['id']}/join", headers=headers)
+        assert join_response.status_code == 200
+
+    roster_response = client.get(
+        f"/api/v1/communities/{community['id']}/members",
+        headers=admin_headers,
+    )
+    members_by_email = {member["email"]: member for member in roster_response.json()["members"]}
+    manager_promotion = client.patch(
+        f"/api/v1/communities/{community['id']}/members/"
+        f"{members_by_email['engagement.manager@example.com']['id']}",
+        headers=admin_headers,
+        json={"role": "MANAGER"},
+    )
+    assert manager_promotion.status_code == 200
+
+    post_response = client.post(
+        f"/api/v1/communities/{community['id']}/posts",
+        headers=member_headers,
+        json={"body": "Engagement post."},
+    )
+    assert post_response.status_code == 201
+    post = post_response.json()
+    assert post["comment_count"] == 0
+    assert post["reaction_count"] == 0
+    assert post["viewer_reacted"] is False
+    assert post["open_report_count"] == 0
+
+    outsider_comment = client.post(
+        f"/api/v1/communities/{community['id']}/posts/{post['id']}/comments",
+        headers=outsider_headers,
+        json={"body": "Not allowed."},
+    )
+    assert outsider_comment.status_code == 403
+
+    comment_response = client.post(
+        f"/api/v1/communities/{community['id']}/posts/{post['id']}/comments",
+        headers=member_headers,
+        json={"body": "  First comment.  "},
+    )
+    assert comment_response.status_code == 201
+    comment = comment_response.json()
+    assert comment["body"] == "First comment."
+    assert comment["author_display_name"] == "Engagement Member"
+
+    comments_response = client.get(
+        f"/api/v1/communities/{community['id']}/posts/{post['id']}/comments",
+        headers=manager_headers,
+    )
+    assert comments_response.status_code == 200
+    assert comments_response.json()["total"] == 1
+
+    like_response = client.post(
+        f"/api/v1/communities/{community['id']}/posts/{post['id']}/reaction",
+        headers=manager_headers,
+        json={"reaction_type": "like"},
+    )
+    assert like_response.status_code == 200
+    assert like_response.json()["reacted"] is True
+    assert like_response.json()["reaction_count"] == 1
+
+    invalid_reaction = client.post(
+        f"/api/v1/communities/{community['id']}/posts/{post['id']}/reaction",
+        headers=manager_headers,
+        json={"reaction_type": "WOW"},
+    )
+    assert invalid_reaction.status_code == 400
+
+    manager_posts = client.get(
+        f"/api/v1/communities/{community['id']}/posts",
+        headers=manager_headers,
+    )
+    assert manager_posts.status_code == 200
+    manager_post = manager_posts.json()["posts"][0]
+    assert manager_post["comment_count"] == 1
+    assert manager_post["reaction_count"] == 1
+    assert manager_post["viewer_reacted"] is True
+
+    unlike_response = client.post(
+        f"/api/v1/communities/{community['id']}/posts/{post['id']}/reaction",
+        headers=manager_headers,
+        json={"reaction_type": "LIKE"},
+    )
+    assert unlike_response.status_code == 200
+    assert unlike_response.json()["reacted"] is False
+    assert unlike_response.json()["reaction_count"] == 0
+
+    report_response = client.post(
+        f"/api/v1/communities/{community['id']}/posts/{post['id']}/reports",
+        headers=manager_headers,
+        json={"reason": "spam", "note": "Looks off."},
+    )
+    assert report_response.status_code == 201
+    report = report_response.json()
+    assert report["reason"] == "SPAM"
+    assert report["status"] == "OPEN"
+    assert report["reporter_display_name"] == "Engagement Manager"
+
+    duplicate_report = client.post(
+        f"/api/v1/communities/{community['id']}/posts/{post['id']}/reports",
+        headers=manager_headers,
+        json={"reason": "SPAM"},
+    )
+    assert duplicate_report.status_code == 409
+
+    member_reports_denied = client.get(
+        f"/api/v1/communities/{community['id']}/posts/{post['id']}/reports",
+        headers=member_headers,
+    )
+    assert member_reports_denied.status_code == 403
+
+    manager_reports = client.get(
+        f"/api/v1/communities/{community['id']}/posts/{post['id']}/reports",
+        headers=manager_headers,
+    )
+    assert manager_reports.status_code == 200
+    assert manager_reports.json()["total"] == 1
+    manager_post_after_report = client.get(
+        f"/api/v1/communities/{community['id']}/posts",
+        headers=manager_headers,
+    )
+    assert manager_post_after_report.json()["posts"][0]["open_report_count"] == 1
+    member_post_after_report = client.get(
+        f"/api/v1/communities/{community['id']}/posts",
+        headers=member_headers,
+    )
+    assert member_post_after_report.json()["posts"][0]["open_report_count"] == 0
+
+    resolve_response = client.post(
+        f"/api/v1/communities/{community['id']}/posts/{post['id']}/reports/{report['id']}/resolve",
+        headers=manager_headers,
+    )
+    assert resolve_response.status_code == 200
+    assert resolve_response.json()["status"] == "RESOLVED"
+    duplicate_resolve = client.post(
+        f"/api/v1/communities/{community['id']}/posts/{post['id']}/reports/{report['id']}/resolve",
+        headers=manager_headers,
+    )
+    assert duplicate_resolve.status_code == 409
+
+    manager_remove_comment = client.post(
+        f"/api/v1/communities/{community['id']}/posts/{post['id']}/comments/{comment['id']}/remove",
+        headers=manager_headers,
+    )
+    assert manager_remove_comment.status_code == 200
+    assert manager_remove_comment.json()["status"] == "REMOVED"
+    member_removed_comments_denied = client.get(
+        f"/api/v1/communities/{community['id']}/posts/{post['id']}/comments?status=REMOVED",
+        headers=member_headers,
+    )
+    assert member_removed_comments_denied.status_code == 403
+    manager_removed_comments = client.get(
+        f"/api/v1/communities/{community['id']}/posts/{post['id']}/comments?status=REMOVED",
+        headers=manager_headers,
+    )
+    assert manager_removed_comments.status_code == 200
+    assert manager_removed_comments.json()["total"] == 1
+
+
 def test_community_manager_can_review_pending_join_requests(client: TestClient) -> None:
     admin_headers = create_admin(client)
     community = create_community(

@@ -18,6 +18,9 @@ from app.modules.communities.models import (
     CommunityInvitation,
     CommunityMembership,
     CommunityPost,
+    CommunityPostComment,
+    CommunityPostReaction,
+    CommunityPostReport,
 )
 from app.modules.communities.schemas import (
     CommunityCreate,
@@ -30,8 +33,16 @@ from app.modules.communities.schemas import (
     CommunityMemberResponse,
     CommunityMemberRoleUpdate,
     CommunityOwnershipTransfer,
+    CommunityPostCommentCreate,
+    CommunityPostCommentListResponse,
+    CommunityPostCommentResponse,
     CommunityPostCreate,
     CommunityPostListResponse,
+    CommunityPostReactionCreate,
+    CommunityPostReactionResponse,
+    CommunityPostReportCreate,
+    CommunityPostReportListResponse,
+    CommunityPostReportResponse,
     CommunityPostResponse,
     CommunityResponse,
     CommunityUpdate,
@@ -53,6 +64,9 @@ COMMUNITY_MEMBER_ROLES = {"MEMBER", "MANAGER"}
 COMMUNITY_INVITATION_STATUSES = {"ACCEPTED", "CANCELED", "EXPIRED", "PENDING"}
 COMMUNITY_INVITATION_DAYS = 14
 COMMUNITY_POST_STATUSES = {"ACTIVE", "REMOVED"}
+COMMUNITY_REACTION_TYPES = {"LIKE"}
+COMMUNITY_REPORT_REASONS = {"HARASSMENT", "MISINFORMATION", "OTHER", "SPAM", "UNRELATED"}
+COMMUNITY_REPORT_STATUSES = {"OPEN", "RESOLVED"}
 
 
 def _request_context(request: Request) -> tuple[str | None, str | None]:
@@ -226,7 +240,53 @@ def _serialize_member(membership: CommunityMembership) -> CommunityMemberRespons
     )
 
 
-def _serialize_post(post: CommunityPost) -> CommunityPostResponse:
+def _serialize_post(
+    db: Session,
+    post: CommunityPost,
+    current_user: User,
+    community: Community,
+) -> CommunityPostResponse:
+    comment_count = (
+        db.scalar(
+            select(func.count())
+            .select_from(CommunityPostComment)
+            .where(
+                CommunityPostComment.post_id == post.id,
+                CommunityPostComment.status == "ACTIVE",
+            )
+        )
+        or 0
+    )
+    reaction_count = (
+        db.scalar(
+            select(func.count())
+            .select_from(CommunityPostReaction)
+            .where(CommunityPostReaction.post_id == post.id)
+        )
+        or 0
+    )
+    viewer_reacted = bool(
+        db.scalar(
+            select(CommunityPostReaction.id).where(
+                CommunityPostReaction.post_id == post.id,
+                CommunityPostReaction.user_id == current_user.id,
+            )
+        )
+    )
+    open_report_count = 0
+    if _can_manage_community(current_user, community):
+        open_report_count = (
+            db.scalar(
+                select(func.count())
+                .select_from(CommunityPostReport)
+                .where(
+                    CommunityPostReport.post_id == post.id,
+                    CommunityPostReport.status == "OPEN",
+                )
+            )
+            or 0
+        )
+
     return CommunityPostResponse(
         id=post.id,
         community_id=post.community_id,
@@ -236,8 +296,43 @@ def _serialize_post(post: CommunityPost) -> CommunityPostResponse:
         status=post.status,
         removed_by_user_id=post.removed_by_user_id,
         removed_at=post.removed_at,
+        comment_count=comment_count,
+        reaction_count=reaction_count,
+        viewer_reacted=viewer_reacted,
+        open_report_count=open_report_count,
         created_at=post.created_at,
         updated_at=post.updated_at,
+    )
+
+
+def _serialize_comment(comment: CommunityPostComment) -> CommunityPostCommentResponse:
+    return CommunityPostCommentResponse(
+        id=comment.id,
+        post_id=comment.post_id,
+        author_user_id=comment.author_user_id,
+        author_display_name=comment.author.display_name if comment.author else "Removed user",
+        body=comment.body,
+        status=comment.status,
+        removed_by_user_id=comment.removed_by_user_id,
+        removed_at=comment.removed_at,
+        created_at=comment.created_at,
+        updated_at=comment.updated_at,
+    )
+
+
+def _serialize_report(report: CommunityPostReport) -> CommunityPostReportResponse:
+    return CommunityPostReportResponse(
+        id=report.id,
+        post_id=report.post_id,
+        reporter_user_id=report.reporter_user_id,
+        reporter_display_name=report.reporter.display_name if report.reporter else "Removed user",
+        reason=report.reason,
+        note=report.note,
+        status=report.status,
+        resolved_by_user_id=report.resolved_by_user_id,
+        resolved_at=report.resolved_at,
+        created_at=report.created_at,
+        updated_at=report.updated_at,
     )
 
 
@@ -600,7 +695,7 @@ def list_community_posts(
         query.order_by(CommunityPost.created_at.desc()).offset(offset).limit(limit)
     ).all()
     return CommunityPostListResponse(
-        posts=[_serialize_post(post) for post in posts],
+        posts=[_serialize_post(db, post, current_user, community) for post in posts],
         total=total,
         limit=limit,
         offset=offset,
@@ -644,7 +739,7 @@ def create_community_post(
     db.commit()
     db.refresh(post)
     post = _get_post_or_404(db, community, post.id)
-    return _serialize_post(post)
+    return _serialize_post(db, post, current_user, community)
 
 
 @router.post("/{community_id}/posts/{post_id}/remove", response_model=CommunityPostResponse)
@@ -691,7 +786,376 @@ def remove_community_post(
     )
     db.commit()
     db.refresh(post)
-    return _serialize_post(post)
+    return _serialize_post(db, post, current_user, community)
+
+
+@router.get(
+    "/{community_id}/posts/{post_id}/comments",
+    response_model=CommunityPostCommentListResponse,
+)
+def list_community_post_comments(
+    community_id: uuid.UUID,
+    post_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+    status_filter: Annotated[
+        str,
+        Query(alias="status", pattern="^(ACTIVE|REMOVED|ALL)$"),
+    ] = "ACTIVE",
+    limit: Annotated[int, Query(ge=1, le=30)] = 10,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> CommunityPostCommentListResponse:
+    community = _get_community_or_404(db, community_id)
+    if not _can_access_community_content(current_user, community):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Community comments are available to active members",
+        )
+
+    post = _get_post_or_404(db, community, post_id)
+    normalized_status = status_filter.strip().upper()
+    if (normalized_status != "ACTIVE" or post.status != "ACTIVE") and not _can_manage_community(
+        current_user, community
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to view moderated comments",
+        )
+
+    query = (
+        select(CommunityPostComment)
+        .options(joinedload(CommunityPostComment.author))
+        .where(CommunityPostComment.post_id == post.id)
+    )
+    if normalized_status != "ALL":
+        query = query.where(CommunityPostComment.status == normalized_status)
+
+    total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+    comments = db.scalars(
+        query.order_by(CommunityPostComment.created_at.asc()).offset(offset).limit(limit)
+    ).all()
+    return CommunityPostCommentListResponse(
+        comments=[_serialize_comment(comment) for comment in comments],
+        total=total,
+        limit=limit,
+        offset=offset,
+        has_more=offset + len(comments) < total,
+    )
+
+
+@router.post(
+    "/{community_id}/posts/{post_id}/comments",
+    response_model=CommunityPostCommentResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_community_post_comment(
+    community_id: uuid.UUID,
+    post_id: uuid.UUID,
+    payload: CommunityPostCommentCreate,
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> CommunityPostCommentResponse:
+    community = _get_community_or_404(db, community_id)
+    if not _can_access_community_content(current_user, community):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Community comments are available to active members",
+        )
+
+    post = _get_post_or_404(db, community, post_id)
+    _ensure_post_active(post)
+    comment = CommunityPostComment(
+        post_id=post.id,
+        author_user_id=current_user.id,
+        body=payload.body,
+        status="ACTIVE",
+    )
+    db.add(comment)
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "community.post_comment_created",
+        metadata={"community_id": str(community.id), "post_id": str(post.id)},
+    )
+    db.commit()
+    db.refresh(comment)
+    comment = _get_comment_or_404(db, post, comment.id)
+    return _serialize_comment(comment)
+
+
+@router.post(
+    "/{community_id}/posts/{post_id}/comments/{comment_id}/remove",
+    response_model=CommunityPostCommentResponse,
+)
+def remove_community_post_comment(
+    community_id: uuid.UUID,
+    post_id: uuid.UUID,
+    comment_id: uuid.UUID,
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> CommunityPostCommentResponse:
+    community = _get_community_or_404(db, community_id)
+    if not _can_access_community_content(current_user, community):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Community comments are available to active members",
+        )
+
+    post = _get_post_or_404(db, community, post_id)
+    comment = _get_comment_or_404(db, post, comment_id)
+    actor_is_author = comment.author_user_id == current_user.id
+    if not actor_is_author and not _can_manage_community(current_user, community):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to remove this comment",
+        )
+    if comment.status != "ACTIVE":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only active comments can be removed",
+        )
+
+    comment.status = "REMOVED"
+    comment.removed_by_user_id = current_user.id
+    comment.removed_at = utcnow()
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "community.post_comment_removed",
+        metadata={
+            "comment_id": str(comment.id),
+            "community_id": str(community.id),
+            "post_id": str(post.id),
+        },
+    )
+    db.commit()
+    db.refresh(comment)
+    return _serialize_comment(comment)
+
+
+@router.post(
+    "/{community_id}/posts/{post_id}/reaction",
+    response_model=CommunityPostReactionResponse,
+)
+def toggle_community_post_reaction(
+    community_id: uuid.UUID,
+    post_id: uuid.UUID,
+    payload: CommunityPostReactionCreate,
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> CommunityPostReactionResponse:
+    community = _get_community_or_404(db, community_id)
+    if not _can_access_community_content(current_user, community):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Community reactions are available to active members",
+        )
+    if payload.reaction_type not in COMMUNITY_REACTION_TYPES:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid reaction")
+
+    post = _get_post_or_404(db, community, post_id)
+    _ensure_post_active(post)
+    existing_reaction = db.scalar(
+        select(CommunityPostReaction).where(
+            CommunityPostReaction.post_id == post.id,
+            CommunityPostReaction.user_id == current_user.id,
+        )
+    )
+    reacted = existing_reaction is None
+    if existing_reaction:
+        db.delete(existing_reaction)
+        event_type = "community.post_reaction_removed"
+    else:
+        db.add(
+            CommunityPostReaction(
+                post_id=post.id,
+                user_id=current_user.id,
+                reaction_type=payload.reaction_type,
+            )
+        )
+        event_type = "community.post_reaction_added"
+
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        event_type,
+        metadata={"community_id": str(community.id), "post_id": str(post.id)},
+    )
+    db.commit()
+    reaction_count = (
+        db.scalar(
+            select(func.count())
+            .select_from(CommunityPostReaction)
+            .where(CommunityPostReaction.post_id == post.id)
+        )
+        or 0
+    )
+    return CommunityPostReactionResponse(
+        post_id=post.id,
+        reaction_type=payload.reaction_type,
+        reacted=reacted,
+        reaction_count=reaction_count,
+    )
+
+
+@router.post(
+    "/{community_id}/posts/{post_id}/reports",
+    response_model=CommunityPostReportResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_community_post_report(
+    community_id: uuid.UUID,
+    post_id: uuid.UUID,
+    payload: CommunityPostReportCreate,
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> CommunityPostReportResponse:
+    community = _get_community_or_404(db, community_id)
+    if not _can_access_community_content(current_user, community):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Community reports are available to active members",
+        )
+    if payload.reason not in COMMUNITY_REPORT_REASONS:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid report reason")
+
+    post = _get_post_or_404(db, community, post_id)
+    _ensure_post_active(post)
+    existing_open_report = db.scalar(
+        select(CommunityPostReport.id).where(
+            CommunityPostReport.post_id == post.id,
+            CommunityPostReport.reporter_user_id == current_user.id,
+            CommunityPostReport.status == "OPEN",
+        )
+    )
+    if existing_open_report:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="You already have an open report for this post",
+        )
+
+    report = CommunityPostReport(
+        post_id=post.id,
+        reporter_user_id=current_user.id,
+        reason=payload.reason,
+        note=payload.note,
+        status="OPEN",
+    )
+    db.add(report)
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "community.post_report_created",
+        metadata={
+            "community_id": str(community.id),
+            "post_id": str(post.id),
+            "reason": report.reason,
+        },
+    )
+    db.commit()
+    db.refresh(report)
+    report = _get_report_or_404(db, post, report.id)
+    return _serialize_report(report)
+
+
+@router.get(
+    "/{community_id}/posts/{post_id}/reports",
+    response_model=CommunityPostReportListResponse,
+)
+def list_community_post_reports(
+    community_id: uuid.UUID,
+    post_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+    status_filter: Annotated[
+        str,
+        Query(alias="status", pattern="^(OPEN|RESOLVED|ALL)$"),
+    ] = "OPEN",
+    limit: Annotated[int, Query(ge=1, le=30)] = 10,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> CommunityPostReportListResponse:
+    community = _get_community_or_404(db, community_id)
+    if not _can_manage_community(current_user, community):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to review post reports",
+        )
+
+    post = _get_post_or_404(db, community, post_id)
+    normalized_status = status_filter.strip().upper()
+    query = (
+        select(CommunityPostReport)
+        .options(joinedload(CommunityPostReport.reporter))
+        .where(CommunityPostReport.post_id == post.id)
+    )
+    if normalized_status != "ALL":
+        query = query.where(CommunityPostReport.status == normalized_status)
+
+    total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+    reports = db.scalars(
+        query.order_by(CommunityPostReport.created_at.desc()).offset(offset).limit(limit)
+    ).all()
+    return CommunityPostReportListResponse(
+        reports=[_serialize_report(report) for report in reports],
+        total=total,
+        limit=limit,
+        offset=offset,
+        has_more=offset + len(reports) < total,
+    )
+
+
+@router.post(
+    "/{community_id}/posts/{post_id}/reports/{report_id}/resolve",
+    response_model=CommunityPostReportResponse,
+)
+def resolve_community_post_report(
+    community_id: uuid.UUID,
+    post_id: uuid.UUID,
+    report_id: uuid.UUID,
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> CommunityPostReportResponse:
+    community = _get_community_or_404(db, community_id)
+    if not _can_manage_community(current_user, community):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to review post reports",
+        )
+
+    post = _get_post_or_404(db, community, post_id)
+    report = _get_report_or_404(db, post, report_id)
+    if report.status != "OPEN":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only open reports can be resolved",
+        )
+
+    report.status = "RESOLVED"
+    report.resolved_by_user_id = current_user.id
+    report.resolved_at = utcnow()
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "community.post_report_resolved",
+        metadata={
+            "community_id": str(community.id),
+            "post_id": str(post.id),
+            "report_id": str(report.id),
+        },
+    )
+    db.commit()
+    db.refresh(report)
+    return _serialize_report(report)
 
 
 @router.get("/{community_id}/members", response_model=CommunityMemberListResponse)
@@ -903,6 +1367,52 @@ def _get_post_or_404(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
 
     return post
+
+
+def _ensure_post_active(post: CommunityPost) -> None:
+    if post.status != "ACTIVE":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only active posts can be used for this action",
+        )
+
+
+def _get_comment_or_404(
+    db: Session,
+    post: CommunityPost,
+    comment_id: uuid.UUID,
+) -> CommunityPostComment:
+    comment = db.scalar(
+        select(CommunityPostComment)
+        .options(joinedload(CommunityPostComment.author))
+        .where(
+            CommunityPostComment.id == comment_id,
+            CommunityPostComment.post_id == post.id,
+        )
+    )
+    if comment is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Comment not found")
+
+    return comment
+
+
+def _get_report_or_404(
+    db: Session,
+    post: CommunityPost,
+    report_id: uuid.UUID,
+) -> CommunityPostReport:
+    report = db.scalar(
+        select(CommunityPostReport)
+        .options(joinedload(CommunityPostReport.reporter))
+        .where(
+            CommunityPostReport.id == report_id,
+            CommunityPostReport.post_id == post.id,
+        )
+    )
+    if report is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
+
+    return report
 
 
 def _active_pending_invitation_for_email(

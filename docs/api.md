@@ -60,6 +60,17 @@ POST /api/v1/communities/{community_id}/invitations/{invitation_id}/cancel
 POST /api/v1/communities/invitations/accept
 POST /api/v1/communities/{community_id}/join
 POST /api/v1/communities/{community_id}/leave
+POST /api/v1/communities/{community_id}/ownership-transfer
+GET  /api/v1/communities/{community_id}/posts
+POST /api/v1/communities/{community_id}/posts
+POST /api/v1/communities/{community_id}/posts/{post_id}/remove
+GET  /api/v1/communities/{community_id}/posts/{post_id}/comments
+POST /api/v1/communities/{community_id}/posts/{post_id}/comments
+POST /api/v1/communities/{community_id}/posts/{post_id}/comments/{comment_id}/remove
+POST /api/v1/communities/{community_id}/posts/{post_id}/reaction
+POST /api/v1/communities/{community_id}/posts/{post_id}/reports
+GET  /api/v1/communities/{community_id}/posts/{post_id}/reports
+POST /api/v1/communities/{community_id}/posts/{post_id}/reports/{report_id}/resolve
 ```
 
 Evidence uploads accept PDF, JPEG, PNG, and WebP files. Uploading evidence to a
@@ -159,6 +170,20 @@ Private community posts support:
 - Non-members and pending members cannot read or create community posts.
 - Removed posts are hidden from ordinary members; managers/owners/admins can
   query removed or all posts for moderation review.
+- Post list responses include active `comment_count`, `reaction_count`,
+  current-user `viewer_reacted`, and manager-only `open_report_count`.
+- `GET /api/v1/communities/{community_id}/posts/{post_id}/comments` lists
+  active comments for members. Removed/all comment review is restricted to
+  managers, owners, and admins.
+- `POST /api/v1/communities/{community_id}/posts/{post_id}/comments` creates
+  member comments, and
+  `POST /api/v1/communities/{community_id}/posts/{post_id}/comments/{comment_id}/remove`
+  lets comment authors or moderators remove them.
+- `POST /api/v1/communities/{community_id}/posts/{post_id}/reaction` toggles a
+  current-user `LIKE` reaction and returns the updated reaction count.
+- `POST /api/v1/communities/{community_id}/posts/{post_id}/reports` creates
+  one open report per reporter/post. Report listing and resolving are
+  restricted to community managers/owners and platform admins.
 
 ## Phase 3: Alumni
 
@@ -179,14 +204,21 @@ POST   /api/v1/communities/{community_id}/ownership-transfer  # implemented
 GET    /api/v1/communities/{community_id}/posts                 # implemented
 POST   /api/v1/communities/{community_id}/posts                 # implemented
 POST   /api/v1/communities/{community_id}/posts/{post_id}/remove # implemented
+GET    /api/v1/communities/{community_id}/posts/{post_id}/comments # implemented
+POST   /api/v1/communities/{community_id}/posts/{post_id}/comments # implemented
+POST   /api/v1/communities/{community_id}/posts/{post_id}/comments/{comment_id}/remove # implemented
+POST   /api/v1/communities/{community_id}/posts/{post_id}/reaction # implemented
+POST   /api/v1/communities/{community_id}/posts/{post_id}/reports # implemented
+GET    /api/v1/communities/{community_id}/posts/{post_id}/reports # implemented
+POST   /api/v1/communities/{community_id}/posts/{post_id}/reports/{report_id}/resolve # implemented
 GET    /api/v1/feed
 POST   /api/v1/posts
 GET    /api/v1/posts/{post_id}
 PATCH  /api/v1/posts/{post_id}
 DELETE /api/v1/posts/{post_id}
-POST   /api/v1/posts/{post_id}/comments
-POST   /api/v1/posts/{post_id}/reactions
-POST   /api/v1/posts/{post_id}/reports
+POST   /api/v1/posts/{post_id}/comments                         # global feed planned
+POST   /api/v1/posts/{post_id}/reactions                        # global feed planned
+POST   /api/v1/posts/{post_id}/reports                          # global feed planned
 ```
 
 ## Phase 6: Messaging

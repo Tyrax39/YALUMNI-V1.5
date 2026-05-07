@@ -136,3 +136,95 @@ class CommunityPost(Base, TimestampMixin):
     community: Mapped[Community] = relationship(back_populates="posts")
     author: Mapped[User | None] = relationship(foreign_keys=[author_user_id])
     removed_by_user: Mapped[User | None] = relationship(foreign_keys=[removed_by_user_id])
+    comments: Mapped[list["CommunityPostComment"]] = relationship(
+        back_populates="post",
+        cascade="all, delete-orphan",
+        order_by="CommunityPostComment.created_at.asc()",
+    )
+    reactions: Mapped[list["CommunityPostReaction"]] = relationship(
+        back_populates="post",
+        cascade="all, delete-orphan",
+    )
+    reports: Mapped[list["CommunityPostReport"]] = relationship(
+        back_populates="post",
+        cascade="all, delete-orphan",
+        order_by="CommunityPostReport.created_at.desc()",
+    )
+
+
+class CommunityPostComment(Base, TimestampMixin):
+    __tablename__ = "community_post_comments"
+    __table_args__ = (
+        Index("ix_community_post_comments_post_status_created", "post_id", "status", "created_at"),
+        Index("ix_community_post_comments_author_created", "author_user_id", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    post_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("community_posts.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    author_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+    )
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(40), default="ACTIVE", nullable=False)
+    removed_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+    )
+    removed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    post: Mapped[CommunityPost] = relationship(back_populates="comments")
+    author: Mapped[User | None] = relationship(foreign_keys=[author_user_id])
+    removed_by_user: Mapped[User | None] = relationship(foreign_keys=[removed_by_user_id])
+
+
+class CommunityPostReaction(Base, TimestampMixin):
+    __tablename__ = "community_post_reactions"
+    __table_args__ = (
+        UniqueConstraint("post_id", "user_id", name="uq_community_post_reaction_user"),
+        Index("ix_community_post_reactions_post_type", "post_id", "reaction_type"),
+        Index("ix_community_post_reactions_user", "user_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    post_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("community_posts.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    reaction_type: Mapped[str] = mapped_column(String(40), default="LIKE", nullable=False)
+
+    post: Mapped[CommunityPost] = relationship(back_populates="reactions")
+    user: Mapped[User] = relationship()
+
+
+class CommunityPostReport(Base, TimestampMixin):
+    __tablename__ = "community_post_reports"
+    __table_args__ = (
+        Index("ix_community_post_reports_post_status", "post_id", "status"),
+        Index("ix_community_post_reports_reporter_status", "reporter_user_id", "status"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    post_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("community_posts.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    reporter_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+    )
+    reason: Mapped[str] = mapped_column(String(80), nullable=False)
+    note: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(40), default="OPEN", nullable=False)
+    resolved_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+    )
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    post: Mapped[CommunityPost] = relationship(back_populates="reports")
+    reporter: Mapped[User | None] = relationship(foreign_keys=[reporter_user_id])
+    resolved_by_user: Mapped[User | None] = relationship(foreign_keys=[resolved_by_user_id])

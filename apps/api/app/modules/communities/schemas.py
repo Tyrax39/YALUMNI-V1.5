@@ -132,6 +132,46 @@ class CommunityPostCreate(BaseModel):
         return value
 
 
+class CommunityPostCommentCreate(BaseModel):
+    body: str = Field(min_length=1, max_length=1000)
+
+    @field_validator("body")
+    @classmethod
+    def normalize_body(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Comment body is required")
+        return value
+
+
+class CommunityPostReactionCreate(BaseModel):
+    reaction_type: str = Field(default="LIKE", max_length=40)
+
+    @field_validator("reaction_type")
+    @classmethod
+    def normalize_reaction_type(cls, value: str) -> str:
+        return value.strip().upper().replace(" ", "_")
+
+
+class CommunityPostReportCreate(BaseModel):
+    reason: str = Field(default="OTHER", max_length=80)
+    note: str | None = Field(default=None, max_length=1000)
+
+    @field_validator("reason")
+    @classmethod
+    def normalize_reason(cls, value: str) -> str:
+        value = value.strip().upper().replace(" ", "_")
+        return value or "OTHER"
+
+    @field_validator("note")
+    @classmethod
+    def normalize_note(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        return value or None
+
+
 class CommunityInvitationCreate(BaseModel):
     email: str = Field(max_length=320, pattern=EMAIL_PATTERN)
     role: str = Field(default="MEMBER", max_length=40)
@@ -202,12 +242,66 @@ class CommunityPostResponse(BaseModel):
     status: str
     removed_by_user_id: uuid.UUID | None
     removed_at: datetime | None
+    comment_count: int
+    reaction_count: int
+    viewer_reacted: bool
+    open_report_count: int
     created_at: datetime
     updated_at: datetime
 
 
 class CommunityPostListResponse(BaseModel):
     posts: list[CommunityPostResponse]
+    total: int
+    limit: int
+    offset: int
+    has_more: bool
+
+
+class CommunityPostCommentResponse(BaseModel):
+    id: uuid.UUID
+    post_id: uuid.UUID
+    author_user_id: uuid.UUID | None
+    author_display_name: str
+    body: str
+    status: str
+    removed_by_user_id: uuid.UUID | None
+    removed_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class CommunityPostCommentListResponse(BaseModel):
+    comments: list[CommunityPostCommentResponse]
+    total: int
+    limit: int
+    offset: int
+    has_more: bool
+
+
+class CommunityPostReactionResponse(BaseModel):
+    post_id: uuid.UUID
+    reaction_type: str
+    reacted: bool
+    reaction_count: int
+
+
+class CommunityPostReportResponse(BaseModel):
+    id: uuid.UUID
+    post_id: uuid.UUID
+    reporter_user_id: uuid.UUID | None
+    reporter_display_name: str
+    reason: str
+    note: str | None
+    status: str
+    resolved_by_user_id: uuid.UUID | None
+    resolved_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class CommunityPostReportListResponse(BaseModel):
+    reports: list[CommunityPostReportResponse]
     total: int
     limit: int
     offset: int

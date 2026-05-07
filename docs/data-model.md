@@ -38,15 +38,18 @@
 - `community_memberships` - implemented with active, pending, left, rejected statuses plus owner/member/manager roles.
 - `community_invitations` - implemented with invited email, invited role, pending/accepted/canceled/expired status, hashed token, expiry, inviter, and acceptance metadata.
 - `community_posts` - implemented with active/removed status, author, body, remover, and removal timestamp for private community feeds.
+- `community_post_comments` - implemented with active/removed status, post-scoped author comments, remover, and removal timestamp.
+- `community_post_reactions` - implemented with one current `LIKE` reaction per user/post.
+- `community_post_reports` - implemented with reporter, reason, optional note, open/resolved status, resolver, and resolution timestamp.
 - `community_settings` - folded into `communities` for MVP settings editing.
 
 ### Feed
 
-- `posts` - global/cross-community feed still planned; current MVP feed work starts with `community_posts`.
+- `posts` - global/cross-community feed still planned; current MVP feed work starts with `community_posts` plus scoped comments/reactions/reports.
 - `post_media`
-- `comments`
-- `reactions`
-- `post_reports`
+- `comments` - global feed equivalent still planned.
+- `reactions` - global feed equivalent still planned.
+- `post_reports` - global/admin moderation equivalent still planned.
 - `post_topics`
 
 ### Messaging
