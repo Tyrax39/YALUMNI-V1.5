@@ -324,12 +324,39 @@ class CommunityPostReportQueueResponse(BaseModel):
     has_more: bool
 
 
+class CommunityAdminPostReportQueueItem(CommunityPostReportQueueItem):
+    community_id: uuid.UUID
+    community_name: str
+    community_slug: str
+
+
+class CommunityAdminPostReportQueueResponse(BaseModel):
+    reports: list[CommunityAdminPostReportQueueItem]
+    total: int
+    limit: int
+    offset: int
+    has_more: bool
+
+
 class CommunityRemovedPostQueueItem(CommunityPostResponse):
     removed_by_display_name: str
 
 
 class CommunityRemovedPostQueueResponse(BaseModel):
     posts: list[CommunityRemovedPostQueueItem]
+    total: int
+    limit: int
+    offset: int
+    has_more: bool
+
+
+class CommunityAdminRemovedPostQueueItem(CommunityRemovedPostQueueItem):
+    community_name: str
+    community_slug: str
+
+
+class CommunityAdminRemovedPostQueueResponse(BaseModel):
+    posts: list[CommunityAdminRemovedPostQueueItem]
     total: int
     limit: int
     offset: int
@@ -346,6 +373,20 @@ class CommunityRemovedCommentQueueItem(CommunityPostCommentResponse):
 
 class CommunityRemovedCommentQueueResponse(BaseModel):
     comments: list[CommunityRemovedCommentQueueItem]
+    total: int
+    limit: int
+    offset: int
+    has_more: bool
+
+
+class CommunityAdminRemovedCommentQueueItem(CommunityRemovedCommentQueueItem):
+    community_id: uuid.UUID
+    community_name: str
+    community_slug: str
+
+
+class CommunityAdminRemovedCommentQueueResponse(BaseModel):
+    comments: list[CommunityAdminRemovedCommentQueueItem]
     total: int
     limit: int
     offset: int

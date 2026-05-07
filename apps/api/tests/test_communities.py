@@ -884,6 +884,175 @@ def test_community_post_comments_reactions_and_reports(client: TestClient) -> No
     assert duplicate_restore_comment.status_code == 409
 
 
+def test_admin_can_review_cross_community_moderation_queues(client: TestClient) -> None:
+    admin_headers = create_admin(client, "global.moderator@example.com")
+    member_user = register_user(client, "global.member@example.com")
+    member_headers = auth_headers(member_user["access_token"])
+
+    report_community = create_community(
+        client,
+        admin_headers,
+        name="Rwanda Report Review Chapter",
+        country="Rwanda",
+    )
+    removed_community = create_community(
+        client,
+        admin_headers,
+        name="Senegal Removed Content Chapter",
+        country="Senegal",
+    )
+
+    for community in (report_community, removed_community):
+        join_response = client.post(
+            f"/api/v1/communities/{community['id']}/join",
+            headers=member_headers,
+        )
+        assert join_response.status_code == 200
+
+    reported_post_response = client.post(
+        f"/api/v1/communities/{report_community['id']}/posts",
+        headers=admin_headers,
+        json={"body": "Global report queue seed post."},
+    )
+    assert reported_post_response.status_code == 201
+    reported_post = reported_post_response.json()
+    report_response = client.post(
+        f"/api/v1/communities/{report_community['id']}/posts/{reported_post['id']}/reports",
+        headers=member_headers,
+        json={"reason": "spam", "note": "Needs platform review."},
+    )
+    assert report_response.status_code == 201
+    report = report_response.json()
+
+    removed_post_response = client.post(
+        f"/api/v1/communities/{removed_community['id']}/posts",
+        headers=member_headers,
+        json={"body": "Global removed post queue seed."},
+    )
+    assert removed_post_response.status_code == 201
+    removed_post = removed_post_response.json()
+    remove_post_response = client.post(
+        f"/api/v1/communities/{removed_community['id']}/posts/{removed_post['id']}/remove",
+        headers=admin_headers,
+    )
+    assert remove_post_response.status_code == 200
+
+    comment_post_response = client.post(
+        f"/api/v1/communities/{removed_community['id']}/posts",
+        headers=admin_headers,
+        json={"body": "Global removed comment parent post."},
+    )
+    assert comment_post_response.status_code == 201
+    comment_post = comment_post_response.json()
+    comment_response = client.post(
+        f"/api/v1/communities/{removed_community['id']}/posts/{comment_post['id']}/comments",
+        headers=member_headers,
+        json={"body": "Global removed comment queue seed."},
+    )
+    assert comment_response.status_code == 201
+    removed_comment = comment_response.json()
+    remove_comment_response = client.post(
+        f"/api/v1/communities/{removed_community['id']}/posts/{comment_post['id']}/comments/"
+        f"{removed_comment['id']}/remove",
+        headers=admin_headers,
+    )
+    assert remove_comment_response.status_code == 200
+
+    member_global_queue_denied = client.get(
+        "/api/v1/communities/admin/moderation/post-reports",
+        headers=member_headers,
+    )
+    assert member_global_queue_denied.status_code == 403
+
+    report_queue = client.get(
+        "/api/v1/communities/admin/moderation/post-reports?reason=SPAM",
+        headers=admin_headers,
+    )
+    assert report_queue.status_code == 200
+    report_payload = report_queue.json()
+    assert report_payload["total"] == 1
+    assert report_payload["reports"][0]["id"] == report["id"]
+    assert report_payload["reports"][0]["community_id"] == report_community["id"]
+    assert report_payload["reports"][0]["community_name"] == "Rwanda Report Review Chapter"
+    assert report_payload["reports"][0]["post_body"] == "Global report queue seed post."
+
+    filtered_report_queue = client.get(
+        f"/api/v1/communities/admin/moderation/post-reports"
+        f"?community_id={removed_community['id']}",
+        headers=admin_headers,
+    )
+    assert filtered_report_queue.status_code == 200
+    assert filtered_report_queue.json()["total"] == 0
+
+    removed_post_queue = client.get(
+        "/api/v1/communities/admin/moderation/removed-posts?q=Senegal",
+        headers=admin_headers,
+    )
+    assert removed_post_queue.status_code == 200
+    removed_post_payload = removed_post_queue.json()
+    assert removed_post_payload["total"] == 1
+    assert removed_post_payload["posts"][0]["id"] == removed_post["id"]
+    assert removed_post_payload["posts"][0]["community_id"] == removed_community["id"]
+    assert removed_post_payload["posts"][0]["community_name"] == "Senegal Removed Content Chapter"
+    assert removed_post_payload["posts"][0]["removed_by_display_name"] == "Global Moderator"
+
+    removed_comment_queue = client.get(
+        "/api/v1/communities/admin/moderation/removed-comments?q=comment",
+        headers=admin_headers,
+    )
+    assert removed_comment_queue.status_code == 200
+    removed_comment_payload = removed_comment_queue.json()
+    assert removed_comment_payload["total"] == 1
+    assert removed_comment_payload["comments"][0]["id"] == removed_comment["id"]
+    assert removed_comment_payload["comments"][0]["community_id"] == removed_community["id"]
+    assert removed_comment_payload["comments"][0]["community_name"] == (
+        "Senegal Removed Content Chapter"
+    )
+    assert removed_comment_payload["comments"][0]["post_body"] == (
+        "Global removed comment parent post."
+    )
+
+    resolve_report = client.post(
+        f"/api/v1/communities/{report_community['id']}/posts/{reported_post['id']}/reports/"
+        f"{report['id']}/resolve",
+        headers=admin_headers,
+    )
+    assert resolve_report.status_code == 200
+    restore_removed_post = client.post(
+        f"/api/v1/communities/{removed_community['id']}/posts/{removed_post['id']}/restore",
+        headers=admin_headers,
+    )
+    assert restore_removed_post.status_code == 200
+    restore_removed_comment = client.post(
+        f"/api/v1/communities/{removed_community['id']}/posts/{comment_post['id']}/comments/"
+        f"{removed_comment['id']}/restore",
+        headers=admin_headers,
+    )
+    assert restore_removed_comment.status_code == 200
+
+    assert (
+        client.get(
+            "/api/v1/communities/admin/moderation/post-reports",
+            headers=admin_headers,
+        ).json()["total"]
+        == 0
+    )
+    assert (
+        client.get(
+            "/api/v1/communities/admin/moderation/removed-posts",
+            headers=admin_headers,
+        ).json()["total"]
+        == 0
+    )
+    assert (
+        client.get(
+            "/api/v1/communities/admin/moderation/removed-comments",
+            headers=admin_headers,
+        ).json()["total"]
+        == 0
+    )
+
+
 def test_community_manager_can_review_pending_join_requests(client: TestClient) -> None:
     admin_headers = create_admin(client)
     community = create_community(

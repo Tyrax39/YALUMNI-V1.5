@@ -23,6 +23,12 @@ from app.modules.communities.models import (
     CommunityPostReport,
 )
 from app.modules.communities.schemas import (
+    CommunityAdminPostReportQueueItem,
+    CommunityAdminPostReportQueueResponse,
+    CommunityAdminRemovedCommentQueueItem,
+    CommunityAdminRemovedCommentQueueResponse,
+    CommunityAdminRemovedPostQueueItem,
+    CommunityAdminRemovedPostQueueResponse,
     CommunityCreate,
     CommunityInvitationAccept,
     CommunityInvitationCreate,
@@ -364,6 +370,19 @@ def _serialize_report_queue_item(report: CommunityPostReport) -> CommunityPostRe
     )
 
 
+def _serialize_admin_report_queue_item(
+    report: CommunityPostReport,
+) -> CommunityAdminPostReportQueueItem:
+    post = report.post
+    community = post.community
+    return CommunityAdminPostReportQueueItem(
+        **_serialize_report_queue_item(report).model_dump(),
+        community_id=post.community_id,
+        community_name=community.name,
+        community_slug=community.slug,
+    )
+
+
 def _serialize_removed_post_queue_item(
     db: Session,
     post: CommunityPost,
@@ -375,6 +394,19 @@ def _serialize_removed_post_queue_item(
         removed_by_display_name=(
             post.removed_by_user.display_name if post.removed_by_user else "Removed user"
         ),
+    )
+
+
+def _serialize_admin_removed_post_queue_item(
+    db: Session,
+    post: CommunityPost,
+    current_user: User,
+) -> CommunityAdminRemovedPostQueueItem:
+    community = post.community
+    return CommunityAdminRemovedPostQueueItem(
+        **_serialize_removed_post_queue_item(db, post, current_user, community).model_dump(),
+        community_name=community.name,
+        community_slug=community.slug,
     )
 
 
@@ -391,6 +423,19 @@ def _serialize_removed_comment_queue_item(
         post_body=post.body,
         post_status=post.status,
         post_created_at=post.created_at,
+    )
+
+
+def _serialize_admin_removed_comment_queue_item(
+    comment: CommunityPostComment,
+) -> CommunityAdminRemovedCommentQueueItem:
+    post = comment.post
+    community = post.community
+    return CommunityAdminRemovedCommentQueueItem(
+        **_serialize_removed_comment_queue_item(comment).model_dump(),
+        community_id=post.community_id,
+        community_name=community.name,
+        community_slug=community.slug,
     )
 
 
@@ -1301,6 +1346,175 @@ def resolve_community_post_report(
     db.commit()
     db.refresh(report)
     return _serialize_report(report)
+
+
+@router.get(
+    "/admin/moderation/post-reports",
+    response_model=CommunityAdminPostReportQueueResponse,
+)
+def list_admin_community_post_report_queue(
+    current_user: Annotated[User, Depends(community_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+    status_filter: Annotated[
+        str,
+        Query(alias="status", pattern="^(OPEN|RESOLVED|ALL)$"),
+    ] = "OPEN",
+    community_id_filter: Annotated[uuid.UUID | None, Query(alias="community_id")] = None,
+    reason: Annotated[
+        str | None,
+        Query(pattern="^(HARASSMENT|MISINFORMATION|OTHER|SPAM|UNRELATED)$"),
+    ] = None,
+    q: Annotated[str | None, Query(max_length=120)] = None,
+    limit: Annotated[int, Query(ge=1, le=50)] = 10,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> CommunityAdminPostReportQueueResponse:
+    _ = current_user
+    normalized_status = status_filter.strip().upper()
+    query = (
+        select(CommunityPostReport)
+        .join(CommunityPost, CommunityPostReport.post_id == CommunityPost.id)
+        .join(Community, CommunityPost.community_id == Community.id)
+        .options(
+            joinedload(CommunityPostReport.reporter),
+            joinedload(CommunityPostReport.post).joinedload(CommunityPost.author),
+            joinedload(CommunityPostReport.post).joinedload(CommunityPost.community),
+        )
+    )
+    if normalized_status != "ALL":
+        query = query.where(CommunityPostReport.status == normalized_status)
+    if community_id_filter:
+        query = query.where(Community.id == community_id_filter)
+    if reason:
+        query = query.where(CommunityPostReport.reason == reason.strip().upper())
+    if q:
+        search_term = f"%{q.strip()}%"
+        query = query.where(
+            or_(
+                Community.name.ilike(search_term),
+                Community.slug.ilike(search_term),
+                CommunityPost.body.ilike(search_term),
+                CommunityPostReport.note.ilike(search_term),
+            )
+        )
+
+    total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+    reports = db.scalars(
+        query.order_by(CommunityPostReport.created_at.desc()).offset(offset).limit(limit)
+    ).all()
+    return CommunityAdminPostReportQueueResponse(
+        reports=[_serialize_admin_report_queue_item(report) for report in reports],
+        total=total,
+        limit=limit,
+        offset=offset,
+        has_more=offset + len(reports) < total,
+    )
+
+
+@router.get(
+    "/admin/moderation/removed-posts",
+    response_model=CommunityAdminRemovedPostQueueResponse,
+)
+def list_admin_community_removed_posts(
+    current_user: Annotated[User, Depends(community_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+    community_id_filter: Annotated[uuid.UUID | None, Query(alias="community_id")] = None,
+    q: Annotated[str | None, Query(max_length=120)] = None,
+    limit: Annotated[int, Query(ge=1, le=50)] = 10,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> CommunityAdminRemovedPostQueueResponse:
+    query = (
+        select(CommunityPost)
+        .join(Community, CommunityPost.community_id == Community.id)
+        .options(
+            joinedload(CommunityPost.author),
+            joinedload(CommunityPost.community),
+            joinedload(CommunityPost.removed_by_user),
+        )
+        .where(CommunityPost.status == "REMOVED")
+    )
+    if community_id_filter:
+        query = query.where(Community.id == community_id_filter)
+    if q:
+        search_term = f"%{q.strip()}%"
+        query = query.where(
+            or_(
+                Community.name.ilike(search_term),
+                Community.slug.ilike(search_term),
+                CommunityPost.body.ilike(search_term),
+            )
+        )
+
+    total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+    posts = db.scalars(
+        query.order_by(CommunityPost.removed_at.desc(), CommunityPost.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+    ).all()
+    return CommunityAdminRemovedPostQueueResponse(
+        posts=[
+            _serialize_admin_removed_post_queue_item(db, post, current_user) for post in posts
+        ],
+        total=total,
+        limit=limit,
+        offset=offset,
+        has_more=offset + len(posts) < total,
+    )
+
+
+@router.get(
+    "/admin/moderation/removed-comments",
+    response_model=CommunityAdminRemovedCommentQueueResponse,
+)
+def list_admin_community_removed_comments(
+    current_user: Annotated[User, Depends(community_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+    community_id_filter: Annotated[uuid.UUID | None, Query(alias="community_id")] = None,
+    q: Annotated[str | None, Query(max_length=120)] = None,
+    limit: Annotated[int, Query(ge=1, le=50)] = 10,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> CommunityAdminRemovedCommentQueueResponse:
+    _ = current_user
+    query = (
+        select(CommunityPostComment)
+        .join(CommunityPost, CommunityPostComment.post_id == CommunityPost.id)
+        .join(Community, CommunityPost.community_id == Community.id)
+        .options(
+            joinedload(CommunityPostComment.author),
+            joinedload(CommunityPostComment.removed_by_user),
+            joinedload(CommunityPostComment.post).joinedload(CommunityPost.author),
+            joinedload(CommunityPostComment.post).joinedload(CommunityPost.community),
+        )
+        .where(CommunityPostComment.status == "REMOVED")
+    )
+    if community_id_filter:
+        query = query.where(Community.id == community_id_filter)
+    if q:
+        search_term = f"%{q.strip()}%"
+        query = query.where(
+            or_(
+                Community.name.ilike(search_term),
+                Community.slug.ilike(search_term),
+                CommunityPost.body.ilike(search_term),
+                CommunityPostComment.body.ilike(search_term),
+            )
+        )
+
+    total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+    comments = db.scalars(
+        query.order_by(
+            CommunityPostComment.removed_at.desc(),
+            CommunityPostComment.created_at.desc(),
+        )
+        .offset(offset)
+        .limit(limit)
+    ).all()
+    return CommunityAdminRemovedCommentQueueResponse(
+        comments=[_serialize_admin_removed_comment_queue_item(comment) for comment in comments],
+        total=total,
+        limit=limit,
+        offset=offset,
+        has_more=offset + len(comments) < total,
+    )
 
 
 @router.get(

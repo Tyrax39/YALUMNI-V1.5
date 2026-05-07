@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 
+import { AdminModerationConsole } from "@/components/admin/admin-moderation-console";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import {
   AdminOverview,
@@ -21,7 +22,7 @@ import {
 
 const upcomingQueues = [
   ["User management", "Assign roles, review account status, and audit sensitive changes."],
-  ["Moderation", "Resolve reports for posts, profiles, messages, events, and communities."],
+  ["Trust escalations", "Add notes, severity levels, and cross-surface escalation workflows."],
   ["Governance", "Prepare contribution, election, and audit workflows for later phases."]
 ] as const;
 
@@ -132,6 +133,7 @@ function AdminOverviewPanel({ accessToken, email }: { accessToken: string; email
           </div>
 
           <VerificationQueuePanel accessToken={accessToken} />
+          <AdminModerationConsole accessToken={accessToken} />
           <AuditLogPanel accessToken={accessToken} />
 
           <div className="mt-10 grid gap-4 md:grid-cols-3">

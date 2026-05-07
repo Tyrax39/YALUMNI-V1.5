@@ -76,6 +76,9 @@ POST /api/v1/communities/{community_id}/posts/{post_id}/reports/{report_id}/reso
 GET  /api/v1/communities/{community_id}/post-reports
 GET  /api/v1/communities/{community_id}/removed-posts
 GET  /api/v1/communities/{community_id}/removed-comments
+GET  /api/v1/communities/admin/moderation/post-reports
+GET  /api/v1/communities/admin/moderation/removed-posts
+GET  /api/v1/communities/admin/moderation/removed-comments
 ```
 
 Evidence uploads accept PDF, JPEG, PNG, and WebP files. Uploading evidence to a
@@ -200,6 +203,12 @@ Private community posts support:
   `GET /api/v1/communities/{community_id}/removed-comments` give managers,
   owners, and admins paginated removed-content queues with remover and parent
   post context.
+- `GET /api/v1/communities/admin/moderation/post-reports`,
+  `GET /api/v1/communities/admin/moderation/removed-posts`, and
+  `GET /api/v1/communities/admin/moderation/removed-comments` give platform
+  admins cross-community moderation queues with community context. All three
+  support `community_id`, `q`, `limit`, and `offset`; reported posts also
+  support `status=OPEN|RESOLVED|ALL` and `reason`.
 
 ## Phase 3: Alumni
 
@@ -232,6 +241,9 @@ POST   /api/v1/communities/{community_id}/posts/{post_id}/reports/{report_id}/re
 GET    /api/v1/communities/{community_id}/post-reports # implemented
 GET    /api/v1/communities/{community_id}/removed-posts # implemented
 GET    /api/v1/communities/{community_id}/removed-comments # implemented
+GET    /api/v1/communities/admin/moderation/post-reports # implemented
+GET    /api/v1/communities/admin/moderation/removed-posts # implemented
+GET    /api/v1/communities/admin/moderation/removed-comments # implemented
 GET    /api/v1/feed
 POST   /api/v1/posts
 GET    /api/v1/posts/{post_id}

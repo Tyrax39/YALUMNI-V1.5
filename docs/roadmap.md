@@ -79,7 +79,7 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
 - Community moderation queue. Implemented as a manager/owner/admin open-report review surface on community detail pages.
 - Removed-content queues. Implemented for manager/owner/admin review and restoration of removed posts/comments inside communities.
 - Moderator actions. Started with manager/owner/admin post/comment removal, report resolution, and restoration inside communities.
-- Cross-community admin moderation queue. Planned as a global review surface.
+- Cross-community admin moderation queue. Implemented in the admin console with platform-wide report, removed-post, and removed-comment queues plus filters and action buttons.
 
 ## Phase 7: Messaging And Notifications
 
