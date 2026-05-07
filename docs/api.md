@@ -93,6 +93,15 @@ PATCH /api/v1/notifications/preferences
 POST /api/v1/notifications/admin/email-digests/run
 POST /api/v1/notifications/{notification_id}/read
 POST /api/v1/notifications/read-all
+GET  /api/v1/messages/conversations
+POST /api/v1/messages/conversations
+GET  /api/v1/messages/conversations/{conversation_id}
+GET  /api/v1/messages/conversations/{conversation_id}/messages
+POST /api/v1/messages/conversations/{conversation_id}/messages
+POST /api/v1/messages/conversations/{conversation_id}/read
+GET  /api/v1/messages/blocks
+POST /api/v1/messages/blocks
+DELETE /api/v1/messages/blocks/{blocked_user_id}
 ```
 
 Evidence uploads accept PDF, JPEG, PNG, and WebP files. Uploading evidence to a
@@ -289,11 +298,32 @@ Notification center support:
   approval/rejection, role changes, ownership transfers, invitations for
   existing users, invitation cancellation/acceptance, post/comment removal and
   restoration, new comments on owned posts, report resolution, new post reports,
-  and moderation escalations.
+  moderation escalations, and received direct messages.
 - Email delivery is currently direct console/SMTP sending for auth,
   invitation, and admin-run digest emails. Queue/retry behavior, scheduled
   worker execution, bounce tracking, and delivery audit exports remain future
   production work.
+
+Direct messaging support:
+
+- `GET /api/v1/messages/conversations` returns the current user's direct
+  conversations with participants, last message, unread count, pagination, and
+  total.
+- `POST /api/v1/messages/conversations` creates or reuses a direct conversation
+  with another active user and can optionally send an initial message.
+- `GET /api/v1/messages/conversations/{conversation_id}` returns one
+  conversation only if the current user is a participant.
+- `GET /api/v1/messages/conversations/{conversation_id}/messages` returns the
+  conversation message history for participants only.
+- `POST /api/v1/messages/conversations/{conversation_id}/messages` sends a
+  direct message, updates `last_message_at`, stamps the sender's read marker,
+  and creates received-message notifications for the other participant.
+- `POST /api/v1/messages/conversations/{conversation_id}/read` updates the
+  current participant's `last_read_at` marker.
+- `GET /api/v1/messages/blocks`, `POST /api/v1/messages/blocks`, and
+  `DELETE /api/v1/messages/blocks/{blocked_user_id}` manage current-user
+  contact blocks. Blocks prevent new conversations and sends in either
+  direction.
 
 ## Phase 3: Alumni
 
@@ -349,14 +379,15 @@ POST   /api/v1/posts/{post_id}/reports                          # global feed pl
 ## Phase 6: Messaging
 
 ```text
-GET    /api/v1/conversations
-POST   /api/v1/conversations
-GET    /api/v1/conversations/{conversation_id}
-GET    /api/v1/conversations/{conversation_id}/messages
-POST   /api/v1/conversations/{conversation_id}/messages
-POST   /api/v1/conversations/{conversation_id}/read
-POST   /api/v1/users/{user_id}/block
-DELETE /api/v1/users/{user_id}/block
+GET    /api/v1/messages/conversations                       # implemented
+POST   /api/v1/messages/conversations                       # implemented
+GET    /api/v1/messages/conversations/{conversation_id}      # implemented
+GET    /api/v1/messages/conversations/{conversation_id}/messages # implemented
+POST   /api/v1/messages/conversations/{conversation_id}/messages # implemented
+POST   /api/v1/messages/conversations/{conversation_id}/read # implemented
+GET    /api/v1/messages/blocks                              # implemented
+POST   /api/v1/messages/blocks                              # implemented
+DELETE /api/v1/messages/blocks/{blocked_user_id}            # implemented
 ```
 
 ## Phase 6b: Notifications

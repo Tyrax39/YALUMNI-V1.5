@@ -11,6 +11,7 @@ import { SessionCard } from "@/components/auth/session-card";
 import { SessionManagementPanel } from "@/components/auth/session-management-panel";
 import { TwoFactorPanel } from "@/components/auth/two-factor-panel";
 import { CommunitiesPanel } from "@/components/communities/communities-panel";
+import { MessagingPanel } from "@/components/messages/messaging-panel";
 import { NotificationCenter } from "@/components/notifications/notification-center";
 import { adminRoles } from "@/lib/api";
 
@@ -19,7 +20,6 @@ const modules = [
   ["Directory", "Search by program, country, cohort, sector, and skills"],
   ["Communities", "Country chapters, sector groups, and private working teams"],
   ["Events", "RSVPs, gatherings, agendas, speakers, and check-in planning"],
-  ["Messages", "Direct conversations with privacy and blocking controls"],
   ["Governance", "Contributions, elections, audit logs, and reports"]
 ] as const;
 
@@ -87,6 +87,7 @@ export function DashboardWorkspace() {
               <VerificationRequestPanel accessToken={accessToken} />
               <DirectorySearchPanel accessToken={accessToken} />
               <CommunitiesPanel accessToken={accessToken} canCreate={hasAdminRole} />
+              <MessagingPanel accessToken={accessToken} currentUserId={user.id} />
               <SessionManagementPanel
                 accessToken={accessToken}
                 onCurrentSessionRevoked={clearSession}

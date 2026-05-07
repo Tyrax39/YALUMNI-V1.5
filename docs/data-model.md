@@ -60,13 +60,13 @@
 
 ### Messaging
 
-- `conversations`
-- `conversation_members`
-- `messages`
+- `conversations` - implemented for direct one-to-one conversation records with creator, type, timestamps, and last-message timestamp.
+- `conversation_participants` - implemented for conversation membership, current-user read marker, archive/mute placeholders, and one record per conversation user.
+- `direct_messages` - implemented for participant-scoped message history with sender, body, active/deleted status, sent timestamp, and edit/delete placeholders.
 - `message_attachments`
-- `message_read_receipts`
+- `message_read_receipts` - not split yet; MVP read state is stored as `conversation_participants.last_read_at`.
 - `message_reactions`
-- `user_blocks`
+- `user_blocks` - implemented for current-user contact blocking with unique blocker/blocked pairs and optional reason.
 
 ### Events
 

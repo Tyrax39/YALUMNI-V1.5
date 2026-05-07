@@ -189,6 +189,79 @@ export type NotificationDigestRunResponse = {
   deliveries: NotificationDigestDelivery[];
 };
 
+export type ConversationParticipant = {
+  id: string;
+  user_id: string;
+  display_name: string;
+  email: string;
+  role: string;
+  last_read_at: string | null;
+  created_at: string;
+};
+
+export type DirectMessage = {
+  id: string;
+  conversation_id: string;
+  sender_user_id: string | null;
+  sender_display_name: string;
+  body: string;
+  status: string;
+  sent_at: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type Conversation = {
+  id: string;
+  conversation_type: string;
+  participants: ConversationParticipant[];
+  last_message: DirectMessage | null;
+  unread_count: number;
+  last_message_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ConversationListResponse = {
+  conversations: Conversation[];
+  total: number;
+  limit: number;
+  offset: number;
+  has_more: boolean;
+};
+
+export type MessageListResponse = {
+  messages: DirectMessage[];
+  total: number;
+  limit: number;
+  offset: number;
+  has_more: boolean;
+};
+
+export type ConversationCreatePayload = {
+  initial_message?: string | null;
+  participant_user_id: string;
+};
+
+export type MessageCreatePayload = {
+  body: string;
+};
+
+export type MessageReadResponse = {
+  conversation_id: string;
+  last_read_at: string;
+  unread_count: number;
+};
+
+export type UserBlock = {
+  id: string;
+  blocker_user_id: string;
+  blocked_user_id: string;
+  blocked_display_name: string;
+  reason: string | null;
+  created_at: string;
+};
+
 export type ProgramAffiliation = {
   id: string;
   program_name: string;
@@ -993,6 +1066,117 @@ export function runNotificationEmailDigest(
       body: JSON.stringify(payload),
       headers: authHeaders(accessToken),
       method: "POST"
+    }
+  );
+}
+
+export function listConversations(
+  accessToken: string,
+  params: { limit?: number; offset?: number } = {}
+): Promise<ConversationListResponse> {
+  const searchParams = new URLSearchParams();
+  if (params.limit) {
+    searchParams.set("limit", String(params.limit));
+  }
+  if (params.offset) {
+    searchParams.set("offset", String(params.offset));
+  }
+
+  const query = searchParams.toString();
+  return protectedApiFetch<ConversationListResponse>(
+    `/api/v1/messages/conversations${query ? `?${query}` : ""}`,
+    {
+      headers: authHeaders(accessToken)
+    }
+  );
+}
+
+export function createDirectConversation(
+  accessToken: string,
+  payload: ConversationCreatePayload
+): Promise<Conversation> {
+  return protectedApiFetch<Conversation>("/api/v1/messages/conversations", {
+    body: JSON.stringify(payload),
+    headers: authHeaders(accessToken),
+    method: "POST"
+  });
+}
+
+export function listConversationMessages(
+  accessToken: string,
+  conversationId: string,
+  params: { limit?: number; offset?: number } = {}
+): Promise<MessageListResponse> {
+  const searchParams = new URLSearchParams();
+  if (params.limit) {
+    searchParams.set("limit", String(params.limit));
+  }
+  if (params.offset) {
+    searchParams.set("offset", String(params.offset));
+  }
+
+  const query = searchParams.toString();
+  return protectedApiFetch<MessageListResponse>(
+    `/api/v1/messages/conversations/${encodeURIComponent(conversationId)}/messages${
+      query ? `?${query}` : ""
+    }`,
+    {
+      headers: authHeaders(accessToken)
+    }
+  );
+}
+
+export function sendDirectMessage(
+  accessToken: string,
+  conversationId: string,
+  payload: MessageCreatePayload
+): Promise<DirectMessage> {
+  return protectedApiFetch<DirectMessage>(
+    `/api/v1/messages/conversations/${encodeURIComponent(conversationId)}/messages`,
+    {
+      body: JSON.stringify(payload),
+      headers: authHeaders(accessToken),
+      method: "POST"
+    }
+  );
+}
+
+export function markConversationRead(
+  accessToken: string,
+  conversationId: string
+): Promise<MessageReadResponse> {
+  return protectedApiFetch<MessageReadResponse>(
+    `/api/v1/messages/conversations/${encodeURIComponent(conversationId)}/read`,
+    {
+      headers: authHeaders(accessToken),
+      method: "POST"
+    }
+  );
+}
+
+export function listUserBlocks(accessToken: string): Promise<UserBlock[]> {
+  return protectedApiFetch<UserBlock[]>("/api/v1/messages/blocks", {
+    headers: authHeaders(accessToken)
+  });
+}
+
+export function blockUser(
+  accessToken: string,
+  payload: { blocked_user_id: string; reason?: string | null }
+): Promise<UserBlock> {
+  return protectedApiFetch<UserBlock>("/api/v1/messages/blocks", {
+    body: JSON.stringify(payload),
+    headers: authHeaders(accessToken),
+    method: "POST"
+  });
+}
+
+export function unblockUser(accessToken: string, blockedUserId: string): Promise<void> {
+  return protectedApiFetch<void>(
+    `/api/v1/messages/blocks/${encodeURIComponent(blockedUserId)}`,
+    {
+      headers: authHeaders(accessToken),
+      method: "DELETE"
     }
   );
 }
