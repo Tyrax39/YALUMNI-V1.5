@@ -8,6 +8,65 @@ The current Yalumni project is a useful Laravel 9 alumni management platform, bu
 
 The V1.5 implementation is active in `D:\YALUMNI-V1.5`. The new repository now contains a platform foundation with a FastAPI backend, Next.js web shell, Docker Compose, CI workflow, shared packages, copied YALUMNI logo assets, and documentation.
 
+## Current V1.5 Implementation Update: 2026-05-07 Notification Email Digest Worker Slice
+
+Completed after the email delivery foundation slice:
+
+- Added `email_digest_sent_at` tracking on notifications plus an Alembic migration and supporting index for digest selection.
+- Added a notification digest service that finds active users with `DAILY` or `WEEKLY` preferences, filters unread unsent notifications, respects muted event types, and builds summary emails with web links.
+- Added an admin-only digest runner at `POST /api/v1/notifications/admin/email-digests/run` with dry-run mode, delivery mode, frequency selection, per-email item limits, and audit logging in `security_events`.
+- Added admin console controls for digest dry runs and delivery runs, including candidate, skipped, sent, generated-at, and delivery preview output.
+- Added API coverage for dry-run behavior, console email delivery, digest sent marking, no-resend behavior, and admin-only access.
+- Updated API, data model, roadmap, and status docs for digest execution.
+
+Current plan position:
+
+- Phase 1 remains functionally complete for local foundation.
+- Phase 2 remains roughly 91% complete.
+- Phase 3 remains roughly 52% complete.
+- Phase 4 remains roughly 31% complete.
+- Phase 5 remains roughly 81% complete.
+- Phase 6 feed/moderation remains roughly 54% complete.
+- Phase 7 messaging/notifications is now roughly 32% complete: persisted notifications, community hooks, dashboard inbox, read APIs, SSE snapshots, notification preferences, console/SMTP email delivery, and admin-run email digest execution now exist. Direct messaging, Redis/WebSocket fanout, read receipts, blocks, scheduled worker execution, queued retries, push delivery, and delivery audit exports remain open.
+- Overall 24-week MVP implementation is roughly 53% complete.
+
+Implemented now:
+
+- Native landing page.
+- Monorepo foundation, CI, docs, Docker Compose.
+- FastAPI health/status and request middleware.
+- Identity auth, refresh sessions, account recovery, email verification, console/SMTP delivery for account emails, protected platform owner, role-gated admin overview, session management, admin 2FA policy gate, secure cookie-backed web sessions, CSRF protection, and MVP-local rate limiting.
+- Local-only test-account seeding for role and directory QA.
+- Protected dashboard/admin route behavior.
+- Alumni current-user profile model/API/UI with profile photo upload/display/delete.
+- Shared local/S3 upload storage adapter for profile photos, verification evidence, and community feed media.
+- Program affiliation model/API/UI.
+- Verification request submission, member status history, admin queue, review actions, alumni-member role grant, and evidence upload/review.
+- Verified member directory search/profile detail with privacy-aware serializers and authenticated profile-photo display.
+- Dedicated admin audit log viewer backed by `security_events`.
+- Community discovery, creation, detail pages, active rosters, open/request joins, pending review, manager roles, role updates, non-owner member removal, owner/admin settings editing, invitation email delivery, invitation cancellation/acceptance, ownership transfer, gated community posts, media attachments, comments, likes, reports, manager-visible report counts, per-community report queues, removed post/comment queues, restore actions, cross-community admin moderation queues, moderation review metadata, notification inbox, community workflow notification hooks, live notification snapshot streaming, notification preferences, and admin-run notification email digests.
+
+Main gaps now:
+
+- Digest execution is admin-triggered, not a scheduled background worker. Production still needs APScheduler/Celery/RQ or equivalent, worker health checks, retries, backoff, and dead-letter handling.
+- Email delivery is synchronous console/SMTP plumbing. Production still needs provider credentials, HTML templates, delivery logs, bounce handling, unsubscribe/compliance flows, and delivery audit exports.
+- Notification preferences now cover in-app suppression and digest frequency, but per-channel preferences, quiet hours, admin override rules, unsubscribe state, and granular digest grouping remain open.
+- Notification realtime is SSE polling for MVP, not Redis/WebSocket fanout. Production still needs multi-worker pub/sub, reconnection/backoff policy review, batching, and push delivery.
+- Community feed still needs pinned posts, mentions, richer formatting, edit history, audit export tooling, and global feed aggregation.
+- Feed media is storage-backed and moderated, but production media hardening still needs malware scanning, image processing, thumbnail generation, CDN/signed URL decisions, and retention policy.
+- Directory search is database-backed MVP search, not Meilisearch/OpenSearch.
+- Direct messaging, events, initiatives, contributions, elections, chapter analytics, and richer governance workflows are not wired yet.
+
+Next possible implementation slices:
+
+- Direct messaging foundation with conversations, participants, and message send/list APIs.
+- Feed post editing with audit history and moderator-visible revision records.
+- Pinned/featured posts and announcements for community owners/managers.
+- Scheduled background worker foundation for email digests and future async jobs.
+- Global feed aggregation from community posts and future public posts.
+- Moderator audit exports and immutable compliance event tables.
+- Production email hardening with provider templates, queue/retry, bounce tracking, unsubscribe controls, and delivery logs.
+
 ## Current V1.5 Implementation Update: 2026-05-07 Email Delivery Foundation Slice
 
 Completed after the notification preferences slice:

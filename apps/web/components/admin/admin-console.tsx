@@ -16,6 +16,9 @@ import {
   getAdminOverview,
   getAdminVerificationRequests,
   reviewVerificationRequest,
+  runNotificationEmailDigest,
+  NotificationDigestFrequency,
+  NotificationDigestRunResponse,
   VerificationRequest,
   VerificationReviewAction
 } from "@/lib/api";
@@ -46,6 +49,12 @@ type AuditFilters = {
   offset: number;
   userId: string;
 };
+
+type DigestState =
+  | { status: "idle" }
+  | { status: "running" }
+  | { status: "ready"; result: NotificationDigestRunResponse }
+  | { status: "error"; message: string };
 
 const auditLimit = 25;
 
@@ -134,6 +143,7 @@ function AdminOverviewPanel({ accessToken, email }: { accessToken: string; email
 
           <VerificationQueuePanel accessToken={accessToken} />
           <AdminModerationConsole accessToken={accessToken} />
+          <EmailDigestPanel accessToken={accessToken} />
           <AuditLogPanel accessToken={accessToken} />
 
           <div className="mt-10 grid gap-4 md:grid-cols-3">
@@ -349,6 +359,143 @@ function AuditLogPanel({ accessToken }: { accessToken: string }) {
             </div>
           </div>
         </>
+      ) : null}
+    </section>
+  );
+}
+
+function EmailDigestPanel({ accessToken }: { accessToken: string }) {
+  const [frequency, setFrequency] = useState<NotificationDigestFrequency>("DAILY");
+  const [dryRun, setDryRun] = useState(true);
+  const [maxItems, setMaxItems] = useState(10);
+  const [state, setState] = useState<DigestState>({ status: "idle" });
+
+  async function handleRunDigest(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setState({ status: "running" });
+    try {
+      const result = await runNotificationEmailDigest(accessToken, {
+        dry_run: dryRun,
+        frequency,
+        max_items_per_email: maxItems
+      });
+      setState({ status: "ready", result });
+    } catch (caught) {
+      setState({
+        status: "error",
+        message:
+          caught instanceof ApiError ? caught.message : "Notification digest could not be run."
+      });
+    }
+  }
+
+  return (
+    <section className="mt-10 rounded-lg border border-border bg-white p-6 shadow-soft">
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+        <div>
+          <h2 className="font-display text-2xl font-semibold text-ink">
+            Notification email digests
+          </h2>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-muted">
+            Run daily or weekly notification summaries for members who opted into email digests.
+          </p>
+        </div>
+        {state.status === "ready" ? (
+          <p className="text-sm font-semibold text-primary">
+            {state.result.dry_run ? "Dry run" : "Delivered"} · {state.result.notification_count}{" "}
+            notifications
+          </p>
+        ) : null}
+      </div>
+
+      <form
+        className="mt-5 grid gap-3 lg:grid-cols-[0.55fr_auto_auto_auto]"
+        onSubmit={handleRunDigest}
+      >
+        <label className="grid gap-2 text-sm font-semibold text-ink">
+          Frequency
+          <select
+            className="h-12 rounded-lg border border-border bg-white px-4 text-sm font-normal text-ink outline-none transition focus:border-primary"
+            onChange={(event) => setFrequency(event.target.value as NotificationDigestFrequency)}
+            value={frequency}
+          >
+            <option value="DAILY">Daily</option>
+            <option value="WEEKLY">Weekly</option>
+          </select>
+        </label>
+        <label className="grid gap-2 text-sm font-semibold text-ink">
+          Max items
+          <input
+            className="h-12 w-28 rounded-lg border border-border bg-white px-4 text-sm font-normal text-ink outline-none transition focus:border-primary"
+            max={50}
+            min={1}
+            onChange={(event) => setMaxItems(Number(event.target.value))}
+            type="number"
+            value={maxItems}
+          />
+        </label>
+        <label className="flex h-12 items-center gap-3 self-end rounded-lg border border-border px-4 text-sm font-semibold text-ink">
+          <input
+            checked={dryRun}
+            className="h-4 w-4 accent-primary"
+            onChange={(event) => setDryRun(event.target.checked)}
+            type="checkbox"
+          />
+          Dry run
+        </label>
+        <button
+          className="focus-ring h-12 self-end rounded-lg bg-primary px-5 text-sm font-semibold text-white transition hover:bg-[#003d7d] disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={state.status === "running"}
+          type="submit"
+        >
+          {state.status === "running" ? "Running..." : "Run digest"}
+        </button>
+      </form>
+
+      {state.status === "idle" ? (
+        <p className="mt-5 rounded-lg border border-border bg-surface px-4 py-3 text-sm font-semibold text-muted">
+          Dry run is selected by default so admins can preview candidate deliveries first.
+        </p>
+      ) : null}
+
+      {state.status === "error" ? (
+        <p className="mt-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+          {state.message}
+        </p>
+      ) : null}
+
+      {state.status === "ready" ? (
+        <div className="mt-5 grid gap-4 xl:grid-cols-[0.75fr_1.25fr]">
+          <dl className="grid gap-3 rounded-lg border border-border bg-surface p-4 text-sm sm:grid-cols-2">
+            <QueueDetail label="Candidates" value={String(state.result.candidate_user_count)} />
+            <QueueDetail label="Sent" value={String(state.result.sent_count)} />
+            <QueueDetail label="Skipped" value={String(state.result.skipped_count)} />
+            <QueueDetail label="Generated" value={new Date(state.result.generated_at).toLocaleString()} />
+          </dl>
+          <div className="rounded-lg border border-border bg-white p-4">
+            {state.result.deliveries.length === 0 ? (
+              <p className="text-sm font-semibold text-muted">
+                No eligible digest deliveries were found for this run.
+              </p>
+            ) : null}
+            {state.result.deliveries.slice(0, 5).map((delivery) => (
+              <div
+                className="grid gap-2 border-b border-border py-3 text-sm last:border-b-0 sm:grid-cols-[1fr_auto]"
+                key={`${delivery.user_id}:${delivery.frequency}`}
+              >
+                <div className="min-w-0">
+                  <p className="break-all font-semibold text-ink">{delivery.email}</p>
+                  {delivery.error ? (
+                    <p className="mt-1 text-danger">{delivery.error}</p>
+                  ) : null}
+                </div>
+                <p className="font-semibold text-muted">
+                  {delivery.notification_count} · {delivery.delivered ? "sent" : "preview"}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
       ) : null}
     </section>
   );

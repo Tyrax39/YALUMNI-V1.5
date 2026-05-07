@@ -118,6 +118,7 @@ export type NotificationItem = {
   target_url: string | null;
   metadata: Record<string, unknown> | null;
   read_at: string | null;
+  email_digest_sent_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -156,6 +157,36 @@ export type NotificationPreferenceUpdate = {
   email_digest_frequency?: "DAILY" | "NONE" | "WEEKLY";
   in_app_enabled?: boolean;
   muted_event_types?: string[];
+};
+
+export type NotificationDigestFrequency = "DAILY" | "WEEKLY";
+
+export type NotificationDigestRunPayload = {
+  dry_run?: boolean;
+  frequency?: NotificationDigestFrequency;
+  include_read?: boolean;
+  limit?: number;
+  max_items_per_email?: number;
+};
+
+export type NotificationDigestDelivery = {
+  user_id: string;
+  email: string;
+  frequency: NotificationDigestFrequency;
+  notification_count: number;
+  delivered: boolean;
+  error: string | null;
+};
+
+export type NotificationDigestRunResponse = {
+  frequency: NotificationDigestFrequency;
+  dry_run: boolean;
+  generated_at: string;
+  candidate_user_count: number;
+  sent_count: number;
+  skipped_count: number;
+  notification_count: number;
+  deliveries: NotificationDigestDelivery[];
 };
 
 export type ProgramAffiliation = {
@@ -950,6 +981,20 @@ export function updateNotificationPreferences(
     headers: authHeaders(accessToken),
     method: "PATCH"
   });
+}
+
+export function runNotificationEmailDigest(
+  accessToken: string,
+  payload: NotificationDigestRunPayload
+): Promise<NotificationDigestRunResponse> {
+  return protectedApiFetch<NotificationDigestRunResponse>(
+    "/api/v1/notifications/admin/email-digests/run",
+    {
+      body: JSON.stringify(payload),
+      headers: authHeaders(accessToken),
+      method: "POST"
+    }
+  );
 }
 
 export async function streamNotificationSnapshots(

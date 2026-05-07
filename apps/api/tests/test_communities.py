@@ -346,6 +346,104 @@ def test_notification_preferences_control_in_app_delivery(client: TestClient) ->
     assert disabled_notifications.json()["total"] == 1
 
 
+def test_admin_email_digest_run_previews_sends_and_marks_notifications(
+    client: TestClient,
+) -> None:
+    admin_headers = create_admin(client)
+    community = create_community(
+        client,
+        admin_headers,
+        name="Digest Review Working Group",
+        community_type="WORKING_GROUP",
+        join_policy="REQUEST",
+    )
+    preferences_response = client.patch(
+        "/api/v1/notifications/preferences",
+        headers=admin_headers,
+        json={"email_digest_frequency": "daily"},
+    )
+    assert preferences_response.status_code == 200
+    assert preferences_response.json()["email_digest_frequency"] == "DAILY"
+
+    member = register_user(client, "digest.member@example.com")
+    clear_email_outbox()
+    join_response = client.post(
+        f"/api/v1/communities/{community['id']}/join",
+        headers=auth_headers(member["access_token"]),
+    )
+    assert join_response.status_code == 200
+    assert join_response.json()["membership_status"] == "PENDING"
+
+    dry_run_response = client.post(
+        "/api/v1/notifications/admin/email-digests/run",
+        headers=admin_headers,
+        json={"dry_run": True, "frequency": "daily", "max_items_per_email": 5},
+    )
+    assert dry_run_response.status_code == 200
+    dry_run_payload = dry_run_response.json()
+    assert dry_run_payload["dry_run"] is True
+    assert dry_run_payload["candidate_user_count"] == 1
+    assert dry_run_payload["notification_count"] == 1
+    assert dry_run_payload["sent_count"] == 0
+    assert dry_run_payload["deliveries"][0]["delivered"] is False
+    assert dry_run_payload["deliveries"][0]["email"] == "admin@example.com"
+    assert email_outbox() == []
+
+    unsent_notifications = client.get(
+        "/api/v1/notifications?status=ALL",
+        headers=admin_headers,
+    )
+    assert unsent_notifications.status_code == 200
+    assert unsent_notifications.json()["notifications"][0]["email_digest_sent_at"] is None
+
+    send_response = client.post(
+        "/api/v1/notifications/admin/email-digests/run",
+        headers=admin_headers,
+        json={"frequency": "DAILY", "max_items_per_email": 5},
+    )
+    assert send_response.status_code == 200
+    send_payload = send_response.json()
+    assert send_payload["dry_run"] is False
+    assert send_payload["sent_count"] == 1
+    assert send_payload["notification_count"] == 1
+    assert send_payload["deliveries"][0]["delivered"] is True
+
+    outbox = email_outbox()
+    assert len(outbox) == 1
+    assert outbox[0].to_email == "admin@example.com"
+    assert outbox[0].subject == "Your YALUMNI daily notification digest"
+    assert "Digest Review Working Group" in outbox[0].text_body
+    assert f"/communities/{community['id']}" in outbox[0].text_body
+
+    sent_notifications = client.get(
+        "/api/v1/notifications?status=ALL",
+        headers=admin_headers,
+    )
+    assert sent_notifications.status_code == 200
+    assert sent_notifications.json()["notifications"][0]["email_digest_sent_at"] is not None
+
+    clear_email_outbox()
+    second_send_response = client.post(
+        "/api/v1/notifications/admin/email-digests/run",
+        headers=admin_headers,
+        json={"frequency": "DAILY", "max_items_per_email": 5},
+    )
+    assert second_send_response.status_code == 200
+    assert second_send_response.json()["sent_count"] == 0
+    assert second_send_response.json()["notification_count"] == 0
+    assert email_outbox() == []
+
+
+def test_email_digest_run_requires_admin_role(client: TestClient) -> None:
+    regular_user = register_user(client, "digest.regular@example.com")
+    denied_response = client.post(
+        "/api/v1/notifications/admin/email-digests/run",
+        headers=auth_headers(regular_user["access_token"]),
+        json={"frequency": "DAILY"},
+    )
+    assert denied_response.status_code == 403
+
+
 def test_community_admin_can_create_and_member_can_join_leave(client: TestClient) -> None:
     admin_headers = create_admin(client)
     community = create_community(

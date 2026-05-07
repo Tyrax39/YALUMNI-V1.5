@@ -3,18 +3,23 @@ import json
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload, sessionmaker
 
 from app.core.config import get_settings
 from app.core.database import get_db_session
+from app.core.permissions import ADMIN_ROLE_NAMES
 from app.core.security import utcnow
-from app.modules.auth.dependencies import get_current_user
-from app.modules.auth.models import User
+from app.modules.auth.dependencies import get_current_user, require_roles
+from app.modules.auth.models import SecurityEvent, User
+from app.modules.notifications.digests import run_email_digest
 from app.modules.notifications.models import Notification, NotificationPreference
 from app.modules.notifications.schemas import (
+    NotificationDigestDeliveryResponse,
+    NotificationDigestRunRequest,
+    NotificationDigestRunResponse,
     NotificationListResponse,
     NotificationPreferenceResponse,
     NotificationPreferenceUpdate,
@@ -24,6 +29,17 @@ from app.modules.notifications.schemas import (
 
 router = APIRouter()
 NOTIFICATION_STREAM_MAX_POLL_SECONDS = 60
+notification_admin_dependency = require_roles(*ADMIN_ROLE_NAMES)
+
+
+def _request_context(request: Request) -> tuple[str | None, str | None]:
+    forwarded_for = request.headers.get("x-forwarded-for")
+    if forwarded_for:
+        ip_address = forwarded_for.split(",", 1)[0].strip()
+    else:
+        ip_address = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+    return ip_address, user_agent[:255] if user_agent else None
 
 
 def _serialize_notification(notification: Notification) -> NotificationResponse:
@@ -40,6 +56,7 @@ def _serialize_notification(notification: Notification) -> NotificationResponse:
         target_url=notification.target_url,
         metadata=notification.metadata_json,
         read_at=notification.read_at,
+        email_digest_sent_at=notification.email_digest_sent_at,
         created_at=notification.created_at,
         updated_at=notification.updated_at,
     )
@@ -216,6 +233,62 @@ def update_my_notification_preferences(
     db.commit()
     db.refresh(preference)
     return _serialize_preference(preference)
+
+
+@router.post("/admin/email-digests/run", response_model=NotificationDigestRunResponse)
+def run_notification_email_digests(
+    payload: NotificationDigestRunRequest,
+    request: Request,
+    current_user: Annotated[User, Depends(notification_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> NotificationDigestRunResponse:
+    result = run_email_digest(
+        db,
+        dry_run=payload.dry_run,
+        frequency=payload.frequency,
+        include_read=payload.include_read,
+        limit=payload.limit,
+        max_items_per_email=payload.max_items_per_email,
+    )
+    ip_address, user_agent = _request_context(request)
+    db.add(
+        SecurityEvent(
+            user_id=current_user.id,
+            event_type="notifications.email_digest_run",
+            ip_address=ip_address,
+            user_agent=user_agent,
+            metadata_json={
+                "candidate_user_count": result.candidate_user_count,
+                "dry_run": result.dry_run,
+                "frequency": result.frequency,
+                "notification_count": result.notification_count,
+                "sent_count": result.sent_count,
+                "skipped_count": result.skipped_count,
+            },
+        )
+    )
+    db.commit()
+
+    return NotificationDigestRunResponse(
+        frequency=result.frequency,
+        dry_run=result.dry_run,
+        generated_at=result.generated_at,
+        candidate_user_count=result.candidate_user_count,
+        sent_count=result.sent_count,
+        skipped_count=result.skipped_count,
+        notification_count=result.notification_count,
+        deliveries=[
+            NotificationDigestDeliveryResponse(
+                user_id=delivery.user_id,
+                email=delivery.email,
+                frequency=delivery.frequency,
+                notification_count=delivery.notification_count,
+                delivered=delivery.delivered,
+                error=delivery.error,
+            )
+            for delivery in result.deliveries
+        ],
+    )
 
 
 @router.post("/{notification_id}/read", response_model=NotificationResponse)

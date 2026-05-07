@@ -12,9 +12,14 @@ class Notification(Base, TimestampMixin):
     __tablename__ = "notifications"
     __table_args__ = (
         Index("ix_notifications_user_read_created", "user_id", "read_at", "created_at"),
+        Index(
+            "ix_notifications_user_digest_created",
+            "user_id",
+            "email_digest_sent_at",
+            "created_at",
+        ),
         Index("ix_notifications_event_created", "event_type", "created_at"),
     )
-
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"),
@@ -29,6 +34,7 @@ class Notification(Base, TimestampMixin):
     target_url: Mapped[str | None] = mapped_column(String(500))
     metadata_json: Mapped[dict | None] = mapped_column("metadata", JSON)
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    email_digest_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     user: Mapped[User] = relationship(foreign_keys=[user_id])
     actor_user: Mapped[User | None] = relationship(foreign_keys=[actor_user_id])

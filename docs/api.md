@@ -90,6 +90,7 @@ GET  /api/v1/notifications
 GET  /api/v1/notifications/stream
 GET  /api/v1/notifications/preferences
 PATCH /api/v1/notifications/preferences
+POST /api/v1/notifications/admin/email-digests/run
 POST /api/v1/notifications/{notification_id}/read
 POST /api/v1/notifications/read-all
 ```
@@ -109,6 +110,8 @@ Email delivery support:
   `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, and `SMTP_USE_TLS`.
 - `EMAIL_FROM_ADDRESS`, `EMAIL_FROM_NAME`, and `WEB_BASE_URL` control sender
   identity and generated account/invitation links.
+- The same delivery abstraction now supports admin-run notification digest
+  emails for users with `DAILY` or `WEEKLY` digest preferences.
 - Local/dev auth and invitation responses still include one-time `dev_*` tokens
   for QA. Production responses suppress those tokens and rely on email links.
 
@@ -271,9 +274,13 @@ Notification center support:
 - `GET /api/v1/notifications/preferences` returns the current user's in-app
   notification preference record. A default record is created on first access.
 - `PATCH /api/v1/notifications/preferences` updates the in-app master toggle,
-  email digest frequency placeholder (`NONE|DAILY|WEEKLY`), and muted
-  notification event types. Muted in-app event types are suppressed by
-  `notify_users` before notifications are written.
+  email digest frequency (`NONE|DAILY|WEEKLY`), and muted notification event
+  types. Muted in-app event types are suppressed by `notify_users` before
+  notifications are written.
+- `POST /api/v1/notifications/admin/email-digests/run` lets admin roles run
+  a dry-run or delivery pass for daily/weekly email digests. Delivered
+  notifications are stamped with `email_digest_sent_at` so later runs do not
+  resend them.
 - `POST /api/v1/notifications/{notification_id}/read` marks a single current
   user notification as read. Other users' notification IDs return 404.
 - `POST /api/v1/notifications/read-all` marks all current-user unread
@@ -283,9 +290,10 @@ Notification center support:
   existing users, invitation cancellation/acceptance, post/comment removal and
   restoration, new comments on owned posts, report resolution, new post reports,
   and moderation escalations.
-- Email delivery is currently direct console/SMTP sending for auth and
-  invitation links. Notification digest execution, queue/retry behavior, bounce
-  tracking, and delivery audit exports remain future production work.
+- Email delivery is currently direct console/SMTP sending for auth,
+  invitation, and admin-run digest emails. Queue/retry behavior, scheduled
+  worker execution, bounce tracking, and delivery audit exports remain future
+  production work.
 
 ## Phase 3: Alumni
 
@@ -358,6 +366,7 @@ GET    /api/v1/notifications                         # implemented
 GET    /api/v1/notifications/stream                  # implemented
 GET    /api/v1/notifications/preferences             # implemented
 PATCH  /api/v1/notifications/preferences             # implemented
+POST   /api/v1/notifications/admin/email-digests/run # implemented
 POST   /api/v1/notifications/{notification_id}/read   # implemented
 POST   /api/v1/notifications/read-all                 # implemented
 ```

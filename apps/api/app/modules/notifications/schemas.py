@@ -17,6 +17,7 @@ class NotificationResponse(BaseModel):
     target_url: str | None
     metadata: dict | None
     read_at: datetime | None
+    email_digest_sent_at: datetime | None
     created_at: datetime
     updated_at: datetime
 
@@ -85,3 +86,39 @@ class NotificationPreferenceUpdate(BaseModel):
                 seen_event_types.add(normalized)
 
         return normalized_event_types
+
+
+class NotificationDigestRunRequest(BaseModel):
+    frequency: str = "DAILY"
+    dry_run: bool = False
+    include_read: bool = False
+    limit: int = Field(default=100, ge=1, le=500)
+    max_items_per_email: int = Field(default=10, ge=1, le=50)
+
+    @field_validator("frequency")
+    @classmethod
+    def normalize_digest_frequency(cls, value: str) -> str:
+        normalized = value.strip().upper()
+        if normalized not in {"DAILY", "WEEKLY"}:
+            raise ValueError("Invalid notification digest frequency")
+        return normalized
+
+
+class NotificationDigestDeliveryResponse(BaseModel):
+    user_id: uuid.UUID
+    email: str
+    frequency: str
+    notification_count: int
+    delivered: bool
+    error: str | None = None
+
+
+class NotificationDigestRunResponse(BaseModel):
+    frequency: str
+    dry_run: bool
+    generated_at: datetime
+    candidate_user_count: int
+    sent_count: int
+    skipped_count: int
+    notification_count: int
+    deliveries: list[NotificationDigestDeliveryResponse]

@@ -95,12 +95,16 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
   muted event types, and digest-frequency preference records.
 - Email delivery foundation. Started with console/SMTP delivery for account
   verification, password reset, and community invitations.
+- Email digest worker foundation. Started with admin-run dry-run/delivery
+  endpoint, digest sent tracking, admin console controls, and console/SMTP
+  notification summary emails.
 - Direct conversations.
 - Message list/send.
 - WebSocket events.
 - Blocks and read receipts.
-- Redis/WebSocket fanout, queued delivery, push, email digests, retries, bounces,
-  and delivery audit exports remain open.
+- Redis/WebSocket fanout, scheduled worker execution, queued delivery, push,
+  retries, bounces, unsubscribe/compliance controls, and delivery audit exports
+  remain open.
 
 ## Phase 8: Events
 
