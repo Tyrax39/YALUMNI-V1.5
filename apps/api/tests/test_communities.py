@@ -691,6 +691,11 @@ def test_community_post_comments_reactions_and_reports(client: TestClient) -> No
         headers=member_headers,
     )
     assert member_reports_denied.status_code == 403
+    member_report_queue_denied = client.get(
+        f"/api/v1/communities/{community['id']}/post-reports",
+        headers=member_headers,
+    )
+    assert member_report_queue_denied.status_code == 403
 
     manager_reports = client.get(
         f"/api/v1/communities/{community['id']}/posts/{post['id']}/reports",
@@ -698,6 +703,19 @@ def test_community_post_comments_reactions_and_reports(client: TestClient) -> No
     )
     assert manager_reports.status_code == 200
     assert manager_reports.json()["total"] == 1
+    manager_report_queue = client.get(
+        f"/api/v1/communities/{community['id']}/post-reports",
+        headers=manager_headers,
+    )
+    assert manager_report_queue.status_code == 200
+    report_queue_payload = manager_report_queue.json()
+    assert report_queue_payload["total"] == 1
+    assert report_queue_payload["reports"][0]["id"] == report["id"]
+    assert report_queue_payload["reports"][0]["post_id"] == post["id"]
+    assert report_queue_payload["reports"][0]["post_body"] == "Engagement post."
+    assert report_queue_payload["reports"][0]["post_author_display_name"] == "Engagement Member"
+    assert report_queue_payload["reports"][0]["post_status"] == "ACTIVE"
+
     manager_post_after_report = client.get(
         f"/api/v1/communities/{community['id']}/posts",
         headers=manager_headers,
@@ -715,6 +733,19 @@ def test_community_post_comments_reactions_and_reports(client: TestClient) -> No
     )
     assert resolve_response.status_code == 200
     assert resolve_response.json()["status"] == "RESOLVED"
+    open_report_queue_after_resolve = client.get(
+        f"/api/v1/communities/{community['id']}/post-reports",
+        headers=manager_headers,
+    )
+    assert open_report_queue_after_resolve.status_code == 200
+    assert open_report_queue_after_resolve.json()["total"] == 0
+    all_report_queue_after_resolve = client.get(
+        f"/api/v1/communities/{community['id']}/post-reports?status=ALL",
+        headers=manager_headers,
+    )
+    assert all_report_queue_after_resolve.status_code == 200
+    assert all_report_queue_after_resolve.json()["total"] == 1
+    assert all_report_queue_after_resolve.json()["reports"][0]["status"] == "RESOLVED"
     duplicate_resolve = client.post(
         f"/api/v1/communities/{community['id']}/posts/{post['id']}/reports/{report['id']}/resolve",
         headers=manager_headers,

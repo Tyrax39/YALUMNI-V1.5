@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import {
   ArrowLeft,
   Ban,
+  CheckCircle2,
   Crown,
   Flag,
   Heart,
@@ -42,6 +43,8 @@ import {
   CommunityPostComment,
   CommunityPostCommentListResponse,
   CommunityPostListResponse,
+  CommunityPostReportQueueItem,
+  CommunityPostReportQueueResponse,
   createCommunityInvitation,
   createCommunityPostComment,
   createCommunityPost,
@@ -52,11 +55,13 @@ import {
   listCommunityInvitations,
   listCommunityMembers,
   listCommunityPostComments,
+  listCommunityPostReportQueue,
   listCommunityPosts,
   rejectCommunityMember,
   removeCommunityMember,
   removeCommunityPostComment,
   removeCommunityPost,
+  resolveCommunityPostReport,
   toggleCommunityPostReaction,
   transferCommunityOwnership,
   updateCommunity,
@@ -75,6 +80,7 @@ type DetailState =
       community: Community;
       invitations: CommunityInvitationListResponse | null;
       members: CommunityMemberListResponse;
+      moderationReports: CommunityPostReportQueueResponse | null;
       posts: CommunityPostListResponse | null;
       status: "ready";
       pendingMembers: CommunityMemberListResponse | null;
@@ -86,6 +92,7 @@ const pendingPageSize = 6;
 const invitationPageSize = 6;
 const postPageSize = 5;
 const commentPageSize = 5;
+const moderationReportPageSize = 6;
 const communityTypeOptions = [
   "COUNTRY_CHAPTER",
   "CITY_CHAPTER",
@@ -169,10 +176,11 @@ function CommunityDetailContent({
   >({});
   const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
   const [reportedPostIds, setReportedPostIds] = useState<Record<string, boolean>>({});
+  const [busyReportId, setBusyReportId] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
-    loadDetail(0, 0, 0, 0)
+    loadDetail(0, 0, 0, 0, 0)
       .then((nextState) => {
         if (isMounted) {
           setState(nextState);
@@ -198,7 +206,8 @@ function CommunityDetailContent({
     activeOffset: number,
     pendingOffset: number,
     invitationOffset: number,
-    postOffset: number
+    postOffset: number,
+    moderationReportOffset: number
   ): Promise<DetailState> {
     const [community, members] = await Promise.all([
       getCommunity(accessToken, communityId),
@@ -210,7 +219,7 @@ function CommunityDetailContent({
     ]);
     const canManage = canManageCommunity(userRoles, community);
     const canReadPosts = canAccessCommunityPosts(userRoles, community);
-    const [pendingMembers, invitations, posts] = await Promise.all([
+    const [pendingMembers, invitations, posts, moderationReports] = await Promise.all([
       canManage
         ? listCommunityMembers(accessToken, communityId, {
             limit: pendingPageSize,
@@ -231,18 +240,42 @@ function CommunityDetailContent({
             offset: postOffset,
             status: "ACTIVE"
           })
+        : Promise.resolve(null),
+      canManage
+        ? listCommunityPostReportQueue(accessToken, communityId, {
+            limit: moderationReportPageSize,
+            offset: moderationReportOffset,
+            status: "OPEN"
+          })
         : Promise.resolve(null)
     ]);
-    return { community, invitations, members, pendingMembers, posts, status: "ready" };
+    return {
+      community,
+      invitations,
+      members,
+      moderationReports,
+      pendingMembers,
+      posts,
+      status: "ready"
+    };
   }
 
   async function refresh(
     activeOffset = state.status === "ready" ? state.members.offset : 0,
     pendingOffset = state.status === "ready" ? state.pendingMembers?.offset ?? 0 : 0,
     invitationOffset = state.status === "ready" ? state.invitations?.offset ?? 0 : 0,
-    postOffset = state.status === "ready" ? state.posts?.offset ?? 0 : 0
+    postOffset = state.status === "ready" ? state.posts?.offset ?? 0 : 0,
+    moderationReportOffset = state.status === "ready" ? state.moderationReports?.offset ?? 0 : 0
   ) {
-    setState(await loadDetail(activeOffset, pendingOffset, invitationOffset, postOffset));
+    setState(
+      await loadDetail(
+        activeOffset,
+        pendingOffset,
+        invitationOffset,
+        postOffset,
+        moderationReportOffset
+      )
+    );
   }
 
   async function refreshCurrentPage(
@@ -256,7 +289,8 @@ function CommunityDetailContent({
       state.members.offset,
       state.pendingMembers?.offset ?? 0,
       state.invitations?.offset ?? 0,
-      postOffset
+      postOffset,
+      state.moderationReports?.offset ?? 0
     );
   }
 
@@ -572,6 +606,37 @@ function CommunityDetailContent({
     }
   }
 
+  async function handleResolveReport(report: CommunityPostReportQueueItem) {
+    if (state.status !== "ready") {
+      return;
+    }
+
+    const currentReports = state.moderationReports;
+    const nextReportOffset =
+      currentReports && currentReports.reports.length === 1 && currentReports.offset > 0
+        ? Math.max(0, currentReports.offset - currentReports.limit)
+        : currentReports?.offset ?? 0;
+
+    setMessage(null);
+    setActionError(null);
+    setBusyReportId(report.id);
+    try {
+      await resolveCommunityPostReport(accessToken, communityId, report.post_id, report.id);
+      setMessage("Report resolved.");
+      await refresh(
+        state.members.offset,
+        state.pendingMembers?.offset ?? 0,
+        state.invitations?.offset ?? 0,
+        state.posts?.offset ?? 0,
+        nextReportOffset
+      );
+    } catch (caught) {
+      setActionError(caught instanceof ApiError ? caught.message : "Report could not be resolved.");
+    } finally {
+      setBusyReportId(null);
+    }
+  }
+
   async function handleJoin() {
     setMessage(null);
     setActionError(null);
@@ -719,7 +784,7 @@ function CommunityDetailContent({
     );
   }
 
-  const { community, invitations, members, pendingMembers, posts } = state;
+  const { community, invitations, members, moderationReports, pendingMembers, posts } = state;
   const activeMember = community.membership_status === "ACTIVE";
   const pendingMember = community.membership_status === "PENDING";
   const owner = community.membership_role === "OWNER";
@@ -1141,6 +1206,134 @@ function CommunityDetailContent({
           </div>
         )}
       </section>
+
+      {canManage && moderationReports ? (
+        <section className="mt-8">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-secondary">
+                Moderation
+              </p>
+              <h2 className="mt-2 font-display text-2xl font-semibold text-ink">
+                Open report queue
+              </h2>
+            </div>
+            <p className="text-sm font-semibold text-muted">
+              {moderationReports.total} open report
+              {moderationReports.total === 1 ? "" : "s"}
+            </p>
+          </div>
+          <div className="mt-5 grid gap-3 lg:grid-cols-2">
+            {moderationReports.reports.length === 0 ? (
+              <p className="border-y border-border bg-white px-4 py-6 text-sm font-semibold text-muted lg:col-span-2">
+                No open reports need review.
+              </p>
+            ) : null}
+            {moderationReports.reports.map((report) => (
+              <article className="rounded-lg border border-border bg-white p-4 shadow-soft" key={report.id}>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="font-display text-xl font-semibold text-ink">
+                      {formatLabel(report.reason)}
+                    </h3>
+                    <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-muted">
+                      Reported {formatDate(report.created_at)}
+                    </p>
+                  </div>
+                  <span className="inline-flex min-h-8 items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 text-xs font-semibold text-amber-700">
+                    <Flag aria-hidden="true" className="h-4 w-4" />
+                    {formatLabel(report.status)}
+                  </span>
+                </div>
+                <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+                  <div>
+                    <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">
+                      Reporter
+                    </dt>
+                    <dd className="mt-1 font-semibold text-ink">{report.reporter_display_name}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">
+                      Post author
+                    </dt>
+                    <dd className="mt-1 font-semibold text-ink">
+                      {report.post_author_display_name}
+                    </dd>
+                  </div>
+                </dl>
+                {report.note ? (
+                  <p className="mt-4 rounded-lg border border-border bg-surface px-3 py-3 text-sm leading-6 text-ink">
+                    {report.note}
+                  </p>
+                ) : null}
+                <div className="mt-4 border-t border-border pt-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">
+                    Reported post
+                  </p>
+                  <p className="mt-2 whitespace-pre-line text-sm leading-6 text-ink">
+                    {truncateText(report.post_body, 280)}
+                  </p>
+                  <p className="mt-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted">
+                    {formatLabel(report.post_status)} - Posted {formatDate(report.post_created_at)}
+                  </p>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white transition hover:bg-[#003d7d] disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={busyReportId === report.id}
+                    onClick={() => void handleResolveReport(report)}
+                    type="button"
+                  >
+                    <CheckCircle2 aria-hidden="true" className="h-4 w-4" />
+                    {busyReportId === report.id ? "Resolving..." : "Resolve"}
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+          <div className="mt-5 flex flex-col gap-3 border-y border-border bg-white px-4 py-3 text-sm font-semibold text-muted sm:flex-row sm:items-center sm:justify-between">
+            <p>
+              {moderationReports.total === 0
+                ? "No reports"
+                : `Showing ${moderationReports.offset + 1}-${moderationReports.offset + moderationReports.reports.length} of ${moderationReports.total}`}
+            </p>
+            <div className="flex gap-2">
+              <button
+                className="focus-ring min-h-10 rounded-lg border border-border px-4 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={moderationReports.offset === 0}
+                onClick={() =>
+                  void refresh(
+                    members.offset,
+                    pendingMembers?.offset ?? 0,
+                    invitations?.offset ?? 0,
+                    posts?.offset ?? 0,
+                    Math.max(0, moderationReports.offset - moderationReports.limit)
+                  )
+                }
+                type="button"
+              >
+                Previous
+              </button>
+              <button
+                className="focus-ring min-h-10 rounded-lg border border-border px-4 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={!moderationReports.has_more}
+                onClick={() =>
+                  void refresh(
+                    members.offset,
+                    pendingMembers?.offset ?? 0,
+                    invitations?.offset ?? 0,
+                    posts?.offset ?? 0,
+                    moderationReports.offset + moderationReports.limit
+                  )
+                }
+                type="button"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       <section className="mt-8">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
@@ -1791,6 +1984,14 @@ function formatDate(value: string): string {
     month: "short",
     year: "numeric"
   }).format(new Date(value));
+}
+
+function truncateText(value: string, maxLength: number): string {
+  if (value.length <= maxLength) {
+    return value;
+  }
+
+  return `${value.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`;
 }
 
 function canManageCommunity(userRoles: string[], community: Community): boolean {

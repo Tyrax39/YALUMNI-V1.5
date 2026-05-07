@@ -71,6 +71,7 @@ POST /api/v1/communities/{community_id}/posts/{post_id}/reaction
 POST /api/v1/communities/{community_id}/posts/{post_id}/reports
 GET  /api/v1/communities/{community_id}/posts/{post_id}/reports
 POST /api/v1/communities/{community_id}/posts/{post_id}/reports/{report_id}/resolve
+GET  /api/v1/communities/{community_id}/post-reports
 ```
 
 Evidence uploads accept PDF, JPEG, PNG, and WebP files. Uploading evidence to a
@@ -124,7 +125,7 @@ Community member management supports:
 Admins and community owners can manage non-owner members and managers. Active
 community managers can manage ordinary members only. Community owners cannot be
 demoted or removed through these endpoints; ownership transfer remains a
-separate planned workflow.
+separate workflow.
 
 Community settings management supports:
 
@@ -184,6 +185,9 @@ Private community posts support:
 - `POST /api/v1/communities/{community_id}/posts/{post_id}/reports` creates
   one open report per reporter/post. Report listing and resolving are
   restricted to community managers/owners and platform admins.
+- `GET /api/v1/communities/{community_id}/post-reports` gives the same
+  manager set a paginated community-level report queue with post context.
+  It supports `status=OPEN|RESOLVED|ALL`, `limit`, and `offset`.
 
 ## Phase 3: Alumni
 
@@ -211,6 +215,7 @@ POST   /api/v1/communities/{community_id}/posts/{post_id}/reaction # implemented
 POST   /api/v1/communities/{community_id}/posts/{post_id}/reports # implemented
 GET    /api/v1/communities/{community_id}/posts/{post_id}/reports # implemented
 POST   /api/v1/communities/{community_id}/posts/{post_id}/reports/{report_id}/resolve # implemented
+GET    /api/v1/communities/{community_id}/post-reports # implemented
 GET    /api/v1/feed
 POST   /api/v1/posts
 GET    /api/v1/posts/{post_id}

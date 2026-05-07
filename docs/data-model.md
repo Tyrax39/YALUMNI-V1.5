@@ -40,7 +40,7 @@
 - `community_posts` - implemented with active/removed status, author, body, remover, and removal timestamp for private community feeds.
 - `community_post_comments` - implemented with active/removed status, post-scoped author comments, remover, and removal timestamp.
 - `community_post_reactions` - implemented with one current `LIKE` reaction per user/post.
-- `community_post_reports` - implemented with reporter, reason, optional note, open/resolved status, resolver, and resolution timestamp.
+- `community_post_reports` - implemented with reporter, reason, optional note, open/resolved status, resolver, resolution timestamp, and community-level queue support through post joins.
 - `community_settings` - folded into `communities` for MVP settings editing.
 
 ### Feed

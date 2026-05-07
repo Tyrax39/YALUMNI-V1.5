@@ -396,6 +396,22 @@ export type CommunityPostReportListResponse = {
   has_more: boolean;
 };
 
+export type CommunityPostReportQueueItem = CommunityPostReport & {
+  post_author_display_name: string;
+  post_body: string;
+  post_status: string;
+  post_removed_at: string | null;
+  post_created_at: string;
+};
+
+export type CommunityPostReportQueueResponse = {
+  reports: CommunityPostReportQueueItem[];
+  total: number;
+  limit: number;
+  offset: number;
+  has_more: boolean;
+};
+
 export type CommunityCreatePayload = {
   name: string;
   community_type?: string;
@@ -1265,6 +1281,31 @@ export function listCommunityPostReports(
   const query = searchParams.toString();
   return protectedApiFetch<CommunityPostReportListResponse>(
     `/api/v1/communities/${encodeURIComponent(communityId)}/posts/${encodeURIComponent(postId)}/reports${query ? `?${query}` : ""}`,
+    {
+      headers: authHeaders(accessToken)
+    }
+  );
+}
+
+export function listCommunityPostReportQueue(
+  accessToken: string,
+  communityId: string,
+  params: { limit?: number; offset?: number; status?: string } = {}
+): Promise<CommunityPostReportQueueResponse> {
+  const searchParams = new URLSearchParams();
+  if (params.status) {
+    searchParams.set("status", params.status);
+  }
+  if (params.limit) {
+    searchParams.set("limit", String(params.limit));
+  }
+  if (params.offset) {
+    searchParams.set("offset", String(params.offset));
+  }
+
+  const query = searchParams.toString();
+  return protectedApiFetch<CommunityPostReportQueueResponse>(
+    `/api/v1/communities/${encodeURIComponent(communityId)}/post-reports${query ? `?${query}` : ""}`,
     {
       headers: authHeaders(accessToken)
     }

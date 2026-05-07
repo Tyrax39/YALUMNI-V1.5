@@ -76,8 +76,9 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
 - Community comments. Implemented for active members with author/moderator removal.
 - Reactions. Implemented as a current-user `LIKE` toggle with feed counts.
 - Reports. Implemented as one open report per reporter/post with moderator review and resolution APIs.
-- Moderator actions. Started with manager/owner/admin post and comment removal inside communities.
-- Admin moderation queue. Planned as a cross-community review surface.
+- Community moderation queue. Implemented as a manager/owner/admin open-report review surface on community detail pages.
+- Moderator actions. Started with manager/owner/admin post and comment removal plus report resolution inside communities.
+- Cross-community admin moderation queue. Planned as a global review surface.
 
 ## Phase 7: Messaging And Notifications
 

@@ -306,3 +306,19 @@ class CommunityPostReportListResponse(BaseModel):
     limit: int
     offset: int
     has_more: bool
+
+
+class CommunityPostReportQueueItem(CommunityPostReportResponse):
+    post_author_display_name: str
+    post_body: str
+    post_status: str
+    post_removed_at: datetime | None
+    post_created_at: datetime
+
+
+class CommunityPostReportQueueResponse(BaseModel):
+    reports: list[CommunityPostReportQueueItem]
+    total: int
+    limit: int
+    offset: int
+    has_more: bool

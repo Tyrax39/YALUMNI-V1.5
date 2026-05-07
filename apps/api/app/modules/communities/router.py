@@ -42,6 +42,8 @@ from app.modules.communities.schemas import (
     CommunityPostReactionResponse,
     CommunityPostReportCreate,
     CommunityPostReportListResponse,
+    CommunityPostReportQueueItem,
+    CommunityPostReportQueueResponse,
     CommunityPostReportResponse,
     CommunityPostResponse,
     CommunityResponse,
@@ -333,6 +335,28 @@ def _serialize_report(report: CommunityPostReport) -> CommunityPostReportRespons
         resolved_at=report.resolved_at,
         created_at=report.created_at,
         updated_at=report.updated_at,
+    )
+
+
+def _serialize_report_queue_item(report: CommunityPostReport) -> CommunityPostReportQueueItem:
+    post = report.post
+    return CommunityPostReportQueueItem(
+        id=report.id,
+        post_id=report.post_id,
+        reporter_user_id=report.reporter_user_id,
+        reporter_display_name=report.reporter.display_name if report.reporter else "Removed user",
+        reason=report.reason,
+        note=report.note,
+        status=report.status,
+        resolved_by_user_id=report.resolved_by_user_id,
+        resolved_at=report.resolved_at,
+        created_at=report.created_at,
+        updated_at=report.updated_at,
+        post_author_display_name=post.author.display_name if post.author else "Removed user",
+        post_body=post.body,
+        post_status=post.status,
+        post_removed_at=post.removed_at,
+        post_created_at=post.created_at,
     )
 
 
@@ -1156,6 +1180,54 @@ def resolve_community_post_report(
     db.commit()
     db.refresh(report)
     return _serialize_report(report)
+
+
+@router.get(
+    "/{community_id}/post-reports",
+    response_model=CommunityPostReportQueueResponse,
+)
+def list_community_post_report_queue(
+    community_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+    status_filter: Annotated[
+        str,
+        Query(alias="status", pattern="^(OPEN|RESOLVED|ALL)$"),
+    ] = "OPEN",
+    limit: Annotated[int, Query(ge=1, le=50)] = 10,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> CommunityPostReportQueueResponse:
+    community = _get_community_or_404(db, community_id)
+    if not _can_manage_community(current_user, community):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to review community reports",
+        )
+
+    normalized_status = status_filter.strip().upper()
+    query = (
+        select(CommunityPostReport)
+        .join(CommunityPost, CommunityPostReport.post_id == CommunityPost.id)
+        .options(
+            joinedload(CommunityPostReport.reporter),
+            joinedload(CommunityPostReport.post).joinedload(CommunityPost.author),
+        )
+        .where(CommunityPost.community_id == community.id)
+    )
+    if normalized_status != "ALL":
+        query = query.where(CommunityPostReport.status == normalized_status)
+
+    total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+    reports = db.scalars(
+        query.order_by(CommunityPostReport.created_at.desc()).offset(offset).limit(limit)
+    ).all()
+    return CommunityPostReportQueueResponse(
+        reports=[_serialize_report_queue_item(report) for report in reports],
+        total=total,
+        limit=limit,
+        offset=offset,
+        has_more=offset + len(reports) < total,
+    )
 
 
 @router.get("/{community_id}/members", response_model=CommunityMemberListResponse)
