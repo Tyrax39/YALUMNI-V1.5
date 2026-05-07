@@ -142,6 +142,22 @@ export type NotificationStreamSnapshot = {
   unread_count: number;
 };
 
+export type NotificationPreference = {
+  id: string;
+  user_id: string;
+  in_app_enabled: boolean;
+  email_digest_frequency: "DAILY" | "NONE" | "WEEKLY";
+  muted_event_types: string[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type NotificationPreferenceUpdate = {
+  email_digest_frequency?: "DAILY" | "NONE" | "WEEKLY";
+  in_app_enabled?: boolean;
+  muted_event_types?: string[];
+};
+
 export type ProgramAffiliation = {
   id: string;
   program_name: string;
@@ -916,6 +932,23 @@ export function markAllNotificationsRead(
   return protectedApiFetch<NotificationReadAllResponse>("/api/v1/notifications/read-all", {
     headers: authHeaders(accessToken),
     method: "POST"
+  });
+}
+
+export function getNotificationPreferences(accessToken: string): Promise<NotificationPreference> {
+  return protectedApiFetch<NotificationPreference>("/api/v1/notifications/preferences", {
+    headers: authHeaders(accessToken)
+  });
+}
+
+export function updateNotificationPreferences(
+  accessToken: string,
+  payload: NotificationPreferenceUpdate
+): Promise<NotificationPreference> {
+  return protectedApiFetch<NotificationPreference>("/api/v1/notifications/preferences", {
+    body: JSON.stringify(payload),
+    headers: authHeaders(accessToken),
+    method: "PATCH"
   });
 }
 

@@ -13,9 +13,11 @@ from app.core.database import get_db_session
 from app.core.security import utcnow
 from app.modules.auth.dependencies import get_current_user
 from app.modules.auth.models import User
-from app.modules.notifications.models import Notification
+from app.modules.notifications.models import Notification, NotificationPreference
 from app.modules.notifications.schemas import (
     NotificationListResponse,
+    NotificationPreferenceResponse,
+    NotificationPreferenceUpdate,
     NotificationReadAllResponse,
     NotificationResponse,
 )
@@ -41,6 +43,36 @@ def _serialize_notification(notification: Notification) -> NotificationResponse:
         created_at=notification.created_at,
         updated_at=notification.updated_at,
     )
+
+
+def _serialize_preference(preference: NotificationPreference) -> NotificationPreferenceResponse:
+    return NotificationPreferenceResponse(
+        id=preference.id,
+        user_id=preference.user_id,
+        in_app_enabled=preference.in_app_enabled,
+        email_digest_frequency=preference.email_digest_frequency,
+        muted_event_types=preference.muted_event_types or [],
+        created_at=preference.created_at,
+        updated_at=preference.updated_at,
+    )
+
+
+def _get_or_create_preference(db: Session, user: User) -> NotificationPreference:
+    preference = db.scalar(
+        select(NotificationPreference).where(NotificationPreference.user_id == user.id)
+    )
+    if preference is None:
+        preference = NotificationPreference(
+            user_id=user.id,
+            in_app_enabled=True,
+            email_digest_frequency="NONE",
+            muted_event_types=[],
+        )
+        db.add(preference)
+        db.commit()
+        db.refresh(preference)
+
+    return preference
 
 
 def _unread_count(db: Session, user: User) -> int:
@@ -157,6 +189,33 @@ def stream_my_notifications(
         },
         media_type="text/event-stream",
     )
+
+
+@router.get("/preferences", response_model=NotificationPreferenceResponse)
+def get_my_notification_preferences(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> NotificationPreferenceResponse:
+    return _serialize_preference(_get_or_create_preference(db, current_user))
+
+
+@router.patch("/preferences", response_model=NotificationPreferenceResponse)
+def update_my_notification_preferences(
+    payload: NotificationPreferenceUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> NotificationPreferenceResponse:
+    preference = _get_or_create_preference(db, current_user)
+    if payload.in_app_enabled is not None:
+        preference.in_app_enabled = payload.in_app_enabled
+    if payload.email_digest_frequency is not None:
+        preference.email_digest_frequency = payload.email_digest_frequency
+    if payload.muted_event_types is not None:
+        preference.muted_event_types = payload.muted_event_types
+
+    db.commit()
+    db.refresh(preference)
+    return _serialize_preference(preference)
 
 
 @router.post("/{notification_id}/read", response_model=NotificationResponse)

@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Index, String, Text, Uuid
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -32,3 +32,19 @@ class Notification(Base, TimestampMixin):
 
     user: Mapped[User] = relationship(foreign_keys=[user_id])
     actor_user: Mapped[User | None] = relationship(foreign_keys=[actor_user_id])
+
+
+class NotificationPreference(Base, TimestampMixin):
+    __tablename__ = "notification_preferences"
+    __table_args__ = (Index("ix_notification_preferences_user", "user_id", unique=True),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    in_app_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    email_digest_frequency: Mapped[str] = mapped_column(String(20), nullable=False, default="NONE")
+    muted_event_types: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+
+    user: Mapped[User] = relationship(foreign_keys=[user_id])

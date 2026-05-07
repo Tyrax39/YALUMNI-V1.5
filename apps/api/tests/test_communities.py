@@ -241,6 +241,108 @@ def test_notification_stream_returns_live_unread_snapshot(client: TestClient) ->
     assert snapshot_after_read["latest_notification"]["id"] == snapshot["latest_notification"]["id"]
 
 
+def test_notification_preferences_control_in_app_delivery(client: TestClient) -> None:
+    admin_headers = create_admin(client)
+    community = create_community(
+        client,
+        admin_headers,
+        name="Preference Review Working Group",
+        community_type="WORKING_GROUP",
+        join_policy="REQUEST",
+    )
+
+    default_preferences = client.get("/api/v1/notifications/preferences", headers=admin_headers)
+    assert default_preferences.status_code == 200
+    default_payload = default_preferences.json()
+    assert default_payload["in_app_enabled"] is True
+    assert default_payload["email_digest_frequency"] == "NONE"
+    assert default_payload["muted_event_types"] == []
+
+    invalid_preferences = client.patch(
+        "/api/v1/notifications/preferences",
+        headers=admin_headers,
+        json={"email_digest_frequency": "hourly"},
+    )
+    assert invalid_preferences.status_code == 422
+
+    muted_preferences = client.patch(
+        "/api/v1/notifications/preferences",
+        headers=admin_headers,
+        json={
+            "email_digest_frequency": "daily",
+            "muted_event_types": [
+                "community.join_requested",
+                "community.join_requested",
+            ],
+        },
+    )
+    assert muted_preferences.status_code == 200
+    muted_payload = muted_preferences.json()
+    assert muted_payload["email_digest_frequency"] == "DAILY"
+    assert muted_payload["muted_event_types"] == ["community.join_requested"]
+
+    muted_member = register_user(client, "preference.muted@example.com")
+    muted_join = client.post(
+        f"/api/v1/communities/{community['id']}/join",
+        headers=auth_headers(muted_member["access_token"]),
+    )
+    assert muted_join.status_code == 200
+
+    muted_notifications = client.get(
+        "/api/v1/notifications?status=ALL",
+        headers=admin_headers,
+    )
+    assert muted_notifications.status_code == 200
+    assert muted_notifications.json()["total"] == 0
+
+    unmuted_preferences = client.patch(
+        "/api/v1/notifications/preferences",
+        headers=admin_headers,
+        json={"muted_event_types": []},
+    )
+    assert unmuted_preferences.status_code == 200
+    assert unmuted_preferences.json()["muted_event_types"] == []
+
+    unmuted_member = register_user(client, "preference.unmuted@example.com")
+    unmuted_join = client.post(
+        f"/api/v1/communities/{community['id']}/join",
+        headers=auth_headers(unmuted_member["access_token"]),
+    )
+    assert unmuted_join.status_code == 200
+
+    unmuted_notifications = client.get(
+        "/api/v1/notifications?status=ALL",
+        headers=admin_headers,
+    )
+    assert unmuted_notifications.status_code == 200
+    assert unmuted_notifications.json()["total"] == 1
+    assert (
+        unmuted_notifications.json()["notifications"][0]["event_type"] == "community.join_requested"
+    )
+
+    disabled_preferences = client.patch(
+        "/api/v1/notifications/preferences",
+        headers=admin_headers,
+        json={"in_app_enabled": False},
+    )
+    assert disabled_preferences.status_code == 200
+    assert disabled_preferences.json()["in_app_enabled"] is False
+
+    disabled_member = register_user(client, "preference.disabled@example.com")
+    disabled_join = client.post(
+        f"/api/v1/communities/{community['id']}/join",
+        headers=auth_headers(disabled_member["access_token"]),
+    )
+    assert disabled_join.status_code == 200
+
+    disabled_notifications = client.get(
+        "/api/v1/notifications?status=ALL",
+        headers=admin_headers,
+    )
+    assert disabled_notifications.status_code == 200
+    assert disabled_notifications.json()["total"] == 1
+
+
 def test_community_admin_can_create_and_member_can_join_leave(client: TestClient) -> None:
     admin_headers = create_admin(client)
     community = create_community(

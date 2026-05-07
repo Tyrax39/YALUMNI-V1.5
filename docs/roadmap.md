@@ -91,6 +91,8 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
   removal/restoration.
 - Realtime notification delivery. Started with an authenticated SSE stream for
   unread-count/latest-notification snapshots and dashboard live refresh.
+- Notification preferences. Started with current-user in-app master toggle,
+  muted event types, and digest-frequency preference records.
 - Direct conversations.
 - Message list/send.
 - WebSocket events.

@@ -88,6 +88,8 @@ GET  /api/v1/communities/admin/moderation/removed-posts
 GET  /api/v1/communities/admin/moderation/removed-comments
 GET  /api/v1/notifications
 GET  /api/v1/notifications/stream
+GET  /api/v1/notifications/preferences
+PATCH /api/v1/notifications/preferences
 POST /api/v1/notifications/{notification_id}/read
 POST /api/v1/notifications/read-all
 ```
@@ -252,6 +254,12 @@ Notification center support:
   MVP stream uses a configurable polling interval through
   `NOTIFICATION_STREAM_POLL_SECONDS`; Redis/WebSocket fanout remains a later
   production hardening step.
+- `GET /api/v1/notifications/preferences` returns the current user's in-app
+  notification preference record. A default record is created on first access.
+- `PATCH /api/v1/notifications/preferences` updates the in-app master toggle,
+  email digest frequency placeholder (`NONE|DAILY|WEEKLY`), and muted
+  notification event types. Muted in-app event types are suppressed by
+  `notify_users` before notifications are written.
 - `POST /api/v1/notifications/{notification_id}/read` marks a single current
   user notification as read. Other users' notification IDs return 404.
 - `POST /api/v1/notifications/read-all` marks all current-user unread
@@ -331,6 +339,8 @@ DELETE /api/v1/users/{user_id}/block
 ```text
 GET    /api/v1/notifications                         # implemented
 GET    /api/v1/notifications/stream                  # implemented
+GET    /api/v1/notifications/preferences             # implemented
+PATCH  /api/v1/notifications/preferences             # implemented
 POST   /api/v1/notifications/{notification_id}/read   # implemented
 POST   /api/v1/notifications/read-all                 # implemented
 ```
