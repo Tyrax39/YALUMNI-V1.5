@@ -6,6 +6,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.core.config import get_settings
 from app.core.database import Base, get_db_session
 from app.core.rate_limit import clear_rate_limits
 from app.main import app
@@ -696,6 +697,179 @@ def test_community_posts_are_private_and_moderated(client: TestClient) -> None:
         headers=manager_headers,
     )
     assert duplicate_restore_post.status_code == 409
+
+
+def test_community_post_media_uploads_downloads_and_moderates(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    monkeypatch.setenv("UPLOAD_STORAGE_PROVIDER", "LOCAL")
+    monkeypatch.setenv("COMMUNITY_POST_MEDIA_UPLOAD_DIR", str(tmp_path))
+    monkeypatch.setenv("COMMUNITY_POST_MEDIA_UPLOAD_MAX_BYTES", "64")
+    monkeypatch.setenv("COMMUNITY_POST_MEDIA_ALLOWED_TYPES", "image/png,application/pdf")
+    get_settings.cache_clear()
+    try:
+        admin_headers = create_admin(client)
+        community = create_community(
+            client,
+            admin_headers,
+            name="Kenya Media Feed Chapter",
+            country="Kenya",
+        )
+
+        member_user = register_user(client, "media.member@example.com")
+        other_member_user = register_user(client, "media.other@example.com")
+        manager_user = register_user(client, "media.manager@example.com")
+        outsider_user = register_user(client, "media.outsider@example.com")
+        member_headers = auth_headers(member_user["access_token"])
+        other_member_headers = auth_headers(other_member_user["access_token"])
+        manager_headers = auth_headers(manager_user["access_token"])
+        outsider_headers = auth_headers(outsider_user["access_token"])
+
+        for headers in (member_headers, other_member_headers, manager_headers):
+            join_response = client.post(
+                f"/api/v1/communities/{community['id']}/join",
+                headers=headers,
+            )
+            assert join_response.status_code == 200
+
+        roster_response = client.get(
+            f"/api/v1/communities/{community['id']}/members",
+            headers=admin_headers,
+        )
+        assert roster_response.status_code == 200
+        members_by_email = {member["email"]: member for member in roster_response.json()["members"]}
+        manager_promotion = client.patch(
+            f"/api/v1/communities/{community['id']}/members/"
+            f"{members_by_email['media.manager@example.com']['id']}",
+            headers=admin_headers,
+            json={"role": "MANAGER"},
+        )
+        assert manager_promotion.status_code == 200
+
+        post_response = client.post(
+            f"/api/v1/communities/{community['id']}/posts",
+            headers=member_headers,
+            json={"body": "Photo recap from the chapter session."},
+        )
+        assert post_response.status_code == 201
+        post = post_response.json()
+        assert post["media"] == []
+
+        outsider_upload = client.post(
+            f"/api/v1/communities/{community['id']}/posts/{post['id']}/media",
+            files={"file": ("blocked.png", b"blocked", "image/png")},
+            headers=outsider_headers,
+        )
+        assert outsider_upload.status_code == 403
+
+        invalid_type_upload = client.post(
+            f"/api/v1/communities/{community['id']}/posts/{post['id']}/media",
+            files={"file": ("notes.txt", b"notes", "text/plain")},
+            headers=member_headers,
+        )
+        assert invalid_type_upload.status_code == 415
+
+        oversized_upload = client.post(
+            f"/api/v1/communities/{community['id']}/posts/{post['id']}/media",
+            files={"file": ("large.png", b"x" * 65, "image/png")},
+            headers=member_headers,
+        )
+        assert oversized_upload.status_code == 413
+
+        image_bytes = b"fake-png-payload"
+        upload_response = client.post(
+            f"/api/v1/communities/{community['id']}/posts/{post['id']}/media",
+            data={"alt_text": "Chapter members at a local session"},
+            files={"file": ("chapter.png", image_bytes, "image/png")},
+            headers=member_headers,
+        )
+        assert upload_response.status_code == 201
+        media = upload_response.json()
+        assert media["file_name"] == "chapter.png"
+        assert media["content_type"] == "image/png"
+        assert media["file_size_bytes"] == len(image_bytes)
+        assert media["alt_text"] == "Chapter members at a local session"
+        assert media["status"] == "ACTIVE"
+        assert media["download_url"].endswith(f"/media/{media['id']}/download")
+        assert (tmp_path / post["id"] / f"{media['id']}.png").read_bytes() == image_bytes
+
+        member_posts = client.get(
+            f"/api/v1/communities/{community['id']}/posts",
+            headers=member_headers,
+        )
+        assert member_posts.status_code == 200
+        member_post = member_posts.json()["posts"][0]
+        assert member_post["media"][0]["id"] == media["id"]
+
+        download_response = client.get(media["download_url"], headers=member_headers)
+        assert download_response.status_code == 200
+        assert download_response.content == image_bytes
+        assert download_response.headers["content-type"].startswith("image/png")
+
+        outsider_download = client.get(media["download_url"], headers=outsider_headers)
+        assert outsider_download.status_code == 403
+
+        other_member_remove = client.post(
+            f"/api/v1/communities/{community['id']}/posts/{post['id']}/media/{media['id']}/remove",
+            headers=other_member_headers,
+        )
+        assert other_member_remove.status_code == 403
+
+        member_remove = client.post(
+            f"/api/v1/communities/{community['id']}/posts/{post['id']}/media/{media['id']}/remove",
+            headers=member_headers,
+        )
+        assert member_remove.status_code == 200
+        removed_media = member_remove.json()
+        assert removed_media["status"] == "REMOVED"
+        assert removed_media["removed_by_user_id"] == member_user["user"]["id"]
+        assert removed_media["removed_at"] is not None
+
+        duplicate_remove = client.post(
+            f"/api/v1/communities/{community['id']}/posts/{post['id']}/media/{media['id']}/remove",
+            headers=member_headers,
+        )
+        assert duplicate_remove.status_code == 409
+
+        hidden_from_member = client.get(
+            f"/api/v1/communities/{community['id']}/posts",
+            headers=member_headers,
+        )
+        assert hidden_from_member.status_code == 200
+        assert hidden_from_member.json()["posts"][0]["media"] == []
+
+        visible_to_manager = client.get(
+            f"/api/v1/communities/{community['id']}/posts",
+            headers=manager_headers,
+        )
+        assert visible_to_manager.status_code == 200
+        assert visible_to_manager.json()["posts"][0]["media"][0]["status"] == "REMOVED"
+
+        member_download_removed = client.get(media["download_url"], headers=member_headers)
+        assert member_download_removed.status_code == 404
+
+        member_restore_denied = client.post(
+            f"/api/v1/communities/{community['id']}/posts/{post['id']}/media/{media['id']}/restore",
+            headers=member_headers,
+        )
+        assert member_restore_denied.status_code == 403
+
+        manager_restore = client.post(
+            f"/api/v1/communities/{community['id']}/posts/{post['id']}/media/{media['id']}/restore",
+            headers=manager_headers,
+        )
+        assert manager_restore.status_code == 200
+        assert manager_restore.json()["status"] == "ACTIVE"
+        assert manager_restore.json()["removed_by_user_id"] is None
+        assert manager_restore.json()["removed_at"] is None
+
+        restored_download = client.get(media["download_url"], headers=member_headers)
+        assert restored_download.status_code == 200
+        assert restored_download.content == image_bytes
+    finally:
+        get_settings.cache_clear()
 
 
 def test_community_post_comments_reactions_and_reports(client: TestClient) -> None:

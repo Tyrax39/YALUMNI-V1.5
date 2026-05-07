@@ -368,6 +368,23 @@ export type CommunityPost = {
   reaction_count: number;
   viewer_reacted: boolean;
   open_report_count: number;
+  media: CommunityPostMedia[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type CommunityPostMedia = {
+  id: string;
+  post_id: string;
+  uploaded_by_user_id: string | null;
+  file_name: string;
+  content_type: string;
+  file_size_bytes: number;
+  alt_text: string | null;
+  status: string;
+  removed_by_user_id: string | null;
+  removed_at: string | null;
+  download_url: string;
   created_at: string;
   updated_at: string;
 };
@@ -1317,6 +1334,74 @@ export function createCommunityPost(
     `/api/v1/communities/${encodeURIComponent(communityId)}/posts`,
     {
       body: JSON.stringify(payload),
+      headers: authHeaders(accessToken),
+      method: "POST"
+    }
+  );
+}
+
+export function uploadCommunityPostMedia(
+  accessToken: string,
+  communityId: string,
+  postId: string,
+  payload: { altText?: string | null; file: File }
+): Promise<CommunityPostMedia> {
+  const formData = new FormData();
+  formData.set("file", payload.file);
+  if (payload.altText) {
+    formData.set("alt_text", payload.altText);
+  }
+
+  return protectedApiFetch<CommunityPostMedia>(
+    `/api/v1/communities/${encodeURIComponent(communityId)}/posts/${encodeURIComponent(postId)}/media`,
+    {
+      body: formData,
+      headers: authHeaders(accessToken),
+      method: "POST"
+    }
+  );
+}
+
+export async function downloadCommunityPostMedia(
+  accessToken: string,
+  media: CommunityPostMedia
+): Promise<Blob> {
+  const response = await fetch(`/api/backend${media.download_url}`, {
+    credentials: "same-origin",
+    headers: authHeaders(accessToken)
+  });
+
+  if (!response.ok) {
+    throw new ApiError(await readError(response), response.status);
+  }
+
+  return response.blob();
+}
+
+export function removeCommunityPostMedia(
+  accessToken: string,
+  communityId: string,
+  postId: string,
+  mediaId: string
+): Promise<CommunityPostMedia> {
+  return protectedApiFetch<CommunityPostMedia>(
+    `/api/v1/communities/${encodeURIComponent(communityId)}/posts/${encodeURIComponent(postId)}/media/${encodeURIComponent(mediaId)}/remove`,
+    {
+      headers: authHeaders(accessToken),
+      method: "POST"
+    }
+  );
+}
+
+export function restoreCommunityPostMedia(
+  accessToken: string,
+  communityId: string,
+  postId: string,
+  mediaId: string
+): Promise<CommunityPostMedia> {
+  return protectedApiFetch<CommunityPostMedia>(
+    `/api/v1/communities/${encodeURIComponent(communityId)}/posts/${encodeURIComponent(postId)}/media/${encodeURIComponent(mediaId)}/restore`,
+    {
       headers: authHeaders(accessToken),
       method: "POST"
     }

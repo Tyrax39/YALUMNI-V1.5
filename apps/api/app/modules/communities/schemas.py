@@ -254,6 +254,22 @@ class CommunityInvitationListResponse(BaseModel):
     has_more: bool
 
 
+class CommunityPostMediaResponse(BaseModel):
+    id: uuid.UUID
+    post_id: uuid.UUID
+    uploaded_by_user_id: uuid.UUID | None
+    file_name: str
+    content_type: str
+    file_size_bytes: int
+    alt_text: str | None
+    status: str
+    removed_by_user_id: uuid.UUID | None
+    removed_at: datetime | None
+    download_url: str
+    created_at: datetime
+    updated_at: datetime
+
+
 class CommunityPostResponse(BaseModel):
     id: uuid.UUID
     community_id: uuid.UUID
@@ -272,6 +288,7 @@ class CommunityPostResponse(BaseModel):
     reaction_count: int
     viewer_reacted: bool
     open_report_count: int
+    media: list[CommunityPostMediaResponse]
     created_at: datetime
     updated_at: datetime
 

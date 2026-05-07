@@ -156,6 +156,11 @@ class CommunityPost(Base, TimestampMixin):
         back_populates="post",
         cascade="all, delete-orphan",
     )
+    media_items: Mapped[list["CommunityPostMedia"]] = relationship(
+        back_populates="post",
+        cascade="all, delete-orphan",
+        order_by="CommunityPostMedia.created_at.asc()",
+    )
     reports: Mapped[list["CommunityPostReport"]] = relationship(
         back_populates="post",
         cascade="all, delete-orphan",
@@ -224,6 +229,38 @@ class CommunityPostReaction(Base, TimestampMixin):
 
     post: Mapped[CommunityPost] = relationship(back_populates="reactions")
     user: Mapped[User] = relationship()
+
+
+class CommunityPostMedia(Base, TimestampMixin):
+    __tablename__ = "community_post_media"
+    __table_args__ = (
+        Index("ix_community_post_media_post_status", "post_id", "status"),
+        Index("ix_community_post_media_uploader_created", "uploaded_by_user_id", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    post_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("community_posts.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    uploaded_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+    )
+    file_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(120), nullable=False)
+    file_size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    storage_provider: Mapped[str] = mapped_column(String(40), default="LOCAL", nullable=False)
+    storage_key: Mapped[str] = mapped_column(String(700), nullable=False)
+    alt_text: Mapped[str | None] = mapped_column(String(180))
+    status: Mapped[str] = mapped_column(String(40), default="ACTIVE", nullable=False)
+    removed_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+    )
+    removed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    post: Mapped[CommunityPost] = relationship(back_populates="media_items")
+    uploaded_by_user: Mapped[User | None] = relationship(foreign_keys=[uploaded_by_user_id])
+    removed_by_user: Mapped[User | None] = relationship(foreign_keys=[removed_by_user_id])
 
 
 class CommunityPostReport(Base, TimestampMixin):

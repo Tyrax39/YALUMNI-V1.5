@@ -73,6 +73,7 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
 ## Phase 6: Feed And Moderation
 
 - Community-scoped posts. Implemented for active community members with gated reads/creates.
+- Media attachments. Implemented for community posts with authenticated local/S3 storage, type and size validation, active attachment limits, secure downloads, and remove/restore moderation.
 - Community comments. Implemented for active members with author/moderator removal.
 - Reactions. Implemented as a current-user `LIKE` toggle with feed counts.
 - Reports. Implemented as one open report per reporter/post with moderator review and resolution APIs.

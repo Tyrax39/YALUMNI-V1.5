@@ -3,7 +3,18 @@ import uuid
 from datetime import timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    UploadFile,
+    status,
+)
 from sqlalchemy import String, and_, cast, func, or_, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
@@ -11,6 +22,7 @@ from app.core.config import get_settings
 from app.core.database import get_db_session
 from app.core.permissions import ADMIN_ROLE_NAMES
 from app.core.security import create_refresh_token, hash_token, utcnow
+from app.core.storage import UploadCategory, upload_response
 from app.modules.auth.dependencies import get_current_user, require_roles
 from app.modules.auth.models import Role, RoleAssignment, SecurityEvent, User
 from app.modules.communities.models import (
@@ -19,6 +31,7 @@ from app.modules.communities.models import (
     CommunityMembership,
     CommunityPost,
     CommunityPostComment,
+    CommunityPostMedia,
     CommunityPostReaction,
     CommunityPostReport,
 )
@@ -45,6 +58,7 @@ from app.modules.communities.schemas import (
     CommunityPostCommentResponse,
     CommunityPostCreate,
     CommunityPostListResponse,
+    CommunityPostMediaResponse,
     CommunityPostReactionCreate,
     CommunityPostReactionResponse,
     CommunityPostReportCreate,
@@ -60,6 +74,7 @@ from app.modules.communities.schemas import (
     CommunityResponse,
     CommunityUpdate,
 )
+from app.modules.communities.storage import store_community_post_media_file
 from app.modules.notifications.service import notify_users
 
 router = APIRouter()
@@ -83,6 +98,8 @@ COMMUNITY_REPORT_REASONS = {"HARASSMENT", "MISINFORMATION", "OTHER", "SPAM", "UN
 COMMUNITY_REPORT_STATUSES = {"OPEN", "RESOLVED"}
 COMMUNITY_MODERATION_SEVERITIES = {"CRITICAL", "HIGH", "LOW", "MEDIUM"}
 COMMUNITY_ESCALATION_STATUSES = {"ESCALATED", "NONE"}
+COMMUNITY_POST_MEDIA_STATUSES = {"ACTIVE", "REMOVED"}
+COMMUNITY_POST_MEDIA_LIMIT = 4
 
 
 def _request_context(request: Request) -> tuple[str | None, str | None]:
@@ -399,6 +416,28 @@ def _serialize_member(membership: CommunityMembership) -> CommunityMemberRespons
     )
 
 
+def _serialize_post_media(
+    media: CommunityPostMedia, post: CommunityPost
+) -> CommunityPostMediaResponse:
+    return CommunityPostMediaResponse(
+        id=media.id,
+        post_id=media.post_id,
+        uploaded_by_user_id=media.uploaded_by_user_id,
+        file_name=media.file_name,
+        content_type=media.content_type,
+        file_size_bytes=media.file_size_bytes,
+        alt_text=media.alt_text,
+        status=media.status,
+        removed_by_user_id=media.removed_by_user_id,
+        removed_at=media.removed_at,
+        download_url=(
+            f"/api/v1/communities/{post.community_id}/posts/{post.id}/media/{media.id}/download"
+        ),
+        created_at=media.created_at,
+        updated_at=media.updated_at,
+    )
+
+
 def _serialize_post(
     db: Session,
     post: CommunityPost,
@@ -446,6 +485,9 @@ def _serialize_post(
             )
             or 0
         )
+    media_items = [
+        media for media in post.media_items if media.status == "ACTIVE" or include_moderation
+    ]
 
     return CommunityPostResponse(
         id=post.id,
@@ -465,6 +507,7 @@ def _serialize_post(
         reaction_count=reaction_count,
         viewer_reacted=viewer_reacted,
         open_report_count=open_report_count,
+        media=[_serialize_post_media(media, post) for media in media_items],
         created_at=post.created_at,
         updated_at=post.updated_at,
     )
@@ -988,7 +1031,7 @@ def list_community_posts(
 
     query = (
         select(CommunityPost)
-        .options(joinedload(CommunityPost.author))
+        .options(joinedload(CommunityPost.author), selectinload(CommunityPost.media_items))
         .where(CommunityPost.community_id == community.id)
     )
     if normalized_status != "ALL":
@@ -1215,6 +1258,259 @@ def update_community_post_moderation_review(
     db.commit()
     db.refresh(post)
     return _serialize_post(db, post, current_user, community)
+
+
+@router.post(
+    "/{community_id}/posts/{post_id}/media",
+    response_model=CommunityPostMediaResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_community_post_media(
+    community_id: uuid.UUID,
+    post_id: uuid.UUID,
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+    media_file: Annotated[UploadFile, File(alias="file")],
+    alt_text: Annotated[str | None, Form(max_length=180)] = None,
+) -> CommunityPostMediaResponse:
+    community = _get_community_or_404(db, community_id)
+    if not _can_access_community_content(current_user, community):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Community media is available to active members",
+        )
+
+    post = _get_post_or_404(db, community, post_id)
+    _ensure_post_active(post)
+    if post.author_user_id != current_user.id and not _can_manage_community(
+        current_user, community
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to attach media to this post",
+        )
+
+    active_media_count = (
+        db.scalar(
+            select(func.count())
+            .select_from(CommunityPostMedia)
+            .where(
+                CommunityPostMedia.post_id == post.id,
+                CommunityPostMedia.status == "ACTIVE",
+            )
+        )
+        or 0
+    )
+    if active_media_count >= COMMUNITY_POST_MEDIA_LIMIT:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Posts can have up to {COMMUNITY_POST_MEDIA_LIMIT} active attachments",
+        )
+
+    media_id = uuid.uuid4()
+    stored_file = await store_community_post_media_file(
+        media_id=media_id,
+        post_id=post.id,
+        upload=media_file,
+    )
+    media = CommunityPostMedia(
+        id=media_id,
+        post_id=post.id,
+        uploaded_by_user_id=current_user.id,
+        file_name=stored_file.file_name,
+        content_type=stored_file.content_type,
+        file_size_bytes=stored_file.file_size_bytes,
+        storage_provider=stored_file.storage_provider,
+        storage_key=stored_file.storage_key,
+        alt_text=alt_text.strip() if alt_text else None,
+        status="ACTIVE",
+    )
+    db.add(media)
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "community.post_media_uploaded",
+        metadata={
+            "community_id": str(community.id),
+            "content_type": media.content_type,
+            "media_id": str(media.id),
+            "post_id": str(post.id),
+        },
+    )
+    db.commit()
+    db.refresh(media)
+    return _serialize_post_media(media, post)
+
+
+@router.get(
+    "/{community_id}/posts/{post_id}/media/{media_id}/download",
+)
+def download_community_post_media(
+    community_id: uuid.UUID,
+    post_id: uuid.UUID,
+    media_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> Response:
+    community = _get_community_or_404(db, community_id)
+    if not _can_access_community_content(current_user, community):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Community media is available to active members",
+        )
+
+    post = _get_post_or_404(db, community, post_id)
+    media = _get_post_media_or_404(db, post, media_id)
+    can_manage = _can_manage_community(current_user, community)
+    if (post.status != "ACTIVE" or media.status != "ACTIVE") and not can_manage:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Community post media not found",
+        )
+
+    return upload_response(
+        category=UploadCategory.COMMUNITY_POST_MEDIA,
+        content_type=media.content_type,
+        file_name=media.file_name,
+        storage_key=media.storage_key,
+        storage_provider=media.storage_provider,
+    )
+
+
+@router.post(
+    "/{community_id}/posts/{post_id}/media/{media_id}/remove",
+    response_model=CommunityPostMediaResponse,
+)
+def remove_community_post_media(
+    community_id: uuid.UUID,
+    post_id: uuid.UUID,
+    media_id: uuid.UUID,
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> CommunityPostMediaResponse:
+    community = _get_community_or_404(db, community_id)
+    if not _can_access_community_content(current_user, community):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Community media is available to active members",
+        )
+
+    post = _get_post_or_404(db, community, post_id)
+    media = _get_post_media_or_404(db, post, media_id)
+    actor_can_remove = (
+        media.uploaded_by_user_id == current_user.id
+        or post.author_user_id == current_user.id
+        or _can_manage_community(current_user, community)
+    )
+    if not actor_can_remove:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to remove this attachment",
+        )
+    if media.status != "ACTIVE":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only active media can be removed",
+        )
+
+    media.status = "REMOVED"
+    media.removed_by_user_id = current_user.id
+    media.removed_at = utcnow()
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "community.post_media_removed",
+        metadata={
+            "community_id": str(community.id),
+            "media_id": str(media.id),
+            "post_id": str(post.id),
+        },
+    )
+    if media.uploaded_by_user_id:
+        notify_users(
+            db,
+            [media.uploaded_by_user_id],
+            actor_user_id=current_user.id,
+            body=f"An attachment was removed from a post in {community.name}.",
+            event_type="community.post_media_removed",
+            exclude_user_ids={current_user.id},
+            metadata={
+                "community_id": str(community.id),
+                "media_id": str(media.id),
+                "post_id": str(post.id),
+            },
+            target_url=_community_target_url(community),
+            title="Community post attachment removed",
+        )
+    db.commit()
+    db.refresh(media)
+    return _serialize_post_media(media, post)
+
+
+@router.post(
+    "/{community_id}/posts/{post_id}/media/{media_id}/restore",
+    response_model=CommunityPostMediaResponse,
+)
+def restore_community_post_media(
+    community_id: uuid.UUID,
+    post_id: uuid.UUID,
+    media_id: uuid.UUID,
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> CommunityPostMediaResponse:
+    community = _get_community_or_404(db, community_id)
+    if not _can_manage_community(current_user, community):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to restore this attachment",
+        )
+
+    post = _get_post_or_404(db, community, post_id)
+    media = _get_post_media_or_404(db, post, media_id)
+    if media.status != "REMOVED":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only removed media can be restored",
+        )
+
+    media.status = "ACTIVE"
+    media.removed_by_user_id = None
+    media.removed_at = None
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "community.post_media_restored",
+        metadata={
+            "community_id": str(community.id),
+            "media_id": str(media.id),
+            "post_id": str(post.id),
+        },
+    )
+    if media.uploaded_by_user_id:
+        notify_users(
+            db,
+            [media.uploaded_by_user_id],
+            actor_user_id=current_user.id,
+            body=f"An attachment was restored on a post in {community.name}.",
+            event_type="community.post_media_restored",
+            exclude_user_ids={current_user.id},
+            metadata={
+                "community_id": str(community.id),
+                "media_id": str(media.id),
+                "post_id": str(post.id),
+            },
+            target_url=_community_target_url(community),
+            title="Community post attachment restored",
+        )
+    db.commit()
+    db.refresh(media)
+    return _serialize_post_media(media, post)
 
 
 @router.get(
@@ -1943,6 +2239,7 @@ def list_admin_community_removed_posts(
         .options(
             joinedload(CommunityPost.author),
             joinedload(CommunityPost.community),
+            selectinload(CommunityPost.media_items),
             joinedload(CommunityPost.removed_by_user),
         )
         .where(CommunityPost.status == "REMOVED")
@@ -2142,6 +2439,7 @@ def list_community_removed_posts(
         select(CommunityPost)
         .options(
             joinedload(CommunityPost.author),
+            selectinload(CommunityPost.media_items),
             joinedload(CommunityPost.removed_by_user),
         )
         .where(
@@ -2453,7 +2751,7 @@ def _get_post_or_404(
 ) -> CommunityPost:
     post = db.scalar(
         select(CommunityPost)
-        .options(joinedload(CommunityPost.author))
+        .options(joinedload(CommunityPost.author), selectinload(CommunityPost.media_items))
         .where(
             CommunityPost.id == post_id,
             CommunityPost.community_id == community.id,
@@ -2490,6 +2788,26 @@ def _get_comment_or_404(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Comment not found")
 
     return comment
+
+
+def _get_post_media_or_404(
+    db: Session,
+    post: CommunityPost,
+    media_id: uuid.UUID,
+) -> CommunityPostMedia:
+    media = db.scalar(
+        select(CommunityPostMedia).where(
+            CommunityPostMedia.id == media_id,
+            CommunityPostMedia.post_id == post.id,
+        )
+    )
+    if media is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Community post media not found",
+        )
+
+    return media
 
 
 def _get_report_or_404(

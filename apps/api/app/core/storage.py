@@ -12,6 +12,7 @@ from app.core.config import get_settings
 class UploadCategory(StrEnum):
     VERIFICATION_EVIDENCE = "verification-evidence"
     PROFILE_PHOTO = "profile-photos"
+    COMMUNITY_POST_MEDIA = "community-post-media"
 
 
 @dataclass(frozen=True)
@@ -59,6 +60,8 @@ def _local_base_dir(category: UploadCategory) -> str:
         return settings.verification_upload_dir
     if category == UploadCategory.PROFILE_PHOTO:
         return settings.profile_photo_upload_dir
+    if category == UploadCategory.COMMUNITY_POST_MEDIA:
+        return settings.community_post_media_upload_dir
     raise ValueError(f"Unsupported upload category: {category}")
 
 

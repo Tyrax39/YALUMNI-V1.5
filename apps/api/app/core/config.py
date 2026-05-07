@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     profile_photo_upload_dir: str = ".local/uploads/profile-photos"
     profile_photo_upload_max_bytes: int = 2 * 1024 * 1024
     profile_photo_upload_allowed_types: str = "image/jpeg,image/png,image/webp"
+    community_post_media_upload_dir: str = ".local/uploads/community-post-media"
+    community_post_media_upload_max_bytes: int = 8 * 1024 * 1024
+    community_post_media_allowed_types: str = "image/jpeg,image/png,image/webp,application/pdf"
     s3_endpoint_url: str | None = None
     s3_access_key_id: str | None = None
     s3_secret_access_key: str | None = None

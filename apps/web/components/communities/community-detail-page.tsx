@@ -8,13 +8,16 @@ import {
   Ban,
   CheckCircle2,
   Crown,
+  FileText,
   Flag,
   Heart,
+  ImageIcon,
   LogIn,
   LogOut,
   MailPlus,
   MapPin,
   MessageSquare,
+  Paperclip,
   RotateCcw,
   Save,
   Send,
@@ -44,6 +47,7 @@ import {
   CommunityPostComment,
   CommunityPostCommentListResponse,
   CommunityPostListResponse,
+  CommunityPostMedia,
   CommunityPostReportQueueItem,
   CommunityPostReportQueueResponse,
   CommunityRemovedCommentQueueItem,
@@ -54,6 +58,7 @@ import {
   createCommunityPostComment,
   createCommunityPost,
   createCommunityPostReport,
+  downloadCommunityPostMedia,
   getCommunity,
   joinCommunity,
   leaveCommunity,
@@ -67,15 +72,18 @@ import {
   rejectCommunityMember,
   removeCommunityMember,
   removeCommunityPostComment,
+  removeCommunityPostMedia,
   removeCommunityPost,
   resolveCommunityPostReport,
   restoreCommunityPostComment,
+  restoreCommunityPostMedia,
   restoreCommunityPost,
   toggleCommunityPostReaction,
   transferCommunityOwnership,
   updateCommunity,
   CommunityUpdatePayload,
-  updateCommunityMemberRole
+  updateCommunityMemberRole,
+  uploadCommunityPostMedia
 } from "@/lib/api";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 
@@ -176,6 +184,7 @@ function CommunityDetailContent({
   const [inviteRole, setInviteRole] = useState<"MANAGER" | "MEMBER">("MEMBER");
   const [latestInvitation, setLatestInvitation] = useState<CommunityInvitation | null>(null);
   const [postBody, setPostBody] = useState("");
+  const [postFiles, setPostFiles] = useState<File[]>([]);
   const [isPostSubmitting, setIsPostSubmitting] = useState(false);
   const [busyPostId, setBusyPostId] = useState<string | null>(null);
   const [busyPostAction, setBusyPostAction] = useState<
@@ -189,6 +198,7 @@ function CommunityDetailContent({
   const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
   const [reportedPostIds, setReportedPostIds] = useState<Record<string, boolean>>({});
   const [busyReportId, setBusyReportId] = useState<string | null>(null);
+  const [busyMediaId, setBusyMediaId] = useState<string | null>(null);
   const [busyRemovedPostId, setBusyRemovedPostId] = useState<string | null>(null);
   const [busyRemovedCommentId, setBusyRemovedCommentId] = useState<string | null>(null);
 
@@ -461,6 +471,16 @@ function CommunityDetailContent({
     }
   }
 
+  function handlePostFileChange(files: FileList | null) {
+    const nextFiles = Array.from(files ?? []).slice(0, 4);
+    setPostFiles(nextFiles);
+    if ((files?.length ?? 0) > 4) {
+      setActionError("Posts can include up to 4 attachments.");
+    } else {
+      setActionError(null);
+    }
+  }
+
   async function handleCreatePost(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (state.status !== "ready") {
@@ -477,9 +497,18 @@ function CommunityDetailContent({
     setActionError(null);
     setIsPostSubmitting(true);
     try {
-      await createCommunityPost(accessToken, communityId, { body });
+      const post = await createCommunityPost(accessToken, communityId, { body });
+      for (const file of postFiles) {
+        await uploadCommunityPostMedia(accessToken, communityId, post.id, { file });
+      }
       setPostBody("");
-      setMessage("Post shared with the community.");
+      setPostFiles([]);
+      event.currentTarget.reset();
+      setMessage(
+        postFiles.length > 0
+          ? `Post shared with ${postFiles.length} attachment${postFiles.length === 1 ? "" : "s"}.`
+          : "Post shared with the community."
+      );
       await refresh(
         state.members.offset,
         state.pendingMembers?.offset ?? 0,
@@ -490,6 +519,57 @@ function CommunityDetailContent({
       setActionError(caught instanceof ApiError ? caught.message : "Post could not be shared.");
     } finally {
       setIsPostSubmitting(false);
+    }
+  }
+
+  async function handleDownloadMedia(media: CommunityPostMedia) {
+    setActionError(null);
+    setBusyMediaId(media.id);
+    try {
+      const blob = await downloadCommunityPostMedia(accessToken, media);
+      const objectUrl = URL.createObjectURL(blob);
+      window.open(objectUrl, "_blank", "noopener,noreferrer");
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+    } catch (caught) {
+      setActionError(
+        caught instanceof ApiError ? caught.message : "Attachment could not be opened."
+      );
+    } finally {
+      setBusyMediaId(null);
+    }
+  }
+
+  async function handleRemoveMedia(post: CommunityPost, media: CommunityPostMedia) {
+    setMessage(null);
+    setActionError(null);
+    setBusyMediaId(media.id);
+    try {
+      await removeCommunityPostMedia(accessToken, communityId, post.id, media.id);
+      await refreshCurrentPage();
+      setMessage("Attachment removed.");
+    } catch (caught) {
+      setActionError(
+        caught instanceof ApiError ? caught.message : "Attachment could not be removed."
+      );
+    } finally {
+      setBusyMediaId(null);
+    }
+  }
+
+  async function handleRestoreMedia(post: CommunityPost, media: CommunityPostMedia) {
+    setMessage(null);
+    setActionError(null);
+    setBusyMediaId(media.id);
+    try {
+      await restoreCommunityPostMedia(accessToken, communityId, post.id, media.id);
+      await refreshCurrentPage();
+      setMessage("Attachment restored.");
+    } catch (caught) {
+      setActionError(
+        caught instanceof ApiError ? caught.message : "Attachment could not be restored."
+      );
+    } finally {
+      setBusyMediaId(null);
     }
   }
 
@@ -1049,6 +1129,31 @@ function CommunityDetailContent({
                   value={postBody}
                 />
               </label>
+              <div className="mt-3 grid gap-3 rounded-lg border border-dashed border-border bg-surface px-3 py-3">
+                <label className="text-sm font-semibold text-ink">
+                  Attach media
+                  <input
+                    accept="image/jpeg,image/png,image/webp,application/pdf"
+                    className="focus-ring mt-2 block w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-muted"
+                    multiple
+                    onChange={(event) => handlePostFileChange(event.target.files)}
+                    type="file"
+                  />
+                </label>
+                {postFiles.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {postFiles.map((file) => (
+                      <span
+                        className="inline-flex min-h-8 items-center gap-2 rounded-lg border border-border bg-white px-3 text-xs font-semibold text-muted"
+                        key={`${file.name}-${file.size}`}
+                      >
+                        <Paperclip aria-hidden="true" className="h-3.5 w-3.5" />
+                        {file.name}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
               <div className="mt-3 flex justify-end">
                 <button
                   className="focus-ring inline-flex min-h-11 items-center gap-2 rounded-lg bg-primary px-5 text-sm font-semibold text-white transition hover:bg-[#003d7d] disabled:cursor-not-allowed disabled:opacity-60"
@@ -1098,6 +1203,85 @@ function CommunityDetailContent({
                     <p className="mt-4 whitespace-pre-line text-sm leading-6 text-ink">
                       {post.body}
                     </p>
+
+                    {post.media.length > 0 ? (
+                      <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                        {post.media.map((media) => {
+                          const mediaIsBusy = busyMediaId === media.id;
+                          const mediaIsRemoved = media.status === "REMOVED";
+                          const canRemoveThisMedia = canRemovePostMedia(
+                            userRoles,
+                            community,
+                            post,
+                            media,
+                            userId
+                          );
+
+                          return (
+                            <div
+                              className={`rounded-lg border px-3 py-3 ${
+                                mediaIsRemoved
+                                  ? "border-red-200 bg-red-50"
+                                  : "border-border bg-surface"
+                              }`}
+                              key={media.id}
+                            >
+                              <div className="flex items-start gap-3">
+                                <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border bg-white text-secondary">
+                                  {isImageMedia(media) ? (
+                                    <ImageIcon aria-hidden="true" className="h-5 w-5" />
+                                  ) : (
+                                    <FileText aria-hidden="true" className="h-5 w-5" />
+                                  )}
+                                </span>
+                                <div className="min-w-0">
+                                  <p className="truncate text-sm font-semibold text-ink">
+                                    {media.file_name}
+                                  </p>
+                                  <p className="mt-1 text-xs font-semibold text-muted">
+                                    {formatFileSize(media.file_size_bytes)}
+                                    {mediaIsRemoved ? " - Removed" : ""}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                <button
+                                  className="focus-ring inline-flex min-h-9 items-center gap-2 rounded-lg border border-border bg-white px-3 text-xs font-semibold text-ink transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+                                  disabled={mediaIsBusy}
+                                  onClick={() => void handleDownloadMedia(media)}
+                                  type="button"
+                                >
+                                  <Paperclip aria-hidden="true" className="h-3.5 w-3.5" />
+                                  {mediaIsBusy ? "Opening..." : "Open"}
+                                </button>
+                                {canRemoveThisMedia && !mediaIsRemoved ? (
+                                  <button
+                                    className="focus-ring inline-flex min-h-9 items-center gap-2 rounded-lg border border-red-200 bg-white px-3 text-xs font-semibold text-red-700 transition hover:border-red-300 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                    disabled={mediaIsBusy}
+                                    onClick={() => void handleRemoveMedia(post, media)}
+                                    type="button"
+                                  >
+                                    <Trash2 aria-hidden="true" className="h-3.5 w-3.5" />
+                                    {mediaIsBusy ? "Removing..." : "Remove"}
+                                  </button>
+                                ) : null}
+                                {canManage && mediaIsRemoved ? (
+                                  <button
+                                    className="focus-ring inline-flex min-h-9 items-center gap-2 rounded-lg border border-emerald-200 bg-white px-3 text-xs font-semibold text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                    disabled={mediaIsBusy}
+                                    onClick={() => void handleRestoreMedia(post, media)}
+                                    type="button"
+                                  >
+                                    <RotateCcw aria-hidden="true" className="h-3.5 w-3.5" />
+                                    {mediaIsBusy ? "Restoring..." : "Restore"}
+                                  </button>
+                                ) : null}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : null}
 
                     <div className="mt-4 flex flex-wrap gap-2">
                       <button
@@ -2381,6 +2565,24 @@ function truncateText(value: string, maxLength: number): string {
   return `${value.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`;
 }
 
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+
+  const kilobytes = bytes / 1024;
+  if (kilobytes < 1024) {
+    return `${kilobytes.toFixed(kilobytes >= 10 ? 0 : 1)} KB`;
+  }
+
+  const megabytes = kilobytes / 1024;
+  return `${megabytes.toFixed(megabytes >= 10 ? 0 : 1)} MB`;
+}
+
+function isImageMedia(media: CommunityPostMedia): boolean {
+  return media.content_type.startsWith("image/");
+}
+
 function canManageCommunity(userRoles: string[], community: Community): boolean {
   return (
     community.membership_role === "OWNER" ||
@@ -2443,6 +2645,20 @@ function canRemovePost(
     community.membership_role === "OWNER" ||
     community.membership_role === "MANAGER" ||
     userRoles.some((role) => adminRoles.includes(role))
+  );
+}
+
+function canRemovePostMedia(
+  userRoles: string[],
+  community: Community,
+  post: CommunityPost,
+  media: CommunityPostMedia,
+  userId: string
+): boolean {
+  return (
+    media.uploaded_by_user_id === userId ||
+    post.author_user_id === userId ||
+    canManageCommunity(userRoles, community)
   );
 }
 

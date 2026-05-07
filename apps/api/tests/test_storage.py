@@ -25,6 +25,11 @@ def test_storage_key_prefixes_s3_keys(monkeypatch) -> None:
             "request-id/evidence.pdf",
         )
         assert storage_key == "yalumni/private/verification-evidence/request-id/evidence.pdf"
+        media_storage_key = build_storage_key(
+            UploadCategory.COMMUNITY_POST_MEDIA,
+            "post-id/media-id.png",
+        )
+        assert media_storage_key == "yalumni/private/community-post-media/post-id/media-id.png"
     finally:
         get_settings.cache_clear()
 

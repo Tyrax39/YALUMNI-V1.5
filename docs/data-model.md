@@ -38,6 +38,7 @@
 - `community_memberships` - implemented with active, pending, left, rejected statuses plus owner/member/manager roles.
 - `community_invitations` - implemented with invited email, invited role, pending/accepted/canceled/expired status, hashed token, expiry, inviter, and acceptance metadata.
 - `community_posts` - implemented with active/removed status, author, body, remover, removal timestamp, restoration support, internal moderation notes, severity, and escalation tracking for private community feeds.
+- `community_post_media` - implemented with post-scoped private storage metadata, uploader, original file name, content type, byte size, active/removed moderation status, remover, and removal timestamp for community feed attachments.
 - `community_post_comments` - implemented with active/removed status, post-scoped author comments, remover, removal timestamp, restoration support, internal moderation notes, severity, and escalation tracking.
 - `community_post_reactions` - implemented with one current `LIKE` reaction per user/post.
 - `community_post_reports` - implemented with reporter, reason, reporter note, open/resolved status, moderator note, severity, escalation state, resolver, resolution timestamp, community-level queue support, and cross-community admin queue support through post/community joins.

@@ -65,6 +65,10 @@ GET  /api/v1/communities/{community_id}/posts
 POST /api/v1/communities/{community_id}/posts
 POST /api/v1/communities/{community_id}/posts/{post_id}/remove
 POST /api/v1/communities/{community_id}/posts/{post_id}/restore
+POST /api/v1/communities/{community_id}/posts/{post_id}/media
+GET  /api/v1/communities/{community_id}/posts/{post_id}/media/{media_id}/download
+POST /api/v1/communities/{community_id}/posts/{post_id}/media/{media_id}/remove
+POST /api/v1/communities/{community_id}/posts/{post_id}/media/{media_id}/restore
 GET  /api/v1/communities/{community_id}/posts/{post_id}/comments
 POST /api/v1/communities/{community_id}/posts/{post_id}/comments
 POST /api/v1/communities/{community_id}/posts/{post_id}/comments/{comment_id}/remove
@@ -187,7 +191,18 @@ Private community posts support:
 - Removed posts are hidden from ordinary members; managers/owners/admins can
   query removed or all posts for moderation review.
 - Post list responses include active `comment_count`, `reaction_count`,
-  current-user `viewer_reacted`, and manager-only `open_report_count`.
+  current-user `viewer_reacted`, manager-only `open_report_count`, and active
+  media attachment metadata. Managers/owners/admins can also see removed media
+  metadata for moderation.
+- `POST /api/v1/communities/{community_id}/posts/{post_id}/media` attaches
+  JPEG, PNG, WebP, or PDF files to active posts by the post author or a
+  manager/owner/admin. Posts are limited to four active attachments by default.
+- Media downloads are authenticated through
+  `GET /api/v1/communities/{community_id}/posts/{post_id}/media/{media_id}/download`.
+  Removed media is hidden from ordinary members and remains visible to
+  managers/owners/admins for review.
+- Media removal is available to the uploader, post author, managers, owners,
+  and admins. Media restore is restricted to managers, owners, and admins.
 - `GET /api/v1/communities/{community_id}/posts/{post_id}/comments` lists
   active comments for members. Removed/all comment review is restricted to
   managers, owners, and admins.
@@ -261,6 +276,10 @@ GET    /api/v1/communities/{community_id}/posts                 # implemented
 POST   /api/v1/communities/{community_id}/posts                 # implemented
 POST   /api/v1/communities/{community_id}/posts/{post_id}/remove # implemented
 POST   /api/v1/communities/{community_id}/posts/{post_id}/restore # implemented
+POST   /api/v1/communities/{community_id}/posts/{post_id}/media # implemented
+GET    /api/v1/communities/{community_id}/posts/{post_id}/media/{media_id}/download # implemented
+POST   /api/v1/communities/{community_id}/posts/{post_id}/media/{media_id}/remove # implemented
+POST   /api/v1/communities/{community_id}/posts/{post_id}/media/{media_id}/restore # implemented
 GET    /api/v1/communities/{community_id}/posts/{post_id}/comments # implemented
 POST   /api/v1/communities/{community_id}/posts/{post_id}/comments # implemented
 POST   /api/v1/communities/{community_id}/posts/{post_id}/comments/{comment_id}/remove # implemented
