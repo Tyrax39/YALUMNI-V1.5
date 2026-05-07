@@ -8,6 +8,66 @@ The current Yalumni project is a useful Laravel 9 alumni management platform, bu
 
 The V1.5 implementation is active in `D:\YALUMNI-V1.5`. The new repository now contains a platform foundation with a FastAPI backend, Next.js web shell, Docker Compose, CI workflow, shared packages, copied YALUMNI logo assets, and documentation.
 
+## Current V1.5 Implementation Update: 2026-05-07 Moderation Review Metadata Slice
+
+Completed after cross-community admin moderation:
+
+- Added persisted moderation review metadata to reports, removed posts, and removed comments: internal moderator notes, severity, escalation status, escalation actor, and escalation timestamp.
+- Added Alembic migration `20260507_0012_moderation_review_metadata`.
+- Added review update APIs for report review, removed-post review, and removed-comment review.
+- Added severity and escalation filters to community-scoped queues and cross-community admin moderation queues.
+- Admin queue payloads now include moderation notes, severity, escalation status, escalation actor, and escalation timestamp while ordinary member feed/comment/report responses keep internal review fields hidden.
+- Added admin-console review controls for reported posts, removed posts, and removed comments with save actions beside existing resolve/restore actions.
+- Added API coverage for member denial, admin review saves, severity/escalation normalization, escalated queue filtering, and reviewed content queue payloads.
+- Updated API, data model, roadmap, and status docs for the review metadata slice.
+
+Current plan position:
+
+- Phase 1 remains functionally complete for local foundation.
+- Phase 2 remains roughly 89% complete.
+- Phase 3 remains roughly 52% complete.
+- Phase 4 is now roughly 31% complete because the admin console now includes operational moderation review metadata, not only queue actions.
+- Phase 5 remains roughly 80% complete.
+- Phase 6 feed/moderation is now roughly 47% complete: community-scoped posts/comments/likes/reports, per-community queues, removed-content queues, restore actions, cross-community admin queues, and moderation notes/escalation are implemented. Attachments, pinned posts, mentions, notification fanout, audit exports, and global feed aggregation remain open.
+- Overall 24-week MVP implementation is roughly 47% complete.
+
+Implemented now:
+
+- Native landing page.
+- Monorepo foundation, CI, docs, Docker Compose.
+- FastAPI health/status and request middleware.
+- Identity auth, refresh sessions, account recovery, email verification, protected platform owner, role-gated admin overview, session management, admin 2FA policy gate, secure cookie-backed web sessions, CSRF protection, and MVP-local rate limiting.
+- Local-only test-account seeding for role and directory QA.
+- Protected dashboard/admin route behavior.
+- Alumni current-user profile model/API/UI with profile photo upload/display/delete.
+- Shared local/S3 upload storage adapter for profile photos and verification evidence.
+- Program affiliation model/API/UI.
+- Verification request submission, member status history, admin queue, review actions, alumni-member role grant, and evidence upload/review.
+- Verified member directory search/profile detail with privacy-aware serializers and authenticated profile-photo display.
+- Dedicated admin audit log viewer backed by `security_events`.
+- Community discovery, creation, detail pages, active rosters, open/request joins, pending review, manager roles, role updates, non-owner member removal, owner/admin settings editing, invitations, ownership transfer, gated community posts, comments, likes, reports, manager-visible report counts, per-community report queues, removed post/comment queues, restore actions, cross-community admin moderation queues, and moderation review metadata.
+
+Main gaps now:
+
+- Community feed still needs attachments/media, pinned posts, mentions, richer formatting, edit history, notification fanout, audit export tooling, and global feed aggregation.
+- Real email provider/templates are not wired, so invitation delivery is still local/dev-token based.
+- S3 adapter exists, but production still needs real bucket credentials, bucket policy validation, malware scanning, image processing, lifecycle/retention policy, and CDN/signed URL decisions.
+- Directory search is database-backed MVP search, not Meilisearch/OpenSearch.
+- Public profile pages, saved searches, recommendations, and richer dedicated search indexing are not implemented.
+- Test accounts are local/dev seed data only; there is no production-safe demo identity lifecycle yet.
+- Skills are stored as MVP JSON rather than normalized skill tables.
+- Audit data is viewable through `security_events`, but richer immutable compliance audit tables and export tooling are not implemented.
+- Redis-backed rate limiting, background jobs, realtime notifications, messaging, events, initiatives, contributions, and elections are not wired yet.
+- Communities still need chapter analytics and notification delivery.
+
+Next possible implementation slices:
+
+- Notification/event hooks for community posts, comments, reports, invitations, join requests, settings updates, role changes, ownership transfers, and moderation escalations.
+- Feed media attachments with storage validation and moderation review.
+- Production email delivery for account recovery and invitations.
+- Global feed aggregation from community posts and future public posts.
+- Moderator audit exports and immutable compliance event tables.
+
 ## Current V1.5 Implementation Update: 2026-05-07 Cross-Community Admin Moderation Slice
 
 Completed after removed-content moderation:

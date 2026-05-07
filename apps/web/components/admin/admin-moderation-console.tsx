@@ -12,6 +12,12 @@ import type { FormEvent, ReactNode } from "react";
 import { useEffect, useState } from "react";
 
 import {
+  ModerationReviewControls,
+  type ModerationEscalationStatus,
+  type ModerationReviewDraft,
+  type ModerationSeverity
+} from "@/components/admin/admin-moderation-review-controls";
+import {
   ApiError,
   CommunityAdminPostReportQueueItem,
   CommunityAdminPostReportQueueResponse,
@@ -24,17 +30,22 @@ import {
   listAdminCommunityRemovedPosts,
   resolveCommunityPostReport,
   restoreCommunityPost,
-  restoreCommunityPostComment
+  restoreCommunityPostComment,
+  updateCommunityPostCommentModerationReview,
+  updateCommunityPostModerationReview,
+  updateCommunityPostReportReview
 } from "@/lib/api";
 
 type ModerationFilters = {
   communityId: string;
+  escalationStatus: string;
   q: string;
   reason: string;
   removedCommentOffset: number;
   removedPostOffset: number;
   reportOffset: number;
   reportStatus: string;
+  severity: string;
 };
 
 type ModerationState =
@@ -51,12 +62,14 @@ const moderationReportPageSize = 6;
 const removedContentPageSize = 4;
 const defaultFilters: ModerationFilters = {
   communityId: "",
+  escalationStatus: "",
   q: "",
   reason: "",
   removedCommentOffset: 0,
   removedPostOffset: 0,
   reportOffset: 0,
-  reportStatus: "OPEN"
+  reportStatus: "OPEN",
+  severity: ""
 };
 
 export function AdminModerationConsole({ accessToken }: { accessToken: string }) {
@@ -65,10 +78,13 @@ export function AdminModerationConsole({ accessToken }: { accessToken: string })
   const [communityIdInput, setCommunityIdInput] = useState("");
   const [reasonInput, setReasonInput] = useState("");
   const [reportStatusInput, setReportStatusInput] = useState("OPEN");
+  const [severityInput, setSeverityInput] = useState("");
+  const [escalationStatusInput, setEscalationStatusInput] = useState("");
   const [state, setState] = useState<ModerationState>({ status: "loading" });
   const [reloadKey, setReloadKey] = useState(0);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [reviewDrafts, setReviewDrafts] = useState<Record<string, ModerationReviewDraft>>({});
 
   useEffect(() => {
     let isMounted = true;
@@ -80,19 +96,25 @@ export function AdminModerationConsole({ accessToken }: { accessToken: string })
         offset: filters.reportOffset,
         q: filters.q,
         reason: filters.reason,
+        escalationStatus: filters.escalationStatus,
+        severity: filters.severity,
         status: filters.reportStatus
       }),
       listAdminCommunityRemovedPosts(accessToken, {
         communityId: filters.communityId,
         limit: removedContentPageSize,
         offset: filters.removedPostOffset,
-        q: filters.q
+        q: filters.q,
+        escalationStatus: filters.escalationStatus,
+        severity: filters.severity
       }),
       listAdminCommunityRemovedComments(accessToken, {
         communityId: filters.communityId,
         limit: removedContentPageSize,
         offset: filters.removedCommentOffset,
-        q: filters.q
+        q: filters.q,
+        escalationStatus: filters.escalationStatus,
+        severity: filters.severity
       })
     ])
       .then(([reports, removedPosts, removedComments]) => {
@@ -120,12 +142,14 @@ export function AdminModerationConsole({ accessToken }: { accessToken: string })
   }, [
     accessToken,
     filters.communityId,
+    filters.escalationStatus,
     filters.q,
     filters.reason,
     filters.removedCommentOffset,
     filters.removedPostOffset,
     filters.reportOffset,
     filters.reportStatus,
+    filters.severity,
     reloadKey
   ]);
 
@@ -135,12 +159,14 @@ export function AdminModerationConsole({ accessToken }: { accessToken: string })
     setState({ status: "loading" });
     setFilters({
       communityId: communityIdInput.trim(),
+      escalationStatus: escalationStatusInput,
       q: qInput.trim(),
       reason: reasonInput,
       removedCommentOffset: 0,
       removedPostOffset: 0,
       reportOffset: 0,
-      reportStatus: reportStatusInput
+      reportStatus: reportStatusInput,
+      severity: severityInput
     });
   }
 
@@ -149,9 +175,87 @@ export function AdminModerationConsole({ accessToken }: { accessToken: string })
     setCommunityIdInput("");
     setReasonInput("");
     setReportStatusInput("OPEN");
+    setSeverityInput("");
+    setEscalationStatusInput("");
     setMessage(null);
     setState({ status: "loading" });
     setFilters(defaultFilters);
+  }
+
+  function updateReviewDraft(key: string, draft: ModerationReviewDraft) {
+    setReviewDrafts((current) => ({ ...current, [key]: draft }));
+  }
+
+  async function handleSaveReportReview(
+    report: CommunityAdminPostReportQueueItem,
+    draft: ModerationReviewDraft
+  ) {
+    const key = reviewKey("report", report.id);
+    setBusyAction(`review:${key}`);
+    setMessage(null);
+    try {
+      await updateCommunityPostReportReview(accessToken, report.community_id, report.post_id, report.id, {
+        escalation_status: draft.escalationStatus,
+        moderator_note: draft.moderatorNote,
+        severity: draft.severity
+      });
+      setMessage("Report review saved.");
+      setReloadKey((current) => current + 1);
+    } catch (caught) {
+      setMessage(caught instanceof ApiError ? caught.message : "Report review could not be saved.");
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function handleSavePostReview(
+    post: CommunityAdminRemovedPostQueueItem,
+    draft: ModerationReviewDraft
+  ) {
+    const key = reviewKey("post", post.id);
+    setBusyAction(`review:${key}`);
+    setMessage(null);
+    try {
+      await updateCommunityPostModerationReview(accessToken, post.community_id, post.id, {
+        escalation_status: draft.escalationStatus,
+        moderator_note: draft.moderatorNote,
+        severity: draft.severity
+      });
+      setMessage("Post review saved.");
+      setReloadKey((current) => current + 1);
+    } catch (caught) {
+      setMessage(caught instanceof ApiError ? caught.message : "Post review could not be saved.");
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function handleSaveCommentReview(
+    comment: CommunityAdminRemovedCommentQueueItem,
+    draft: ModerationReviewDraft
+  ) {
+    const key = reviewKey("comment", comment.id);
+    setBusyAction(`review:${key}`);
+    setMessage(null);
+    try {
+      await updateCommunityPostCommentModerationReview(
+        accessToken,
+        comment.community_id,
+        comment.post_id,
+        comment.id,
+        {
+          escalation_status: draft.escalationStatus,
+          moderator_note: draft.moderatorNote,
+          severity: draft.severity
+        }
+      );
+      setMessage("Comment review saved.");
+      setReloadKey((current) => current + 1);
+    } catch (caught) {
+      setMessage(caught instanceof ApiError ? caught.message : "Comment review could not be saved.");
+    } finally {
+      setBusyAction(null);
+    }
   }
 
   function refreshQueues() {
@@ -253,7 +357,7 @@ export function AdminModerationConsole({ accessToken }: { accessToken: string })
       </div>
 
       <form
-        className="mt-5 grid gap-3 lg:grid-cols-[1.2fr_1.3fr_0.8fr_0.8fr_auto_auto]"
+        className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-8"
         onSubmit={handleFilterSubmit}
       >
         <ModerationInput
@@ -290,6 +394,28 @@ export function AdminModerationConsole({ accessToken }: { accessToken: string })
             ["ALL", "All"]
           ]}
           value={reportStatusInput}
+        />
+        <ModerationSelect
+          label="Severity"
+          onChange={setSeverityInput}
+          options={[
+            ["", "Any"],
+            ["LOW", "Low"],
+            ["MEDIUM", "Medium"],
+            ["HIGH", "High"],
+            ["CRITICAL", "Critical"]
+          ]}
+          value={severityInput}
+        />
+        <ModerationSelect
+          label="Escalation"
+          onChange={setEscalationStatusInput}
+          options={[
+            ["", "Any"],
+            ["NONE", "None"],
+            ["ESCALATED", "Escalated"]
+          ]}
+          value={escalationStatusInput}
         />
         <button
           className="focus-ring inline-flex min-h-12 items-center justify-center gap-2 self-end rounded-lg bg-primary px-5 text-sm font-semibold text-white transition hover:bg-[#003d7d]"
@@ -342,7 +468,10 @@ export function AdminModerationConsole({ accessToken }: { accessToken: string })
               onPage={(offset) =>
                 setFilters((current) => ({ ...current, reportOffset: offset }))
               }
+              onDraftChange={updateReviewDraft}
               onResolve={handleResolveReport}
+              onSaveReview={handleSaveReportReview}
+              reviewDrafts={reviewDrafts}
               reports={state.reports}
             />
             <RemovedPostQueue
@@ -350,8 +479,11 @@ export function AdminModerationConsole({ accessToken }: { accessToken: string })
               onPage={(offset) =>
                 setFilters((current) => ({ ...current, removedPostOffset: offset }))
               }
+              onDraftChange={updateReviewDraft}
               onRestore={handleRestorePost}
+              onSaveReview={handleSavePostReview}
               posts={state.removedPosts}
+              reviewDrafts={reviewDrafts}
             />
             <RemovedCommentQueue
               busyAction={busyAction}
@@ -359,7 +491,10 @@ export function AdminModerationConsole({ accessToken }: { accessToken: string })
               onPage={(offset) =>
                 setFilters((current) => ({ ...current, removedCommentOffset: offset }))
               }
+              onDraftChange={updateReviewDraft}
               onRestore={handleRestoreComment}
+              onSaveReview={handleSaveCommentReview}
+              reviewDrafts={reviewDrafts}
             />
           </div>
         </>
@@ -370,13 +505,22 @@ export function AdminModerationConsole({ accessToken }: { accessToken: string })
 
 function ReportQueue({
   busyAction,
+  onDraftChange,
   onPage,
   onResolve,
+  onSaveReview,
+  reviewDrafts,
   reports
 }: {
   busyAction: string | null;
+  onDraftChange: (key: string, draft: ModerationReviewDraft) => void;
   onPage: (offset: number) => void;
   onResolve: (report: CommunityAdminPostReportQueueItem) => void;
+  onSaveReview: (
+    report: CommunityAdminPostReportQueueItem,
+    draft: ModerationReviewDraft
+  ) => void;
+  reviewDrafts: Record<string, ModerationReviewDraft>;
   reports: CommunityAdminPostReportQueueResponse;
 }) {
   return (
@@ -392,61 +536,81 @@ function ReportQueue({
       {reports.reports.length === 0 ? (
         <EmptyQueue label="No reported posts match these filters." />
       ) : null}
-      {reports.reports.map((report) => (
-        <article className="rounded-lg border border-border bg-white p-4" key={report.id}>
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-            <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">
-                {report.reason} · {formatStatus(report.status)}
-              </p>
-              <h3 className="mt-2 font-display text-lg font-semibold text-ink">
-                {report.community_name}
-              </h3>
-              <p className="mt-2 text-sm leading-6 text-muted">{report.post_body}</p>
-              {report.note ? (
-                <p className="mt-3 rounded-lg border border-border bg-surface px-3 py-2 text-sm leading-6 text-muted">
-                  {report.note}
+      {reports.reports.map((report) => {
+        const key = reviewKey("report", report.id);
+        const draft = reviewDrafts[key] ?? reviewDraftFromReport(report);
+        return (
+          <article className="rounded-lg border border-border bg-white p-4" key={report.id}>
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">
+                  {report.reason} · {formatStatus(report.status)}
                 </p>
-              ) : null}
-              <dl className="mt-4 grid gap-3 text-sm md:grid-cols-3">
-                <QueueDetail label="Reporter" value={report.reporter_display_name} />
-                <QueueDetail label="Author" value={report.post_author_display_name} />
-                <QueueDetail label="Created" value={formatDate(report.created_at)} />
-              </dl>
+                <h3 className="mt-2 font-display text-lg font-semibold text-ink">
+                  {report.community_name}
+                </h3>
+                <ReviewSummary
+                  escalationStatus={report.escalation_status}
+                  severity={report.severity}
+                />
+                <p className="mt-2 text-sm leading-6 text-muted">{report.post_body}</p>
+                {report.note ? (
+                  <p className="mt-3 rounded-lg border border-border bg-surface px-3 py-2 text-sm leading-6 text-muted">
+                    {report.note}
+                  </p>
+                ) : null}
+                <dl className="mt-4 grid gap-3 text-sm md:grid-cols-3">
+                  <QueueDetail label="Reporter" value={report.reporter_display_name} />
+                  <QueueDetail label="Author" value={report.post_author_display_name} />
+                  <QueueDetail label="Created" value={formatDate(report.created_at)} />
+                </dl>
+              </div>
+              <div className="flex flex-wrap gap-2 lg:justify-end">
+                <Link
+                  className="focus-ring inline-flex min-h-10 items-center justify-center rounded-lg border border-border px-4 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary"
+                  href={`/communities/${report.community_id}`}
+                >
+                  Open community
+                </Link>
+                <button
+                  className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white transition hover:bg-[#003d7d] disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={Boolean(busyAction) || report.status !== "OPEN"}
+                  onClick={() => onResolve(report)}
+                  type="button"
+                >
+                  <CheckCircle2 aria-hidden="true" className="h-4 w-4" />
+                  {busyAction === `report:${report.id}` ? "Resolving..." : "Resolve"}
+                </button>
+              </div>
             </div>
-            <div className="flex flex-wrap gap-2 lg:justify-end">
-              <Link
-                className="focus-ring inline-flex min-h-10 items-center justify-center rounded-lg border border-border px-4 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary"
-                href={`/communities/${report.community_id}`}
-              >
-                Open community
-              </Link>
-              <button
-                className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white transition hover:bg-[#003d7d] disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={Boolean(busyAction) || report.status !== "OPEN"}
-                onClick={() => onResolve(report)}
-                type="button"
-              >
-                <CheckCircle2 aria-hidden="true" className="h-4 w-4" />
-                {busyAction === `report:${report.id}` ? "Resolving..." : "Resolve"}
-              </button>
-            </div>
-          </div>
-        </article>
-      ))}
+            <ModerationReviewControls
+              busy={busyAction === `review:${key}`}
+              draft={draft}
+              onChange={(nextDraft) => onDraftChange(key, nextDraft)}
+              onSave={() => onSaveReview(report, draft)}
+            />
+          </article>
+        );
+      })}
     </ModerationQueueFrame>
   );
 }
 
 function RemovedPostQueue({
   busyAction,
+  onDraftChange,
   onPage,
   onRestore,
+  onSaveReview,
+  reviewDrafts,
   posts
 }: {
   busyAction: string | null;
+  onDraftChange: (key: string, draft: ModerationReviewDraft) => void;
   onPage: (offset: number) => void;
   onRestore: (post: CommunityAdminRemovedPostQueueItem) => void;
+  onSaveReview: (post: CommunityAdminRemovedPostQueueItem, draft: ModerationReviewDraft) => void;
+  reviewDrafts: Record<string, ModerationReviewDraft>;
   posts: CommunityAdminRemovedPostQueueResponse;
 }) {
   return (
@@ -460,46 +624,60 @@ function RemovedPostQueue({
       visibleOffset={posts.offset}
     >
       {posts.posts.length === 0 ? <EmptyQueue label="No removed posts match these filters." /> : null}
-      {posts.posts.map((post) => (
-        <article className="rounded-lg border border-border bg-white p-4" key={post.id}>
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-            <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">
-                Removed post
-              </p>
-              <h3 className="mt-2 font-display text-lg font-semibold text-ink">
-                {post.community_name}
-              </h3>
-              <p className="mt-2 text-sm leading-6 text-muted">{post.body}</p>
-              <dl className="mt-4 grid gap-3 text-sm md:grid-cols-3">
-                <QueueDetail label="Author" value={post.author_display_name} />
-                <QueueDetail label="Removed by" value={post.removed_by_display_name} />
-                <QueueDetail
-                  label="Removed"
-                  value={post.removed_at ? formatDate(post.removed_at) : "Not captured"}
+      {posts.posts.map((post) => {
+        const key = reviewKey("post", post.id);
+        const draft = reviewDrafts[key] ?? reviewDraftFromRemovedContent(post);
+        return (
+          <article className="rounded-lg border border-border bg-white p-4" key={post.id}>
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">
+                  Removed post
+                </p>
+                <h3 className="mt-2 font-display text-lg font-semibold text-ink">
+                  {post.community_name}
+                </h3>
+                <ReviewSummary
+                  escalationStatus={post.escalation_status}
+                  severity={post.moderation_severity}
                 />
-              </dl>
+                <p className="mt-2 text-sm leading-6 text-muted">{post.body}</p>
+                <dl className="mt-4 grid gap-3 text-sm md:grid-cols-3">
+                  <QueueDetail label="Author" value={post.author_display_name} />
+                  <QueueDetail label="Removed by" value={post.removed_by_display_name} />
+                  <QueueDetail
+                    label="Removed"
+                    value={post.removed_at ? formatDate(post.removed_at) : "Not captured"}
+                  />
+                </dl>
+              </div>
+              <div className="flex flex-wrap gap-2 lg:justify-end">
+                <Link
+                  className="focus-ring inline-flex min-h-10 items-center justify-center rounded-lg border border-border px-4 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary"
+                  href={`/communities/${post.community_id}`}
+                >
+                  Open community
+                </Link>
+                <button
+                  className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white transition hover:bg-[#003d7d] disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={Boolean(busyAction)}
+                  onClick={() => onRestore(post)}
+                  type="button"
+                >
+                  <RotateCcw aria-hidden="true" className="h-4 w-4" />
+                  {busyAction === `post:${post.id}` ? "Restoring..." : "Restore"}
+                </button>
+              </div>
             </div>
-            <div className="flex flex-wrap gap-2 lg:justify-end">
-              <Link
-                className="focus-ring inline-flex min-h-10 items-center justify-center rounded-lg border border-border px-4 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary"
-                href={`/communities/${post.community_id}`}
-              >
-                Open community
-              </Link>
-              <button
-                className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white transition hover:bg-[#003d7d] disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={Boolean(busyAction)}
-                onClick={() => onRestore(post)}
-                type="button"
-              >
-                <RotateCcw aria-hidden="true" className="h-4 w-4" />
-                {busyAction === `post:${post.id}` ? "Restoring..." : "Restore"}
-              </button>
-            </div>
-          </div>
-        </article>
-      ))}
+            <ModerationReviewControls
+              busy={busyAction === `review:${key}`}
+              draft={draft}
+              onChange={(nextDraft) => onDraftChange(key, nextDraft)}
+              onSave={() => onSaveReview(post, draft)}
+            />
+          </article>
+        );
+      })}
     </ModerationQueueFrame>
   );
 }
@@ -507,13 +685,22 @@ function RemovedPostQueue({
 function RemovedCommentQueue({
   busyAction,
   comments,
+  onDraftChange,
   onPage,
-  onRestore
+  onRestore,
+  onSaveReview,
+  reviewDrafts
 }: {
   busyAction: string | null;
   comments: CommunityAdminRemovedCommentQueueResponse;
+  onDraftChange: (key: string, draft: ModerationReviewDraft) => void;
   onPage: (offset: number) => void;
   onRestore: (comment: CommunityAdminRemovedCommentQueueItem) => void;
+  onSaveReview: (
+    comment: CommunityAdminRemovedCommentQueueItem,
+    draft: ModerationReviewDraft
+  ) => void;
+  reviewDrafts: Record<string, ModerationReviewDraft>;
 }) {
   return (
     <ModerationQueueFrame
@@ -528,49 +715,63 @@ function RemovedCommentQueue({
       {comments.comments.length === 0 ? (
         <EmptyQueue label="No removed comments match these filters." />
       ) : null}
-      {comments.comments.map((comment) => (
-        <article className="rounded-lg border border-border bg-white p-4" key={comment.id}>
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-            <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">
-                Removed comment
-              </p>
-              <h3 className="mt-2 font-display text-lg font-semibold text-ink">
-                {comment.community_name}
-              </h3>
-              <p className="mt-2 text-sm leading-6 text-muted">{comment.body}</p>
-              <p className="mt-3 rounded-lg border border-border bg-surface px-3 py-2 text-sm leading-6 text-muted">
-                Parent post: {comment.post_body}
-              </p>
-              <dl className="mt-4 grid gap-3 text-sm md:grid-cols-3">
-                <QueueDetail label="Comment author" value={comment.author_display_name} />
-                <QueueDetail label="Removed by" value={comment.removed_by_display_name} />
-                <QueueDetail
-                  label="Removed"
-                  value={comment.removed_at ? formatDate(comment.removed_at) : "Not captured"}
+      {comments.comments.map((comment) => {
+        const key = reviewKey("comment", comment.id);
+        const draft = reviewDrafts[key] ?? reviewDraftFromRemovedContent(comment);
+        return (
+          <article className="rounded-lg border border-border bg-white p-4" key={comment.id}>
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">
+                  Removed comment
+                </p>
+                <h3 className="mt-2 font-display text-lg font-semibold text-ink">
+                  {comment.community_name}
+                </h3>
+                <ReviewSummary
+                  escalationStatus={comment.escalation_status}
+                  severity={comment.moderation_severity}
                 />
-              </dl>
+                <p className="mt-2 text-sm leading-6 text-muted">{comment.body}</p>
+                <p className="mt-3 rounded-lg border border-border bg-surface px-3 py-2 text-sm leading-6 text-muted">
+                  Parent post: {comment.post_body}
+                </p>
+                <dl className="mt-4 grid gap-3 text-sm md:grid-cols-3">
+                  <QueueDetail label="Comment author" value={comment.author_display_name} />
+                  <QueueDetail label="Removed by" value={comment.removed_by_display_name} />
+                  <QueueDetail
+                    label="Removed"
+                    value={comment.removed_at ? formatDate(comment.removed_at) : "Not captured"}
+                  />
+                </dl>
+              </div>
+              <div className="flex flex-wrap gap-2 lg:justify-end">
+                <Link
+                  className="focus-ring inline-flex min-h-10 items-center justify-center rounded-lg border border-border px-4 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary"
+                  href={`/communities/${comment.community_id}`}
+                >
+                  Open community
+                </Link>
+                <button
+                  className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white transition hover:bg-[#003d7d] disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={Boolean(busyAction)}
+                  onClick={() => onRestore(comment)}
+                  type="button"
+                >
+                  <RotateCcw aria-hidden="true" className="h-4 w-4" />
+                  {busyAction === `comment:${comment.id}` ? "Restoring..." : "Restore"}
+                </button>
+              </div>
             </div>
-            <div className="flex flex-wrap gap-2 lg:justify-end">
-              <Link
-                className="focus-ring inline-flex min-h-10 items-center justify-center rounded-lg border border-border px-4 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary"
-                href={`/communities/${comment.community_id}`}
-              >
-                Open community
-              </Link>
-              <button
-                className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white transition hover:bg-[#003d7d] disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={Boolean(busyAction)}
-                onClick={() => onRestore(comment)}
-                type="button"
-              >
-                <RotateCcw aria-hidden="true" className="h-4 w-4" />
-                {busyAction === `comment:${comment.id}` ? "Restoring..." : "Restore"}
-              </button>
-            </div>
-          </div>
-        </article>
-      ))}
+            <ModerationReviewControls
+              busy={busyAction === `review:${key}`}
+              draft={draft}
+              onChange={(nextDraft) => onDraftChange(key, nextDraft)}
+              onSave={() => onSaveReview(comment, draft)}
+            />
+          </article>
+        );
+      })}
     </ModerationQueueFrame>
   );
 }
@@ -708,6 +909,33 @@ function EmptyQueue({ label }: { label: string }) {
   );
 }
 
+function ReviewSummary({
+  escalationStatus,
+  severity
+}: {
+  escalationStatus: string | null;
+  severity: string | null;
+}) {
+  const normalizedSeverity = normalizeSeverity(severity);
+  const normalizedEscalation = normalizeEscalationStatus(escalationStatus);
+  return (
+    <div className="mt-3 flex flex-wrap gap-2">
+      <span className="rounded-lg border border-border bg-white px-3 py-1 text-xs font-semibold text-muted">
+        Severity: {formatStatus(normalizedSeverity)}
+      </span>
+      <span
+        className={
+          normalizedEscalation === "ESCALATED"
+            ? "rounded-lg border border-amber-300 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800"
+            : "rounded-lg border border-border bg-white px-3 py-1 text-xs font-semibold text-muted"
+        }
+      >
+        {normalizedEscalation === "ESCALATED" ? "Escalated" : "Not escalated"}
+      </span>
+    </div>
+  );
+}
+
 function QueueDetail({ label, value }: { label: string; value: string }) {
   return (
     <div>
@@ -715,6 +943,41 @@ function QueueDetail({ label, value }: { label: string; value: string }) {
       <dd className="mt-1 break-words font-semibold text-ink">{value}</dd>
     </div>
   );
+}
+
+function reviewKey(kind: "comment" | "post" | "report", id: string) {
+  return `${kind}:${id}`;
+}
+
+function reviewDraftFromReport(report: CommunityAdminPostReportQueueItem): ModerationReviewDraft {
+  return {
+    escalationStatus: normalizeEscalationStatus(report.escalation_status),
+    moderatorNote: report.moderator_note ?? "",
+    severity: normalizeSeverity(report.severity)
+  };
+}
+
+function reviewDraftFromRemovedContent(item: {
+  escalation_status: string | null;
+  moderation_note: string | null;
+  moderation_severity: string | null;
+}): ModerationReviewDraft {
+  return {
+    escalationStatus: normalizeEscalationStatus(item.escalation_status),
+    moderatorNote: item.moderation_note ?? "",
+    severity: normalizeSeverity(item.moderation_severity)
+  };
+}
+
+function normalizeSeverity(value: string | null): ModerationSeverity {
+  if (value === "CRITICAL" || value === "HIGH" || value === "LOW" || value === "MEDIUM") {
+    return value;
+  }
+  return "MEDIUM";
+}
+
+function normalizeEscalationStatus(value: string | null): ModerationEscalationStatus {
+  return value === "ESCALATED" ? "ESCALATED" : "NONE";
 }
 
 function formatDate(value: string) {

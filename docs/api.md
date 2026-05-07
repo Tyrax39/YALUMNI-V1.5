@@ -73,6 +73,9 @@ POST /api/v1/communities/{community_id}/posts/{post_id}/reaction
 POST /api/v1/communities/{community_id}/posts/{post_id}/reports
 GET  /api/v1/communities/{community_id}/posts/{post_id}/reports
 POST /api/v1/communities/{community_id}/posts/{post_id}/reports/{report_id}/resolve
+PATCH /api/v1/communities/{community_id}/posts/{post_id}/reports/{report_id}/review
+PATCH /api/v1/communities/{community_id}/posts/{post_id}/moderation-review
+PATCH /api/v1/communities/{community_id}/posts/{post_id}/comments/{comment_id}/moderation-review
 GET  /api/v1/communities/{community_id}/post-reports
 GET  /api/v1/communities/{community_id}/removed-posts
 GET  /api/v1/communities/{community_id}/removed-comments
@@ -198,17 +201,27 @@ Private community posts support:
   restricted to community managers/owners and platform admins.
 - `GET /api/v1/communities/{community_id}/post-reports` gives the same
   manager set a paginated community-level report queue with post context.
-  It supports `status=OPEN|RESOLVED|ALL`, `limit`, and `offset`.
+  It supports `status=OPEN|RESOLVED|ALL`, `severity`, `escalation_status`,
+  `limit`, and `offset`.
 - `GET /api/v1/communities/{community_id}/removed-posts` and
   `GET /api/v1/communities/{community_id}/removed-comments` give managers,
   owners, and admins paginated removed-content queues with remover and parent
-  post context.
+  post context. They support `severity`, `escalation_status`, `limit`, and
+  `offset`.
+- `PATCH /api/v1/communities/{community_id}/posts/{post_id}/reports/{report_id}/review`,
+  `PATCH /api/v1/communities/{community_id}/posts/{post_id}/moderation-review`,
+  and
+  `PATCH /api/v1/communities/{community_id}/posts/{post_id}/comments/{comment_id}/moderation-review`
+  let managers, owners, and admins save internal moderation notes, assign
+  `LOW|MEDIUM|HIGH|CRITICAL` severity, and mark review escalation as
+  `NONE|ESCALATED`.
 - `GET /api/v1/communities/admin/moderation/post-reports`,
   `GET /api/v1/communities/admin/moderation/removed-posts`, and
   `GET /api/v1/communities/admin/moderation/removed-comments` give platform
   admins cross-community moderation queues with community context. All three
-  support `community_id`, `q`, `limit`, and `offset`; reported posts also
-  support `status=OPEN|RESOLVED|ALL` and `reason`.
+  support `community_id`, `q`, `severity`, `escalation_status`, `limit`, and
+  `offset`; reported posts also support `status=OPEN|RESOLVED|ALL` and
+  `reason`.
 
 ## Phase 3: Alumni
 
@@ -238,6 +251,9 @@ POST   /api/v1/communities/{community_id}/posts/{post_id}/reaction # implemented
 POST   /api/v1/communities/{community_id}/posts/{post_id}/reports # implemented
 GET    /api/v1/communities/{community_id}/posts/{post_id}/reports # implemented
 POST   /api/v1/communities/{community_id}/posts/{post_id}/reports/{report_id}/resolve # implemented
+PATCH  /api/v1/communities/{community_id}/posts/{post_id}/reports/{report_id}/review # implemented
+PATCH  /api/v1/communities/{community_id}/posts/{post_id}/moderation-review # implemented
+PATCH  /api/v1/communities/{community_id}/posts/{post_id}/comments/{comment_id}/moderation-review # implemented
 GET    /api/v1/communities/{community_id}/post-reports # implemented
 GET    /api/v1/communities/{community_id}/removed-posts # implemented
 GET    /api/v1/communities/{community_id}/removed-comments # implemented

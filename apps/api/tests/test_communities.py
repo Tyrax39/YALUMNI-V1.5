@@ -977,8 +977,7 @@ def test_admin_can_review_cross_community_moderation_queues(client: TestClient) 
     assert report_payload["reports"][0]["post_body"] == "Global report queue seed post."
 
     filtered_report_queue = client.get(
-        f"/api/v1/communities/admin/moderation/post-reports"
-        f"?community_id={removed_community['id']}",
+        f"/api/v1/communities/admin/moderation/post-reports?community_id={removed_community['id']}",
         headers=admin_headers,
     )
     assert filtered_report_queue.status_code == 200
@@ -1010,6 +1009,103 @@ def test_admin_can_review_cross_community_moderation_queues(client: TestClient) 
     )
     assert removed_comment_payload["comments"][0]["post_body"] == (
         "Global removed comment parent post."
+    )
+
+    member_report_review_denied = client.patch(
+        f"/api/v1/communities/{report_community['id']}/posts/{reported_post['id']}/reports/"
+        f"{report['id']}/review",
+        headers=member_headers,
+        json={
+            "moderator_note": "Member should not update moderation review.",
+            "severity": "HIGH",
+            "escalation_status": "ESCALATED",
+        },
+    )
+    assert member_report_review_denied.status_code == 403
+
+    report_review = client.patch(
+        f"/api/v1/communities/{report_community['id']}/posts/{reported_post['id']}/reports/"
+        f"{report['id']}/review",
+        headers=admin_headers,
+        json={
+            "moderator_note": "Escalate to platform safety review.",
+            "severity": "critical",
+            "escalation_status": "escalated",
+        },
+    )
+    assert report_review.status_code == 200
+    report_review_payload = report_review.json()
+    assert report_review_payload["moderator_note"] == "Escalate to platform safety review."
+    assert report_review_payload["severity"] == "CRITICAL"
+    assert report_review_payload["escalation_status"] == "ESCALATED"
+    assert report_review_payload["escalated_by_user_id"] is not None
+    assert report_review_payload["escalated_at"] is not None
+
+    escalated_report_queue = client.get(
+        "/api/v1/communities/admin/moderation/post-reports"
+        "?severity=CRITICAL&escalation_status=ESCALATED",
+        headers=admin_headers,
+    )
+    assert escalated_report_queue.status_code == 200
+    assert escalated_report_queue.json()["total"] == 1
+    assert escalated_report_queue.json()["reports"][0]["moderator_note"] == (
+        "Escalate to platform safety review."
+    )
+
+    removed_post_review = client.patch(
+        f"/api/v1/communities/{removed_community['id']}/posts/{removed_post['id']}/moderation-review",
+        headers=admin_headers,
+        json={
+            "moderator_note": "Restore only after chapter owner confirms context.",
+            "severity": "high",
+            "escalation_status": "ESCALATED",
+        },
+    )
+    assert removed_post_review.status_code == 200
+    removed_post_review_payload = removed_post_review.json()
+    assert removed_post_review_payload["moderation_note"] == (
+        "Restore only after chapter owner confirms context."
+    )
+    assert removed_post_review_payload["moderation_severity"] == "HIGH"
+    assert removed_post_review_payload["escalation_status"] == "ESCALATED"
+
+    escalated_post_queue = client.get(
+        "/api/v1/communities/admin/moderation/removed-posts"
+        "?severity=HIGH&escalation_status=ESCALATED",
+        headers=admin_headers,
+    )
+    assert escalated_post_queue.status_code == 200
+    assert escalated_post_queue.json()["total"] == 1
+    assert escalated_post_queue.json()["posts"][0]["moderation_note"] == (
+        "Restore only after chapter owner confirms context."
+    )
+
+    removed_comment_review = client.patch(
+        f"/api/v1/communities/{removed_community['id']}/posts/{comment_post['id']}/comments/"
+        f"{removed_comment['id']}/moderation-review",
+        headers=admin_headers,
+        json={
+            "moderator_note": "Track repeat behavior before restoration.",
+            "severity": "medium",
+            "escalation_status": "NONE",
+        },
+    )
+    assert removed_comment_review.status_code == 200
+    removed_comment_review_payload = removed_comment_review.json()
+    assert removed_comment_review_payload["moderation_note"] == (
+        "Track repeat behavior before restoration."
+    )
+    assert removed_comment_review_payload["moderation_severity"] == "MEDIUM"
+    assert removed_comment_review_payload["escalation_status"] == "NONE"
+
+    reviewed_comment_queue = client.get(
+        "/api/v1/communities/admin/moderation/removed-comments?severity=MEDIUM",
+        headers=admin_headers,
+    )
+    assert reviewed_comment_queue.status_code == 200
+    assert reviewed_comment_queue.json()["total"] == 1
+    assert reviewed_comment_queue.json()["comments"][0]["moderation_note"] == (
+        "Track repeat behavior before restoration."
     )
 
     resolve_report = client.post(

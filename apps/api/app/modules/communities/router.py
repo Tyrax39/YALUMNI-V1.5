@@ -38,6 +38,7 @@ from app.modules.communities.schemas import (
     CommunityMemberListResponse,
     CommunityMemberResponse,
     CommunityMemberRoleUpdate,
+    CommunityModerationReviewUpdate,
     CommunityOwnershipTransfer,
     CommunityPostCommentCreate,
     CommunityPostCommentListResponse,
@@ -79,6 +80,8 @@ COMMUNITY_POST_STATUSES = {"ACTIVE", "REMOVED"}
 COMMUNITY_REACTION_TYPES = {"LIKE"}
 COMMUNITY_REPORT_REASONS = {"HARASSMENT", "MISINFORMATION", "OTHER", "SPAM", "UNRELATED"}
 COMMUNITY_REPORT_STATUSES = {"OPEN", "RESOLVED"}
+COMMUNITY_MODERATION_SEVERITIES = {"CRITICAL", "HIGH", "LOW", "MEDIUM"}
+COMMUNITY_ESCALATION_STATUSES = {"ESCALATED", "NONE"}
 
 
 def _request_context(request: Request) -> tuple[str | None, str | None]:
@@ -144,6 +147,39 @@ def _validate_settings(
 
 def _validate_payload(payload: CommunityCreate) -> None:
     _validate_settings(payload.community_type, payload.visibility, payload.join_policy)
+
+
+def _validate_moderation_review_payload(payload: CommunityModerationReviewUpdate) -> None:
+    if payload.severity is not None and payload.severity not in COMMUNITY_MODERATION_SEVERITIES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid moderation severity",
+        )
+    if (
+        payload.escalation_status is not None
+        and payload.escalation_status not in COMMUNITY_ESCALATION_STATUSES
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid escalation status",
+        )
+
+
+def _apply_escalation_review(
+    target: CommunityPost | CommunityPostComment | CommunityPostReport,
+    escalation_status: str | None,
+    current_user: User,
+) -> None:
+    if escalation_status is None:
+        return
+    if escalation_status == "ESCALATED":
+        if target.escalation_status != "ESCALATED":
+            target.escalated_by_user_id = current_user.id
+            target.escalated_at = utcnow()
+    else:
+        target.escalated_by_user_id = None
+        target.escalated_at = None
+    target.escalation_status = escalation_status
 
 
 def _active_member_count(community: Community) -> int:
@@ -258,6 +294,7 @@ def _serialize_post(
     current_user: User,
     community: Community,
 ) -> CommunityPostResponse:
+    include_moderation = _can_manage_community(current_user, community)
     comment_count = (
         db.scalar(
             select(func.count())
@@ -308,6 +345,11 @@ def _serialize_post(
         status=post.status,
         removed_by_user_id=post.removed_by_user_id,
         removed_at=post.removed_at,
+        moderation_note=post.moderation_note if include_moderation else None,
+        moderation_severity=post.moderation_severity if include_moderation else None,
+        escalation_status=post.escalation_status if include_moderation else None,
+        escalated_by_user_id=post.escalated_by_user_id if include_moderation else None,
+        escalated_at=post.escalated_at if include_moderation else None,
         comment_count=comment_count,
         reaction_count=reaction_count,
         viewer_reacted=viewer_reacted,
@@ -317,7 +359,11 @@ def _serialize_post(
     )
 
 
-def _serialize_comment(comment: CommunityPostComment) -> CommunityPostCommentResponse:
+def _serialize_comment(
+    comment: CommunityPostComment,
+    *,
+    include_moderation: bool = False,
+) -> CommunityPostCommentResponse:
     return CommunityPostCommentResponse(
         id=comment.id,
         post_id=comment.post_id,
@@ -327,12 +373,21 @@ def _serialize_comment(comment: CommunityPostComment) -> CommunityPostCommentRes
         status=comment.status,
         removed_by_user_id=comment.removed_by_user_id,
         removed_at=comment.removed_at,
+        moderation_note=comment.moderation_note if include_moderation else None,
+        moderation_severity=comment.moderation_severity if include_moderation else None,
+        escalation_status=comment.escalation_status if include_moderation else None,
+        escalated_by_user_id=comment.escalated_by_user_id if include_moderation else None,
+        escalated_at=comment.escalated_at if include_moderation else None,
         created_at=comment.created_at,
         updated_at=comment.updated_at,
     )
 
 
-def _serialize_report(report: CommunityPostReport) -> CommunityPostReportResponse:
+def _serialize_report(
+    report: CommunityPostReport,
+    *,
+    include_moderation: bool = False,
+) -> CommunityPostReportResponse:
     return CommunityPostReportResponse(
         id=report.id,
         post_id=report.post_id,
@@ -341,6 +396,11 @@ def _serialize_report(report: CommunityPostReport) -> CommunityPostReportRespons
         reason=report.reason,
         note=report.note,
         status=report.status,
+        moderator_note=report.moderator_note if include_moderation else None,
+        severity=report.severity if include_moderation else None,
+        escalation_status=report.escalation_status if include_moderation else None,
+        escalated_by_user_id=report.escalated_by_user_id if include_moderation else None,
+        escalated_at=report.escalated_at if include_moderation else None,
         resolved_by_user_id=report.resolved_by_user_id,
         resolved_at=report.resolved_at,
         created_at=report.created_at,
@@ -358,6 +418,11 @@ def _serialize_report_queue_item(report: CommunityPostReport) -> CommunityPostRe
         reason=report.reason,
         note=report.note,
         status=report.status,
+        moderator_note=report.moderator_note,
+        severity=report.severity,
+        escalation_status=report.escalation_status,
+        escalated_by_user_id=report.escalated_by_user_id,
+        escalated_at=report.escalated_at,
         resolved_by_user_id=report.resolved_by_user_id,
         resolved_at=report.resolved_at,
         created_at=report.created_at,
@@ -415,7 +480,7 @@ def _serialize_removed_comment_queue_item(
 ) -> CommunityRemovedCommentQueueItem:
     post = comment.post
     return CommunityRemovedCommentQueueItem(
-        **_serialize_comment(comment).model_dump(),
+        **_serialize_comment(comment, include_moderation=True).model_dump(),
         removed_by_display_name=(
             comment.removed_by_user.display_name if comment.removed_by_user else "Removed user"
         ),
@@ -933,6 +998,55 @@ def restore_community_post(
     return _serialize_post(db, post, current_user, community)
 
 
+@router.patch(
+    "/{community_id}/posts/{post_id}/moderation-review",
+    response_model=CommunityPostResponse,
+)
+def update_community_post_moderation_review(
+    community_id: uuid.UUID,
+    post_id: uuid.UUID,
+    payload: CommunityModerationReviewUpdate,
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> CommunityPostResponse:
+    _validate_moderation_review_payload(payload)
+    community = _get_community_or_404(db, community_id)
+    if not _can_manage_community(current_user, community):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to update post moderation review",
+        )
+
+    post = _get_post_or_404(db, community, post_id)
+    if post.status != "REMOVED":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only removed posts can receive moderation review metadata",
+        )
+
+    if "moderator_note" in payload.model_fields_set:
+        post.moderation_note = payload.moderator_note
+    if payload.severity is not None:
+        post.moderation_severity = payload.severity
+    _apply_escalation_review(post, payload.escalation_status, current_user)
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "community.post_moderation_review_updated",
+        metadata={
+            "community_id": str(community.id),
+            "escalation_status": post.escalation_status,
+            "moderation_severity": post.moderation_severity,
+            "post_id": str(post.id),
+        },
+    )
+    db.commit()
+    db.refresh(post)
+    return _serialize_post(db, post, current_user, community)
+
+
 @router.get(
     "/{community_id}/posts/{post_id}/comments",
     response_model=CommunityPostCommentListResponse,
@@ -979,7 +1093,13 @@ def list_community_post_comments(
         query.order_by(CommunityPostComment.created_at.asc()).offset(offset).limit(limit)
     ).all()
     return CommunityPostCommentListResponse(
-        comments=[_serialize_comment(comment) for comment in comments],
+        comments=[
+            _serialize_comment(
+                comment,
+                include_moderation=_can_manage_community(current_user, community),
+            )
+            for comment in comments
+        ],
         total=total,
         limit=limit,
         offset=offset,
@@ -1078,7 +1198,10 @@ def remove_community_post_comment(
     )
     db.commit()
     db.refresh(comment)
-    return _serialize_comment(comment)
+    return _serialize_comment(
+        comment,
+        include_moderation=_can_manage_community(current_user, community),
+    )
 
 
 @router.post(
@@ -1124,7 +1247,59 @@ def restore_community_post_comment(
     )
     db.commit()
     db.refresh(comment)
-    return _serialize_comment(comment)
+    return _serialize_comment(comment, include_moderation=True)
+
+
+@router.patch(
+    "/{community_id}/posts/{post_id}/comments/{comment_id}/moderation-review",
+    response_model=CommunityPostCommentResponse,
+)
+def update_community_post_comment_moderation_review(
+    community_id: uuid.UUID,
+    post_id: uuid.UUID,
+    comment_id: uuid.UUID,
+    payload: CommunityModerationReviewUpdate,
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> CommunityPostCommentResponse:
+    _validate_moderation_review_payload(payload)
+    community = _get_community_or_404(db, community_id)
+    if not _can_manage_community(current_user, community):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to update comment moderation review",
+        )
+
+    post = _get_post_or_404(db, community, post_id)
+    comment = _get_comment_or_404(db, post, comment_id)
+    if comment.status != "REMOVED":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only removed comments can receive moderation review metadata",
+        )
+
+    if "moderator_note" in payload.model_fields_set:
+        comment.moderation_note = payload.moderator_note
+    if payload.severity is not None:
+        comment.moderation_severity = payload.severity
+    _apply_escalation_review(comment, payload.escalation_status, current_user)
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "community.post_comment_moderation_review_updated",
+        metadata={
+            "comment_id": str(comment.id),
+            "community_id": str(community.id),
+            "escalation_status": comment.escalation_status,
+            "moderation_severity": comment.moderation_severity,
+            "post_id": str(post.id),
+        },
+    )
+    db.commit()
+    db.refresh(comment)
+    return _serialize_comment(comment, include_moderation=True)
 
 
 @router.post(
@@ -1294,7 +1469,7 @@ def list_community_post_reports(
         query.order_by(CommunityPostReport.created_at.desc()).offset(offset).limit(limit)
     ).all()
     return CommunityPostReportListResponse(
-        reports=[_serialize_report(report) for report in reports],
+        reports=[_serialize_report(report, include_moderation=True) for report in reports],
         total=total,
         limit=limit,
         offset=offset,
@@ -1345,7 +1520,53 @@ def resolve_community_post_report(
     )
     db.commit()
     db.refresh(report)
-    return _serialize_report(report)
+    return _serialize_report(report, include_moderation=True)
+
+
+@router.patch(
+    "/{community_id}/posts/{post_id}/reports/{report_id}/review",
+    response_model=CommunityPostReportResponse,
+)
+def update_community_post_report_review(
+    community_id: uuid.UUID,
+    post_id: uuid.UUID,
+    report_id: uuid.UUID,
+    payload: CommunityModerationReviewUpdate,
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> CommunityPostReportResponse:
+    _validate_moderation_review_payload(payload)
+    community = _get_community_or_404(db, community_id)
+    if not _can_manage_community(current_user, community):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to update post report review",
+        )
+
+    post = _get_post_or_404(db, community, post_id)
+    report = _get_report_or_404(db, post, report_id)
+    if "moderator_note" in payload.model_fields_set:
+        report.moderator_note = payload.moderator_note
+    if payload.severity is not None:
+        report.severity = payload.severity
+    _apply_escalation_review(report, payload.escalation_status, current_user)
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "community.post_report_review_updated",
+        metadata={
+            "community_id": str(community.id),
+            "escalation_status": report.escalation_status,
+            "post_id": str(post.id),
+            "report_id": str(report.id),
+            "severity": report.severity,
+        },
+    )
+    db.commit()
+    db.refresh(report)
+    return _serialize_report(report, include_moderation=True)
 
 
 @router.get(
@@ -1363,6 +1584,14 @@ def list_admin_community_post_report_queue(
     reason: Annotated[
         str | None,
         Query(pattern="^(HARASSMENT|MISINFORMATION|OTHER|SPAM|UNRELATED)$"),
+    ] = None,
+    severity: Annotated[
+        str | None,
+        Query(pattern="^(CRITICAL|HIGH|LOW|MEDIUM)$"),
+    ] = None,
+    escalation_status: Annotated[
+        str | None,
+        Query(pattern="^(ESCALATED|NONE)$"),
     ] = None,
     q: Annotated[str | None, Query(max_length=120)] = None,
     limit: Annotated[int, Query(ge=1, le=50)] = 10,
@@ -1386,6 +1615,12 @@ def list_admin_community_post_report_queue(
         query = query.where(Community.id == community_id_filter)
     if reason:
         query = query.where(CommunityPostReport.reason == reason.strip().upper())
+    if severity:
+        query = query.where(CommunityPostReport.severity == severity.strip().upper())
+    if escalation_status:
+        query = query.where(
+            CommunityPostReport.escalation_status == escalation_status.strip().upper()
+        )
     if q:
         search_term = f"%{q.strip()}%"
         query = query.where(
@@ -1394,6 +1629,7 @@ def list_admin_community_post_report_queue(
                 Community.slug.ilike(search_term),
                 CommunityPost.body.ilike(search_term),
                 CommunityPostReport.note.ilike(search_term),
+                CommunityPostReport.moderator_note.ilike(search_term),
             )
         )
 
@@ -1418,6 +1654,14 @@ def list_admin_community_removed_posts(
     current_user: Annotated[User, Depends(community_admin_dependency)],
     db: Annotated[Session, Depends(get_db_session)],
     community_id_filter: Annotated[uuid.UUID | None, Query(alias="community_id")] = None,
+    severity: Annotated[
+        str | None,
+        Query(pattern="^(CRITICAL|HIGH|LOW|MEDIUM)$"),
+    ] = None,
+    escalation_status: Annotated[
+        str | None,
+        Query(pattern="^(ESCALATED|NONE)$"),
+    ] = None,
     q: Annotated[str | None, Query(max_length=120)] = None,
     limit: Annotated[int, Query(ge=1, le=50)] = 10,
     offset: Annotated[int, Query(ge=0)] = 0,
@@ -1434,6 +1678,10 @@ def list_admin_community_removed_posts(
     )
     if community_id_filter:
         query = query.where(Community.id == community_id_filter)
+    if severity:
+        query = query.where(CommunityPost.moderation_severity == severity.strip().upper())
+    if escalation_status:
+        query = query.where(CommunityPost.escalation_status == escalation_status.strip().upper())
     if q:
         search_term = f"%{q.strip()}%"
         query = query.where(
@@ -1441,6 +1689,7 @@ def list_admin_community_removed_posts(
                 Community.name.ilike(search_term),
                 Community.slug.ilike(search_term),
                 CommunityPost.body.ilike(search_term),
+                CommunityPost.moderation_note.ilike(search_term),
             )
         )
 
@@ -1451,9 +1700,7 @@ def list_admin_community_removed_posts(
         .limit(limit)
     ).all()
     return CommunityAdminRemovedPostQueueResponse(
-        posts=[
-            _serialize_admin_removed_post_queue_item(db, post, current_user) for post in posts
-        ],
+        posts=[_serialize_admin_removed_post_queue_item(db, post, current_user) for post in posts],
         total=total,
         limit=limit,
         offset=offset,
@@ -1469,6 +1716,14 @@ def list_admin_community_removed_comments(
     current_user: Annotated[User, Depends(community_admin_dependency)],
     db: Annotated[Session, Depends(get_db_session)],
     community_id_filter: Annotated[uuid.UUID | None, Query(alias="community_id")] = None,
+    severity: Annotated[
+        str | None,
+        Query(pattern="^(CRITICAL|HIGH|LOW|MEDIUM)$"),
+    ] = None,
+    escalation_status: Annotated[
+        str | None,
+        Query(pattern="^(ESCALATED|NONE)$"),
+    ] = None,
     q: Annotated[str | None, Query(max_length=120)] = None,
     limit: Annotated[int, Query(ge=1, le=50)] = 10,
     offset: Annotated[int, Query(ge=0)] = 0,
@@ -1488,6 +1743,12 @@ def list_admin_community_removed_comments(
     )
     if community_id_filter:
         query = query.where(Community.id == community_id_filter)
+    if severity:
+        query = query.where(CommunityPostComment.moderation_severity == severity.strip().upper())
+    if escalation_status:
+        query = query.where(
+            CommunityPostComment.escalation_status == escalation_status.strip().upper()
+        )
     if q:
         search_term = f"%{q.strip()}%"
         query = query.where(
@@ -1496,6 +1757,7 @@ def list_admin_community_removed_comments(
                 Community.slug.ilike(search_term),
                 CommunityPost.body.ilike(search_term),
                 CommunityPostComment.body.ilike(search_term),
+                CommunityPostComment.moderation_note.ilike(search_term),
             )
         )
 
@@ -1529,6 +1791,14 @@ def list_community_post_report_queue(
         str,
         Query(alias="status", pattern="^(OPEN|RESOLVED|ALL)$"),
     ] = "OPEN",
+    severity: Annotated[
+        str | None,
+        Query(pattern="^(CRITICAL|HIGH|LOW|MEDIUM)$"),
+    ] = None,
+    escalation_status: Annotated[
+        str | None,
+        Query(pattern="^(ESCALATED|NONE)$"),
+    ] = None,
     limit: Annotated[int, Query(ge=1, le=50)] = 10,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> CommunityPostReportQueueResponse:
@@ -1551,6 +1821,12 @@ def list_community_post_report_queue(
     )
     if normalized_status != "ALL":
         query = query.where(CommunityPostReport.status == normalized_status)
+    if severity:
+        query = query.where(CommunityPostReport.severity == severity.strip().upper())
+    if escalation_status:
+        query = query.where(
+            CommunityPostReport.escalation_status == escalation_status.strip().upper()
+        )
 
     total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
     reports = db.scalars(
@@ -1573,6 +1849,14 @@ def list_community_removed_posts(
     community_id: uuid.UUID,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db_session)],
+    severity: Annotated[
+        str | None,
+        Query(pattern="^(CRITICAL|HIGH|LOW|MEDIUM)$"),
+    ] = None,
+    escalation_status: Annotated[
+        str | None,
+        Query(pattern="^(ESCALATED|NONE)$"),
+    ] = None,
     limit: Annotated[int, Query(ge=1, le=50)] = 10,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> CommunityRemovedPostQueueResponse:
@@ -1594,6 +1878,10 @@ def list_community_removed_posts(
             CommunityPost.status == "REMOVED",
         )
     )
+    if severity:
+        query = query.where(CommunityPost.moderation_severity == severity.strip().upper())
+    if escalation_status:
+        query = query.where(CommunityPost.escalation_status == escalation_status.strip().upper())
     total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
     posts = db.scalars(
         query.order_by(CommunityPost.removed_at.desc(), CommunityPost.created_at.desc())
@@ -1619,6 +1907,14 @@ def list_community_removed_comments(
     community_id: uuid.UUID,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db_session)],
+    severity: Annotated[
+        str | None,
+        Query(pattern="^(CRITICAL|HIGH|LOW|MEDIUM)$"),
+    ] = None,
+    escalation_status: Annotated[
+        str | None,
+        Query(pattern="^(ESCALATED|NONE)$"),
+    ] = None,
     limit: Annotated[int, Query(ge=1, le=50)] = 10,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> CommunityRemovedCommentQueueResponse:
@@ -1642,6 +1938,12 @@ def list_community_removed_comments(
             CommunityPostComment.status == "REMOVED",
         )
     )
+    if severity:
+        query = query.where(CommunityPostComment.moderation_severity == severity.strip().upper())
+    if escalation_status:
+        query = query.where(
+            CommunityPostComment.escalation_status == escalation_status.strip().upper()
+        )
     total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
     comments = db.scalars(
         query.order_by(

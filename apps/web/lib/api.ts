@@ -330,6 +330,11 @@ export type CommunityPost = {
   status: string;
   removed_by_user_id: string | null;
   removed_at: string | null;
+  moderation_note: string | null;
+  moderation_severity: string | null;
+  escalation_status: string | null;
+  escalated_by_user_id: string | null;
+  escalated_at: string | null;
   comment_count: number;
   reaction_count: number;
   viewer_reacted: boolean;
@@ -355,6 +360,11 @@ export type CommunityPostComment = {
   status: string;
   removed_by_user_id: string | null;
   removed_at: string | null;
+  moderation_note: string | null;
+  moderation_severity: string | null;
+  escalation_status: string | null;
+  escalated_by_user_id: string | null;
+  escalated_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -382,6 +392,11 @@ export type CommunityPostReport = {
   reason: string;
   note: string | null;
   status: string;
+  moderator_note: string | null;
+  severity: string | null;
+  escalation_status: string | null;
+  escalated_by_user_id: string | null;
+  escalated_at: string | null;
   resolved_by_user_id: string | null;
   resolved_at: string | null;
   created_at: string;
@@ -520,6 +535,12 @@ export type CommunityPostReactionPayload = {
 export type CommunityPostReportCreatePayload = {
   note?: string | null;
   reason?: "HARASSMENT" | "MISINFORMATION" | "OTHER" | "SPAM" | "UNRELATED";
+};
+
+export type CommunityModerationReviewUpdatePayload = {
+  escalation_status?: "ESCALATED" | "NONE" | null;
+  moderator_note?: string | null;
+  severity?: "CRITICAL" | "HIGH" | "LOW" | "MEDIUM" | null;
 };
 
 export const adminRoles: readonly string[] = [
@@ -1388,11 +1409,17 @@ export function listCommunityPostReports(
 export function listCommunityPostReportQueue(
   accessToken: string,
   communityId: string,
-  params: { limit?: number; offset?: number; status?: string } = {}
+  params: { escalationStatus?: string; limit?: number; offset?: number; severity?: string; status?: string } = {}
 ): Promise<CommunityPostReportQueueResponse> {
   const searchParams = new URLSearchParams();
   if (params.status) {
     searchParams.set("status", params.status);
+  }
+  if (params.severity) {
+    searchParams.set("severity", params.severity);
+  }
+  if (params.escalationStatus) {
+    searchParams.set("escalation_status", params.escalationStatus);
   }
   if (params.limit) {
     searchParams.set("limit", String(params.limit));
@@ -1414,10 +1441,12 @@ export function listAdminCommunityPostReportQueue(
   accessToken: string,
   params: {
     communityId?: string;
+    escalationStatus?: string;
     limit?: number;
     offset?: number;
     q?: string;
     reason?: string;
+    severity?: string;
     status?: string;
   } = {}
 ): Promise<CommunityAdminPostReportQueueResponse> {
@@ -1430,6 +1459,12 @@ export function listAdminCommunityPostReportQueue(
   }
   if (params.reason) {
     searchParams.set("reason", params.reason);
+  }
+  if (params.severity) {
+    searchParams.set("severity", params.severity);
+  }
+  if (params.escalationStatus) {
+    searchParams.set("escalation_status", params.escalationStatus);
   }
   if (params.q) {
     searchParams.set("q", params.q);
@@ -1453,9 +1488,15 @@ export function listAdminCommunityPostReportQueue(
 export function listCommunityRemovedPosts(
   accessToken: string,
   communityId: string,
-  params: { limit?: number; offset?: number } = {}
+  params: { escalationStatus?: string; limit?: number; offset?: number; severity?: string } = {}
 ): Promise<CommunityRemovedPostQueueResponse> {
   const searchParams = new URLSearchParams();
+  if (params.severity) {
+    searchParams.set("severity", params.severity);
+  }
+  if (params.escalationStatus) {
+    searchParams.set("escalation_status", params.escalationStatus);
+  }
   if (params.limit) {
     searchParams.set("limit", String(params.limit));
   }
@@ -1474,7 +1515,14 @@ export function listCommunityRemovedPosts(
 
 export function listAdminCommunityRemovedPosts(
   accessToken: string,
-  params: { communityId?: string; limit?: number; offset?: number; q?: string } = {}
+  params: {
+    communityId?: string;
+    escalationStatus?: string;
+    limit?: number;
+    offset?: number;
+    q?: string;
+    severity?: string;
+  } = {}
 ): Promise<CommunityAdminRemovedPostQueueResponse> {
   const searchParams = new URLSearchParams();
   if (params.communityId) {
@@ -1482,6 +1530,12 @@ export function listAdminCommunityRemovedPosts(
   }
   if (params.q) {
     searchParams.set("q", params.q);
+  }
+  if (params.severity) {
+    searchParams.set("severity", params.severity);
+  }
+  if (params.escalationStatus) {
+    searchParams.set("escalation_status", params.escalationStatus);
   }
   if (params.limit) {
     searchParams.set("limit", String(params.limit));
@@ -1502,9 +1556,15 @@ export function listAdminCommunityRemovedPosts(
 export function listCommunityRemovedComments(
   accessToken: string,
   communityId: string,
-  params: { limit?: number; offset?: number } = {}
+  params: { escalationStatus?: string; limit?: number; offset?: number; severity?: string } = {}
 ): Promise<CommunityRemovedCommentQueueResponse> {
   const searchParams = new URLSearchParams();
+  if (params.severity) {
+    searchParams.set("severity", params.severity);
+  }
+  if (params.escalationStatus) {
+    searchParams.set("escalation_status", params.escalationStatus);
+  }
   if (params.limit) {
     searchParams.set("limit", String(params.limit));
   }
@@ -1523,7 +1583,14 @@ export function listCommunityRemovedComments(
 
 export function listAdminCommunityRemovedComments(
   accessToken: string,
-  params: { communityId?: string; limit?: number; offset?: number; q?: string } = {}
+  params: {
+    communityId?: string;
+    escalationStatus?: string;
+    limit?: number;
+    offset?: number;
+    q?: string;
+    severity?: string;
+  } = {}
 ): Promise<CommunityAdminRemovedCommentQueueResponse> {
   const searchParams = new URLSearchParams();
   if (params.communityId) {
@@ -1531,6 +1598,12 @@ export function listAdminCommunityRemovedComments(
   }
   if (params.q) {
     searchParams.set("q", params.q);
+  }
+  if (params.severity) {
+    searchParams.set("severity", params.severity);
+  }
+  if (params.escalationStatus) {
+    searchParams.set("escalation_status", params.escalationStatus);
   }
   if (params.limit) {
     searchParams.set("limit", String(params.limit));
@@ -1559,6 +1632,56 @@ export function resolveCommunityPostReport(
     {
       headers: authHeaders(accessToken),
       method: "POST"
+    }
+  );
+}
+
+export function updateCommunityPostReportReview(
+  accessToken: string,
+  communityId: string,
+  postId: string,
+  reportId: string,
+  payload: CommunityModerationReviewUpdatePayload
+): Promise<CommunityPostReport> {
+  return protectedApiFetch<CommunityPostReport>(
+    `/api/v1/communities/${encodeURIComponent(communityId)}/posts/${encodeURIComponent(postId)}/reports/${encodeURIComponent(reportId)}/review`,
+    {
+      body: JSON.stringify(payload),
+      headers: authHeaders(accessToken),
+      method: "PATCH"
+    }
+  );
+}
+
+export function updateCommunityPostModerationReview(
+  accessToken: string,
+  communityId: string,
+  postId: string,
+  payload: CommunityModerationReviewUpdatePayload
+): Promise<CommunityPost> {
+  return protectedApiFetch<CommunityPost>(
+    `/api/v1/communities/${encodeURIComponent(communityId)}/posts/${encodeURIComponent(postId)}/moderation-review`,
+    {
+      body: JSON.stringify(payload),
+      headers: authHeaders(accessToken),
+      method: "PATCH"
+    }
+  );
+}
+
+export function updateCommunityPostCommentModerationReview(
+  accessToken: string,
+  communityId: string,
+  postId: string,
+  commentId: string,
+  payload: CommunityModerationReviewUpdatePayload
+): Promise<CommunityPostComment> {
+  return protectedApiFetch<CommunityPostComment>(
+    `/api/v1/communities/${encodeURIComponent(communityId)}/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}/moderation-review`,
+    {
+      body: JSON.stringify(payload),
+      headers: authHeaders(accessToken),
+      method: "PATCH"
     }
   );
 }

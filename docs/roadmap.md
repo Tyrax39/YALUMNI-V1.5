@@ -80,6 +80,7 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
 - Removed-content queues. Implemented for manager/owner/admin review and restoration of removed posts/comments inside communities.
 - Moderator actions. Started with manager/owner/admin post/comment removal, report resolution, and restoration inside communities.
 - Cross-community admin moderation queue. Implemented in the admin console with platform-wide report, removed-post, and removed-comment queues plus filters and action buttons.
+- Moderation review metadata. Implemented for reports, removed posts, and removed comments with internal notes, severity, escalation state, API filters, and admin-console save controls.
 
 ## Phase 7: Messaging And Notifications
 

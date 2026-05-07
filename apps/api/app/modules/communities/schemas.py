@@ -172,6 +172,27 @@ class CommunityPostReportCreate(BaseModel):
         return value or None
 
 
+class CommunityModerationReviewUpdate(BaseModel):
+    moderator_note: str | None = Field(default=None, max_length=2000)
+    severity: str | None = Field(default=None, max_length=40)
+    escalation_status: str | None = Field(default=None, max_length=40)
+
+    @field_validator("moderator_note")
+    @classmethod
+    def normalize_note(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        return value or None
+
+    @field_validator("severity", "escalation_status")
+    @classmethod
+    def normalize_enums(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return value.strip().upper().replace(" ", "_")
+
+
 class CommunityInvitationCreate(BaseModel):
     email: str = Field(max_length=320, pattern=EMAIL_PATTERN)
     role: str = Field(default="MEMBER", max_length=40)
@@ -242,6 +263,11 @@ class CommunityPostResponse(BaseModel):
     status: str
     removed_by_user_id: uuid.UUID | None
     removed_at: datetime | None
+    moderation_note: str | None
+    moderation_severity: str | None
+    escalation_status: str | None
+    escalated_by_user_id: uuid.UUID | None
+    escalated_at: datetime | None
     comment_count: int
     reaction_count: int
     viewer_reacted: bool
@@ -267,6 +293,11 @@ class CommunityPostCommentResponse(BaseModel):
     status: str
     removed_by_user_id: uuid.UUID | None
     removed_at: datetime | None
+    moderation_note: str | None
+    moderation_severity: str | None
+    escalation_status: str | None
+    escalated_by_user_id: uuid.UUID | None
+    escalated_at: datetime | None
     created_at: datetime
     updated_at: datetime
 
@@ -294,6 +325,11 @@ class CommunityPostReportResponse(BaseModel):
     reason: str
     note: str | None
     status: str
+    moderator_note: str | None
+    severity: str | None
+    escalation_status: str | None
+    escalated_by_user_id: uuid.UUID | None
+    escalated_at: datetime | None
     resolved_by_user_id: uuid.UUID | None
     resolved_at: datetime | None
     created_at: datetime
