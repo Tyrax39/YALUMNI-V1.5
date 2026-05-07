@@ -12,7 +12,7 @@ from app.core.database import get_db_session
 from app.core.permissions import ADMIN_ROLE_NAMES
 from app.core.security import create_refresh_token, hash_token, utcnow
 from app.modules.auth.dependencies import get_current_user, require_roles
-from app.modules.auth.models import SecurityEvent, User
+from app.modules.auth.models import Role, RoleAssignment, SecurityEvent, User
 from app.modules.communities.models import (
     Community,
     CommunityInvitation,
@@ -60,6 +60,7 @@ from app.modules.communities.schemas import (
     CommunityResponse,
     CommunityUpdate,
 )
+from app.modules.notifications.service import notify_users
 
 router = APIRouter()
 community_admin_dependency = require_roles(*ADMIN_ROLE_NAMES)
@@ -235,6 +236,116 @@ def _can_edit_community_settings(user: User, community: Community) -> bool:
         return True
 
     return _active_membership_role(user, community) == "OWNER"
+
+
+def _community_target_url(community: Community) -> str:
+    return f"/communities/{community.id}"
+
+
+def _admin_moderation_target_url() -> str:
+    return "/admin"
+
+
+def _community_manager_user_ids(community: Community) -> list[uuid.UUID]:
+    return [
+        membership.user_id
+        for membership in community.memberships
+        if membership.status == "ACTIVE" and membership.role in {"MANAGER", "OWNER"}
+    ]
+
+
+def _admin_user_ids(db: Session) -> list[uuid.UUID]:
+    return list(
+        db.scalars(
+            select(RoleAssignment.user_id)
+            .join(Role, RoleAssignment.role_id == Role.id)
+            .where(
+                Role.name.in_(ADMIN_ROLE_NAMES),
+                RoleAssignment.scope_type == "GLOBAL",
+                RoleAssignment.scope_id.is_(None),
+            )
+        ).all()
+    )
+
+
+def _notify_community_managers(
+    db: Session,
+    community: Community,
+    actor: User,
+    *,
+    event_type: str,
+    title: str,
+    body: str | None = None,
+    metadata: dict | None = None,
+) -> None:
+    notify_users(
+        db,
+        _community_manager_user_ids(community),
+        actor_user_id=actor.id,
+        body=body,
+        event_type=event_type,
+        exclude_user_ids={actor.id},
+        metadata=metadata,
+        target_url=_community_target_url(community),
+        title=title,
+    )
+
+
+def _notify_admins(
+    db: Session,
+    actor: User,
+    *,
+    event_type: str,
+    title: str,
+    body: str | None = None,
+    metadata: dict | None = None,
+) -> None:
+    notify_users(
+        db,
+        _admin_user_ids(db),
+        actor_user_id=actor.id,
+        body=body,
+        event_type=event_type,
+        exclude_user_ids={actor.id},
+        metadata=metadata,
+        target_url=_admin_moderation_target_url(),
+        title=title,
+    )
+
+
+def _notify_moderation_escalation(
+    db: Session,
+    community: Community,
+    actor: User,
+    *,
+    content_id: uuid.UUID,
+    content_type: str,
+    severity: str,
+) -> None:
+    metadata = {
+        "community_id": str(community.id),
+        "content_id": str(content_id),
+        "content_type": content_type,
+        "severity": severity,
+    }
+    body = f"{content_type.replace('_', ' ').title()} was escalated as {severity.lower()}."
+    _notify_community_managers(
+        db,
+        community,
+        actor,
+        body=body,
+        event_type="community.moderation_escalated",
+        metadata=metadata,
+        title=f"Moderation escalated in {community.name}",
+    )
+    _notify_admins(
+        db,
+        actor,
+        body=f"{community.name}: {body}",
+        event_type="community.moderation_escalated",
+        metadata=metadata,
+        title="Moderation escalation needs review",
+    )
 
 
 def _can_manage_membership(
@@ -732,6 +843,22 @@ def accept_community_invitation(
             "invited_role": invitation.invited_role,
         },
     )
+    invitation_body = (
+        f"{current_user.display_name} accepted an invitation as {invitation.invited_role.lower()}."
+    )
+    _notify_community_managers(
+        db,
+        community,
+        current_user,
+        body=invitation_body,
+        event_type="community.invitation_accepted",
+        metadata={
+            "community_id": str(community.id),
+            "invitation_id": str(invitation.id),
+            "target_user_id": str(current_user.id),
+        },
+        title=f"Invitation accepted in {community.name}",
+    )
     db.commit()
     community = _get_community_or_404(db, community.id)
     return _serialize_community(community, current_user)
@@ -815,6 +942,15 @@ def update_community(
                 "next_values": next_values,
                 "previous_values": previous_values,
             },
+        )
+        _notify_community_managers(
+            db,
+            community,
+            current_user,
+            body=f"{current_user.display_name} updated {', '.join(changed_fields)}.",
+            event_type="community.updated",
+            metadata={"changed_fields": changed_fields, "community_id": str(community.id)},
+            title=f"{community.name} settings updated",
         )
         db.commit()
     else:
@@ -952,6 +1088,18 @@ def remove_community_post(
             "post_author_user_id": str(post.author_user_id) if post.author_user_id else None,
         },
     )
+    if post.author_user_id:
+        notify_users(
+            db,
+            [post.author_user_id],
+            actor_user_id=current_user.id,
+            body=f"A post was removed in {community.name}.",
+            event_type="community.post_removed",
+            exclude_user_ids={current_user.id},
+            metadata={"community_id": str(community.id), "post_id": str(post.id)},
+            target_url=_community_target_url(community),
+            title="Your community post was removed",
+        )
     db.commit()
     db.refresh(post)
     return _serialize_post(db, post, current_user, community)
@@ -993,6 +1141,18 @@ def restore_community_post(
             "post_author_user_id": str(post.author_user_id) if post.author_user_id else None,
         },
     )
+    if post.author_user_id:
+        notify_users(
+            db,
+            [post.author_user_id],
+            actor_user_id=current_user.id,
+            body=f"A removed post was restored in {community.name}.",
+            event_type="community.post_restored",
+            exclude_user_ids={current_user.id},
+            metadata={"community_id": str(community.id), "post_id": str(post.id)},
+            target_url=_community_target_url(community),
+            title="Your community post was restored",
+        )
     db.commit()
     db.refresh(post)
     return _serialize_post(db, post, current_user, community)
@@ -1029,6 +1189,7 @@ def update_community_post_moderation_review(
         post.moderation_note = payload.moderator_note
     if payload.severity is not None:
         post.moderation_severity = payload.severity
+    previous_escalation_status = post.escalation_status
     _apply_escalation_review(post, payload.escalation_status, current_user)
     _create_security_event(
         db,
@@ -1042,6 +1203,15 @@ def update_community_post_moderation_review(
             "post_id": str(post.id),
         },
     )
+    if payload.escalation_status == "ESCALATED" and previous_escalation_status != "ESCALATED":
+        _notify_moderation_escalation(
+            db,
+            community,
+            current_user,
+            content_id=post.id,
+            content_type="removed_post",
+            severity=post.moderation_severity,
+        )
     db.commit()
     db.refresh(post)
     return _serialize_post(db, post, current_user, community)
@@ -1136,6 +1306,7 @@ def create_community_post_comment(
         status="ACTIVE",
     )
     db.add(comment)
+    db.flush()
     _create_security_event(
         db,
         request,
@@ -1143,6 +1314,22 @@ def create_community_post_comment(
         "community.post_comment_created",
         metadata={"community_id": str(community.id), "post_id": str(post.id)},
     )
+    if post.author_user_id:
+        notify_users(
+            db,
+            [post.author_user_id],
+            actor_user_id=current_user.id,
+            body=f"{current_user.display_name} commented on your post in {community.name}.",
+            event_type="community.post_comment_created",
+            exclude_user_ids={current_user.id},
+            metadata={
+                "community_id": str(community.id),
+                "comment_id": str(comment.id),
+                "post_id": str(post.id),
+            },
+            target_url=_community_target_url(community),
+            title="New comment on your post",
+        )
     db.commit()
     db.refresh(comment)
     comment = _get_comment_or_404(db, post, comment.id)
@@ -1196,6 +1383,22 @@ def remove_community_post_comment(
             "post_id": str(post.id),
         },
     )
+    if comment.author_user_id:
+        notify_users(
+            db,
+            [comment.author_user_id],
+            actor_user_id=current_user.id,
+            body=f"A comment was removed in {community.name}.",
+            event_type="community.post_comment_removed",
+            exclude_user_ids={current_user.id},
+            metadata={
+                "comment_id": str(comment.id),
+                "community_id": str(community.id),
+                "post_id": str(post.id),
+            },
+            target_url=_community_target_url(community),
+            title="Your community comment was removed",
+        )
     db.commit()
     db.refresh(comment)
     return _serialize_comment(
@@ -1245,6 +1448,22 @@ def restore_community_post_comment(
             "post_id": str(post.id),
         },
     )
+    if comment.author_user_id:
+        notify_users(
+            db,
+            [comment.author_user_id],
+            actor_user_id=current_user.id,
+            body=f"A removed comment was restored in {community.name}.",
+            event_type="community.post_comment_restored",
+            exclude_user_ids={current_user.id},
+            metadata={
+                "comment_id": str(comment.id),
+                "community_id": str(community.id),
+                "post_id": str(post.id),
+            },
+            target_url=_community_target_url(community),
+            title="Your community comment was restored",
+        )
     db.commit()
     db.refresh(comment)
     return _serialize_comment(comment, include_moderation=True)
@@ -1283,6 +1502,7 @@ def update_community_post_comment_moderation_review(
         comment.moderation_note = payload.moderator_note
     if payload.severity is not None:
         comment.moderation_severity = payload.severity
+    previous_escalation_status = comment.escalation_status
     _apply_escalation_review(comment, payload.escalation_status, current_user)
     _create_security_event(
         db,
@@ -1297,6 +1517,15 @@ def update_community_post_comment_moderation_review(
             "post_id": str(post.id),
         },
     )
+    if payload.escalation_status == "ESCALATED" and previous_escalation_status != "ESCALATED":
+        _notify_moderation_escalation(
+            db,
+            community,
+            current_user,
+            content_id=comment.id,
+            content_type="removed_comment",
+            severity=comment.moderation_severity,
+        )
     db.commit()
     db.refresh(comment)
     return _serialize_comment(comment, include_moderation=True)
@@ -1414,6 +1643,7 @@ def create_community_post_report(
         status="OPEN",
     )
     db.add(report)
+    db.flush()
     _create_security_event(
         db,
         request,
@@ -1424,6 +1654,21 @@ def create_community_post_report(
             "post_id": str(post.id),
             "reason": report.reason,
         },
+    )
+    report_reason = report.reason.lower().replace("_", " ")
+    _notify_community_managers(
+        db,
+        community,
+        current_user,
+        body=f"{current_user.display_name} reported a post for {report_reason}.",
+        event_type="community.post_report_created",
+        metadata={
+            "community_id": str(community.id),
+            "post_id": str(post.id),
+            "reason": report.reason,
+            "report_id": str(report.id),
+        },
+        title=f"New post report in {community.name}",
     )
     db.commit()
     db.refresh(report)
@@ -1518,6 +1763,22 @@ def resolve_community_post_report(
             "report_id": str(report.id),
         },
     )
+    if report.reporter_user_id:
+        notify_users(
+            db,
+            [report.reporter_user_id],
+            actor_user_id=current_user.id,
+            body=f"A report you submitted in {community.name} has been resolved.",
+            event_type="community.post_report_resolved",
+            exclude_user_ids={current_user.id},
+            metadata={
+                "community_id": str(community.id),
+                "post_id": str(post.id),
+                "report_id": str(report.id),
+            },
+            target_url=_community_target_url(community),
+            title="Your post report was resolved",
+        )
     db.commit()
     db.refresh(report)
     return _serialize_report(report, include_moderation=True)
@@ -1550,6 +1811,7 @@ def update_community_post_report_review(
         report.moderator_note = payload.moderator_note
     if payload.severity is not None:
         report.severity = payload.severity
+    previous_escalation_status = report.escalation_status
     _apply_escalation_review(report, payload.escalation_status, current_user)
     _create_security_event(
         db,
@@ -1564,6 +1826,15 @@ def update_community_post_report_review(
             "severity": report.severity,
         },
     )
+    if payload.escalation_status == "ESCALATED" and previous_escalation_status != "ESCALATED":
+        _notify_moderation_escalation(
+            db,
+            community,
+            current_user,
+            content_id=report.id,
+            content_type="post_report",
+            severity=report.severity,
+        )
     db.commit()
     db.refresh(report)
     return _serialize_report(report, include_moderation=True)
@@ -2102,6 +2373,7 @@ def create_community_invitation(
         expires_at=utcnow() + timedelta(days=COMMUNITY_INVITATION_DAYS),
     )
     db.add(invitation)
+    db.flush()
     _create_security_event(
         db,
         request,
@@ -2113,6 +2385,26 @@ def create_community_invitation(
             "invited_role": invitation.invited_role,
         },
     )
+    if invited_user:
+        invitation_body = (
+            f"{current_user.display_name} invited you to join {community.name} as "
+            f"{invitation.invited_role.lower()}."
+        )
+        notify_users(
+            db,
+            [invited_user.id],
+            actor_user_id=current_user.id,
+            body=invitation_body,
+            event_type="community.invitation_created",
+            exclude_user_ids={current_user.id},
+            metadata={
+                "community_id": str(community.id),
+                "invitation_id": str(invitation.id),
+                "invited_role": invitation.invited_role,
+            },
+            target_url="/communities/invitations/accept",
+            title=f"Invitation to {community.name}",
+        )
     db.commit()
     db.refresh(invitation)
     return _serialize_invitation(invitation, dev_invitation_token=invitation_token)
@@ -2272,6 +2564,17 @@ def approve_community_member(
             "target_user_id": str(membership.user_id),
         },
     )
+    notify_users(
+        db,
+        [membership.user_id],
+        actor_user_id=current_user.id,
+        body=f"Your request to join {community.name} was approved.",
+        event_type="community.member_approved",
+        exclude_user_ids={current_user.id},
+        metadata={"community_id": str(community.id), "membership_id": str(membership.id)},
+        target_url=_community_target_url(community),
+        title=f"You are now a member of {community.name}",
+    )
     db.commit()
     db.refresh(membership)
     return _serialize_member(membership)
@@ -2314,6 +2617,17 @@ def reject_community_member(
             "membership_id": str(membership.id),
             "target_user_id": str(membership.user_id),
         },
+    )
+    notify_users(
+        db,
+        [membership.user_id],
+        actor_user_id=current_user.id,
+        body=f"Your request to join {community.name} was not approved.",
+        event_type="community.member_rejected",
+        exclude_user_ids={current_user.id},
+        metadata={"community_id": str(community.id), "membership_id": str(membership.id)},
+        target_url=_community_target_url(community),
+        title=f"Join request update for {community.name}",
     )
     db.commit()
     db.refresh(membership)
@@ -2368,6 +2682,26 @@ def update_community_member_role(
             "new_role": membership.role,
         },
     )
+    role_update_body = (
+        f"Your role in {community.name} changed from {previous_role.lower()} "
+        f"to {membership.role.lower()}."
+    )
+    notify_users(
+        db,
+        [membership.user_id],
+        actor_user_id=current_user.id,
+        body=role_update_body,
+        event_type="community.member_role_updated",
+        exclude_user_ids={current_user.id},
+        metadata={
+            "community_id": str(community.id),
+            "membership_id": str(membership.id),
+            "new_role": membership.role,
+            "previous_role": previous_role,
+        },
+        target_url=_community_target_url(community),
+        title=f"Role updated in {community.name}",
+    )
     db.commit()
     db.refresh(membership)
     return _serialize_member(membership)
@@ -2416,6 +2750,21 @@ def remove_community_member(
             "target_user_id": str(membership.user_id),
             "previous_role": membership.role,
         },
+    )
+    notify_users(
+        db,
+        [membership.user_id],
+        actor_user_id=current_user.id,
+        body=f"Your membership in {community.name} was removed.",
+        event_type="community.member_removed",
+        exclude_user_ids={current_user.id},
+        metadata={
+            "community_id": str(community.id),
+            "membership_id": str(membership.id),
+            "previous_role": membership.role,
+        },
+        target_url=_community_target_url(community),
+        title=f"Membership update for {community.name}",
     )
     db.commit()
     db.refresh(membership)
@@ -2469,6 +2818,22 @@ def transfer_community_ownership(
             "previous_owner_membership_ids": previous_owner_ids,
         },
     )
+    notify_users(
+        db,
+        [new_owner.user_id, *(owner.user_id for owner in previous_owners)],
+        actor_user_id=current_user.id,
+        body=f"Ownership for {community.name} was transferred.",
+        event_type="community.ownership_transferred",
+        exclude_user_ids={current_user.id},
+        metadata={
+            "community_id": str(community.id),
+            "new_owner_membership_id": str(new_owner.id),
+            "new_owner_user_id": str(new_owner.user_id),
+            "previous_owner_membership_ids": previous_owner_ids,
+        },
+        target_url=_community_target_url(community),
+        title=f"Ownership updated for {community.name}",
+    )
     db.commit()
     community = _get_community_or_404(db, community.id)
     return _serialize_community(community, current_user)
@@ -2501,6 +2866,7 @@ def cancel_community_invitation(
 
     invitation.status = "CANCELED"
     invitation.canceled_at = utcnow()
+    invited_user = db.scalar(select(User).where(func.lower(User.email) == invitation.invited_email))
     _create_security_event(
         db,
         request,
@@ -2512,6 +2878,21 @@ def cancel_community_invitation(
             "invited_email": invitation.invited_email,
         },
     )
+    if invited_user:
+        notify_users(
+            db,
+            [invited_user.id],
+            actor_user_id=current_user.id,
+            body=f"An invitation to join {community.name} was canceled.",
+            event_type="community.invitation_canceled",
+            exclude_user_ids={current_user.id},
+            metadata={
+                "community_id": str(community.id),
+                "invitation_id": str(invitation.id),
+            },
+            target_url=_community_target_url(community),
+            title=f"Invitation canceled for {community.name}",
+        )
     db.commit()
     db.refresh(invitation)
     return _serialize_invitation(invitation)
@@ -2535,15 +2916,15 @@ def join_community(
         membership.role = membership.role or "MEMBER"
         membership.joined_at = joined_at
     else:
-        db.add(
-            CommunityMembership(
-                community_id=community.id,
-                user_id=current_user.id,
-                role="MEMBER",
-                status=status_value,
-                joined_at=joined_at,
-            )
+        membership = CommunityMembership(
+            community_id=community.id,
+            user_id=current_user.id,
+            role="MEMBER",
+            status=status_value,
+            joined_at=joined_at,
         )
+        db.add(membership)
+    db.flush()
     _create_security_event(
         db,
         request,
@@ -2551,6 +2932,16 @@ def join_community(
         "community.join_requested" if status_value == "PENDING" else "community.joined",
         metadata={"community_id": str(community.id)},
     )
+    if status_value == "PENDING":
+        _notify_community_managers(
+            db,
+            community,
+            current_user,
+            body=f"{current_user.display_name} requested to join {community.name}.",
+            event_type="community.join_requested",
+            metadata={"community_id": str(community.id), "membership_id": str(membership.id)},
+            title=f"New join request for {community.name}",
+        )
     db.commit()
     community = _get_community_or_404(db, community.id)
     return _serialize_community(community, current_user)

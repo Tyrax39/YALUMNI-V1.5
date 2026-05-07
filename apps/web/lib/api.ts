@@ -107,6 +107,35 @@ export type AdminOverview = {
   latest_security_events: AdminSecurityEvent[];
 };
 
+export type NotificationItem = {
+  id: string;
+  user_id: string;
+  actor_user_id: string | null;
+  actor_display_name: string | null;
+  event_type: string;
+  title: string;
+  body: string | null;
+  target_url: string | null;
+  metadata: Record<string, unknown> | null;
+  read_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type NotificationListResponse = {
+  notifications: NotificationItem[];
+  total: number;
+  unread_count: number;
+  limit: number;
+  offset: number;
+  has_more: boolean;
+};
+
+export type NotificationReadAllResponse = {
+  marked_read: number;
+  unread_count: number;
+};
+
 export type ProgramAffiliation = {
   id: string;
   program_name: string;
@@ -819,6 +848,52 @@ export function getAdminAuditEvents(
       headers: authHeaders(accessToken)
     }
   );
+}
+
+export function listNotifications(
+  accessToken: string,
+  params: { limit?: number; offset?: number; status?: "ALL" | "READ" | "UNREAD" } = {}
+): Promise<NotificationListResponse> {
+  const searchParams = new URLSearchParams();
+  if (params.status) {
+    searchParams.set("status", params.status);
+  }
+  if (params.limit) {
+    searchParams.set("limit", String(params.limit));
+  }
+  if (params.offset) {
+    searchParams.set("offset", String(params.offset));
+  }
+
+  const query = searchParams.toString();
+  return protectedApiFetch<NotificationListResponse>(
+    `/api/v1/notifications${query ? `?${query}` : ""}`,
+    {
+      headers: authHeaders(accessToken)
+    }
+  );
+}
+
+export function markNotificationRead(
+  accessToken: string,
+  notificationId: string
+): Promise<NotificationItem> {
+  return protectedApiFetch<NotificationItem>(
+    `/api/v1/notifications/${encodeURIComponent(notificationId)}/read`,
+    {
+      headers: authHeaders(accessToken),
+      method: "POST"
+    }
+  );
+}
+
+export function markAllNotificationsRead(
+  accessToken: string
+): Promise<NotificationReadAllResponse> {
+  return protectedApiFetch<NotificationReadAllResponse>("/api/v1/notifications/read-all", {
+    headers: authHeaders(accessToken),
+    method: "POST"
+  });
 }
 
 export function getMyAlumniProfile(accessToken: string): Promise<AlumniProfile> {

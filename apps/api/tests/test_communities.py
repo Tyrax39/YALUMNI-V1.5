@@ -12,8 +12,9 @@ from app.main import app
 from app.modules.alumni import models as alumni_models
 from app.modules.auth import models as auth_models
 from app.modules.communities import models as community_models
+from app.modules.notifications import models as notification_models
 
-_ = auth_models, alumni_models, community_models
+_ = auth_models, alumni_models, community_models, notification_models
 
 
 @pytest.fixture
@@ -95,6 +96,87 @@ def create_community(
     )
     assert response.status_code == 201
     return response.json()
+
+
+def test_notification_center_tracks_community_workflow(client: TestClient) -> None:
+    unauthenticated_response = client.get("/api/v1/notifications")
+    assert unauthenticated_response.status_code == 401
+
+    admin_headers = create_admin(client)
+    community = create_community(
+        client,
+        admin_headers,
+        name="Notification Review Working Group",
+        community_type="WORKING_GROUP",
+        join_policy="REQUEST",
+    )
+    member = register_user(client, "notification.member@example.com")
+    member_headers = auth_headers(member["access_token"])
+
+    join_response = client.post(
+        f"/api/v1/communities/{community['id']}/join",
+        headers=member_headers,
+    )
+    assert join_response.status_code == 200
+    assert join_response.json()["membership_status"] == "PENDING"
+
+    admin_notifications = client.get("/api/v1/notifications", headers=admin_headers)
+    assert admin_notifications.status_code == 200
+    admin_payload = admin_notifications.json()
+    assert admin_payload["total"] == 1
+    assert admin_payload["unread_count"] == 1
+    join_notification = admin_payload["notifications"][0]
+    assert join_notification["event_type"] == "community.join_requested"
+    assert join_notification["target_url"] == f"/communities/{community['id']}"
+    assert join_notification["metadata"]["membership_id"]
+
+    hidden_from_member = client.post(
+        f"/api/v1/notifications/{join_notification['id']}/read",
+        headers=member_headers,
+    )
+    assert hidden_from_member.status_code == 404
+
+    mark_read_response = client.post(
+        f"/api/v1/notifications/{join_notification['id']}/read",
+        headers=admin_headers,
+    )
+    assert mark_read_response.status_code == 200
+    assert mark_read_response.json()["read_at"] is not None
+
+    admin_read_notifications = client.get(
+        "/api/v1/notifications?status=READ",
+        headers=admin_headers,
+    )
+    assert admin_read_notifications.status_code == 200
+    assert admin_read_notifications.json()["total"] == 1
+    assert admin_read_notifications.json()["unread_count"] == 0
+
+    pending_roster = client.get(
+        f"/api/v1/communities/{community['id']}/members?status=PENDING",
+        headers=admin_headers,
+    )
+    assert pending_roster.status_code == 200
+    pending_member = pending_roster.json()["members"][0]
+    approval_response = client.post(
+        f"/api/v1/communities/{community['id']}/members/{pending_member['id']}/approve",
+        headers=admin_headers,
+    )
+    assert approval_response.status_code == 200
+
+    member_notifications = client.get("/api/v1/notifications", headers=member_headers)
+    assert member_notifications.status_code == 200
+    member_payload = member_notifications.json()
+    assert member_payload["total"] == 1
+    assert member_payload["unread_count"] == 1
+    assert member_payload["notifications"][0]["event_type"] == "community.member_approved"
+
+    mark_all_response = client.post("/api/v1/notifications/read-all", headers=member_headers)
+    assert mark_all_response.status_code == 200
+    assert mark_all_response.json() == {"marked_read": 1, "unread_count": 0}
+
+    member_unread_after_read_all = client.get("/api/v1/notifications", headers=member_headers)
+    assert member_unread_after_read_all.status_code == 200
+    assert member_unread_after_read_all.json()["total"] == 0
 
 
 def test_community_admin_can_create_and_member_can_join_leave(client: TestClient) -> None:
@@ -886,6 +968,7 @@ def test_community_post_comments_reactions_and_reports(client: TestClient) -> No
 
 def test_admin_can_review_cross_community_moderation_queues(client: TestClient) -> None:
     admin_headers = create_admin(client, "global.moderator@example.com")
+    observer_admin_headers = create_admin(client, "safety.observer@example.com")
     member_user = register_user(client, "global.member@example.com")
     member_headers = auth_headers(member_user["access_token"])
 
@@ -1040,6 +1123,19 @@ def test_admin_can_review_cross_community_moderation_queues(client: TestClient) 
     assert report_review_payload["escalation_status"] == "ESCALATED"
     assert report_review_payload["escalated_by_user_id"] is not None
     assert report_review_payload["escalated_at"] is not None
+
+    observer_notifications = client.get(
+        "/api/v1/notifications?status=UNREAD",
+        headers=observer_admin_headers,
+    )
+    assert observer_notifications.status_code == 200
+    observer_notification_payload = observer_notifications.json()
+    assert observer_notification_payload["total"] == 1
+    observer_escalation = observer_notification_payload["notifications"][0]
+    assert observer_escalation["event_type"] == "community.moderation_escalated"
+    assert observer_escalation["target_url"] == "/admin"
+    assert observer_escalation["metadata"]["content_type"] == "post_report"
+    assert observer_escalation["metadata"]["severity"] == "CRITICAL"
 
     escalated_report_queue = client.get(
         "/api/v1/communities/admin/moderation/post-reports"

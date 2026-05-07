@@ -12,6 +12,7 @@ from app.modules.auth.platform_owner import ensure_platform_owner
 from app.modules.auth.router import router as auth_router
 from app.modules.auth.test_accounts import ensure_test_accounts, test_accounts_allowed
 from app.modules.communities.router import router as communities_router
+from app.modules.notifications.router import router as notifications_router
 from app.modules.system.router import router as system_router
 
 settings = get_settings()
@@ -64,3 +65,4 @@ app.include_router(system_router, prefix="/api/v1/system", tags=["system"])
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["auth"])
 app.include_router(alumni_router, prefix="/api/v1/alumni", tags=["alumni"])
 app.include_router(communities_router, prefix="/api/v1/communities", tags=["communities"])
+app.include_router(notifications_router, prefix="/api/v1/notifications", tags=["notifications"])

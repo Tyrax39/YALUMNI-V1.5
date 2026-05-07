@@ -82,6 +82,9 @@ GET  /api/v1/communities/{community_id}/removed-comments
 GET  /api/v1/communities/admin/moderation/post-reports
 GET  /api/v1/communities/admin/moderation/removed-posts
 GET  /api/v1/communities/admin/moderation/removed-comments
+GET  /api/v1/notifications
+POST /api/v1/notifications/{notification_id}/read
+POST /api/v1/notifications/read-all
 ```
 
 Evidence uploads accept PDF, JPEG, PNG, and WebP files. Uploading evidence to a
@@ -223,6 +226,21 @@ Private community posts support:
   `offset`; reported posts also support `status=OPEN|RESOLVED|ALL` and
   `reason`.
 
+Notification center support:
+
+- `GET /api/v1/notifications` returns the current user's paginated
+  notifications with `status=UNREAD|READ|ALL`, `limit`, `offset`, total, and
+  unread count.
+- `POST /api/v1/notifications/{notification_id}/read` marks a single current
+  user notification as read. Other users' notification IDs return 404.
+- `POST /api/v1/notifications/read-all` marks all current-user unread
+  notifications as read.
+- Community hooks currently create notifications for join requests, membership
+  approval/rejection, role changes, ownership transfers, invitations for
+  existing users, invitation cancellation/acceptance, post/comment removal and
+  restoration, new comments on owned posts, report resolution, new post reports,
+  and moderation escalations.
+
 ## Phase 3: Alumni
 
 ```text
@@ -281,6 +299,14 @@ POST   /api/v1/conversations/{conversation_id}/messages
 POST   /api/v1/conversations/{conversation_id}/read
 POST   /api/v1/users/{user_id}/block
 DELETE /api/v1/users/{user_id}/block
+```
+
+## Phase 6b: Notifications
+
+```text
+GET    /api/v1/notifications                         # implemented
+POST   /api/v1/notifications/{notification_id}/read   # implemented
+POST   /api/v1/notifications/read-all                 # implemented
 ```
 
 ## Phase 7: Events

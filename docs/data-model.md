@@ -43,6 +43,10 @@
 - `community_post_reports` - implemented with reporter, reason, reporter note, open/resolved status, moderator note, severity, escalation state, resolver, resolution timestamp, community-level queue support, and cross-community admin queue support through post/community joins.
 - `community_settings` - folded into `communities` for MVP settings editing.
 
+### Notifications
+
+- `notifications` - implemented as the user-facing notification inbox with recipient, optional actor, event type, title, body, target URL, metadata, read timestamp, and created/updated timestamps.
+
 ### Feed
 
 - `posts` - global/cross-community feed still planned; current MVP feed work starts with `community_posts` plus scoped comments/reactions/reports.

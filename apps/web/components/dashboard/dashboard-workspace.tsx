@@ -11,6 +11,7 @@ import { SessionCard } from "@/components/auth/session-card";
 import { SessionManagementPanel } from "@/components/auth/session-management-panel";
 import { TwoFactorPanel } from "@/components/auth/two-factor-panel";
 import { CommunitiesPanel } from "@/components/communities/communities-panel";
+import { NotificationCenter } from "@/components/notifications/notification-center";
 import { adminRoles } from "@/lib/api";
 
 const modules = [
@@ -81,6 +82,7 @@ export function DashboardWorkspace() {
                 />
               </div>
               <ProfilePanel accessToken={accessToken} displayName={user.display_name} />
+              <NotificationCenter accessToken={accessToken} />
               <TwoFactorPanel accessToken={accessToken} onUserChange={setUser} user={user} />
               <VerificationRequestPanel accessToken={accessToken} />
               <DirectorySearchPanel accessToken={accessToken} />

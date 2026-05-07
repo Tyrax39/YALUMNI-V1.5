@@ -84,11 +84,15 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
 
 ## Phase 7: Messaging And Notifications
 
+- Notification center. Started with persisted current-user notifications,
+  unread/read APIs, dashboard inbox, and community workflow hooks for
+  moderation escalations, reports, membership actions, invitations, and content
+  removal/restoration.
 - Direct conversations.
 - Message list/send.
 - WebSocket events.
 - Blocks and read receipts.
-- Notification center.
+- Realtime notification delivery remains open.
 
 ## Phase 8: Events
 
