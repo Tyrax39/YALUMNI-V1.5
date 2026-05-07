@@ -555,6 +555,23 @@ def test_community_posts_are_private_and_moderated(client: TestClient) -> None:
     assert manager_removed_posts.json()["total"] == 1
     assert manager_removed_posts.json()["posts"][0]["id"] == member_post["id"]
 
+    member_removed_queue_denied = client.get(
+        f"/api/v1/communities/{community['id']}/removed-posts",
+        headers=member_headers,
+    )
+    assert member_removed_queue_denied.status_code == 403
+
+    manager_removed_queue = client.get(
+        f"/api/v1/communities/{community['id']}/removed-posts",
+        headers=manager_headers,
+    )
+    assert manager_removed_queue.status_code == 200
+    removed_queue_payload = manager_removed_queue.json()
+    assert removed_queue_payload["total"] == 1
+    assert removed_queue_payload["posts"][0]["id"] == member_post["id"]
+    assert removed_queue_payload["posts"][0]["removed_by_display_name"] == "Feed Manager"
+    assert removed_queue_payload["posts"][0]["body"] == "Member update for the group."
+
     active_posts = client.get(
         f"/api/v1/communities/{community['id']}/posts",
         headers=member_headers,
@@ -562,6 +579,41 @@ def test_community_posts_are_private_and_moderated(client: TestClient) -> None:
     assert active_posts.status_code == 200
     assert active_posts.json()["total"] == 1
     assert active_posts.json()["posts"][0]["id"] == owner_post["id"]
+
+    member_restore_denied = client.post(
+        f"/api/v1/communities/{community['id']}/posts/{member_post['id']}/restore",
+        headers=member_headers,
+    )
+    assert member_restore_denied.status_code == 403
+
+    manager_restore_post = client.post(
+        f"/api/v1/communities/{community['id']}/posts/{member_post['id']}/restore",
+        headers=manager_headers,
+    )
+    assert manager_restore_post.status_code == 200
+    assert manager_restore_post.json()["status"] == "ACTIVE"
+    assert manager_restore_post.json()["removed_by_user_id"] is None
+    assert manager_restore_post.json()["removed_at"] is None
+
+    manager_removed_queue_after_restore = client.get(
+        f"/api/v1/communities/{community['id']}/removed-posts",
+        headers=manager_headers,
+    )
+    assert manager_removed_queue_after_restore.status_code == 200
+    assert manager_removed_queue_after_restore.json()["total"] == 0
+
+    active_posts_after_restore = client.get(
+        f"/api/v1/communities/{community['id']}/posts",
+        headers=member_headers,
+    )
+    assert active_posts_after_restore.status_code == 200
+    assert active_posts_after_restore.json()["total"] == 2
+
+    duplicate_restore_post = client.post(
+        f"/api/v1/communities/{community['id']}/posts/{member_post['id']}/restore",
+        headers=manager_headers,
+    )
+    assert duplicate_restore_post.status_code == 409
 
 
 def test_community_post_comments_reactions_and_reports(client: TestClient) -> None:
@@ -769,6 +821,67 @@ def test_community_post_comments_reactions_and_reports(client: TestClient) -> No
     )
     assert manager_removed_comments.status_code == 200
     assert manager_removed_comments.json()["total"] == 1
+
+    member_removed_comment_queue_denied = client.get(
+        f"/api/v1/communities/{community['id']}/removed-comments",
+        headers=member_headers,
+    )
+    assert member_removed_comment_queue_denied.status_code == 403
+
+    manager_removed_comment_queue = client.get(
+        f"/api/v1/communities/{community['id']}/removed-comments",
+        headers=manager_headers,
+    )
+    assert manager_removed_comment_queue.status_code == 200
+    removed_comment_queue_payload = manager_removed_comment_queue.json()
+    assert removed_comment_queue_payload["total"] == 1
+    assert removed_comment_queue_payload["comments"][0]["id"] == comment["id"]
+    assert removed_comment_queue_payload["comments"][0]["body"] == "First comment."
+    assert removed_comment_queue_payload["comments"][0]["removed_by_display_name"] == (
+        "Engagement Manager"
+    )
+    assert removed_comment_queue_payload["comments"][0]["post_body"] == "Engagement post."
+    assert removed_comment_queue_payload["comments"][0]["post_author_display_name"] == (
+        "Engagement Member"
+    )
+
+    member_restore_comment_denied = client.post(
+        f"/api/v1/communities/{community['id']}/posts/{post['id']}/comments/"
+        f"{comment['id']}/restore",
+        headers=member_headers,
+    )
+    assert member_restore_comment_denied.status_code == 403
+
+    manager_restore_comment = client.post(
+        f"/api/v1/communities/{community['id']}/posts/{post['id']}/comments/"
+        f"{comment['id']}/restore",
+        headers=manager_headers,
+    )
+    assert manager_restore_comment.status_code == 200
+    assert manager_restore_comment.json()["status"] == "ACTIVE"
+    assert manager_restore_comment.json()["removed_by_user_id"] is None
+    assert manager_restore_comment.json()["removed_at"] is None
+
+    active_comments_after_restore = client.get(
+        f"/api/v1/communities/{community['id']}/posts/{post['id']}/comments",
+        headers=member_headers,
+    )
+    assert active_comments_after_restore.status_code == 200
+    assert active_comments_after_restore.json()["total"] == 1
+
+    manager_removed_comment_queue_after_restore = client.get(
+        f"/api/v1/communities/{community['id']}/removed-comments",
+        headers=manager_headers,
+    )
+    assert manager_removed_comment_queue_after_restore.status_code == 200
+    assert manager_removed_comment_queue_after_restore.json()["total"] == 0
+
+    duplicate_restore_comment = client.post(
+        f"/api/v1/communities/{community['id']}/posts/{post['id']}/comments/"
+        f"{comment['id']}/restore",
+        headers=manager_headers,
+    )
+    assert duplicate_restore_comment.status_code == 409
 
 
 def test_community_manager_can_review_pending_join_requests(client: TestClient) -> None:

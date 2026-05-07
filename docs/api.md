@@ -64,14 +64,18 @@ POST /api/v1/communities/{community_id}/ownership-transfer
 GET  /api/v1/communities/{community_id}/posts
 POST /api/v1/communities/{community_id}/posts
 POST /api/v1/communities/{community_id}/posts/{post_id}/remove
+POST /api/v1/communities/{community_id}/posts/{post_id}/restore
 GET  /api/v1/communities/{community_id}/posts/{post_id}/comments
 POST /api/v1/communities/{community_id}/posts/{post_id}/comments
 POST /api/v1/communities/{community_id}/posts/{post_id}/comments/{comment_id}/remove
+POST /api/v1/communities/{community_id}/posts/{post_id}/comments/{comment_id}/restore
 POST /api/v1/communities/{community_id}/posts/{post_id}/reaction
 POST /api/v1/communities/{community_id}/posts/{post_id}/reports
 GET  /api/v1/communities/{community_id}/posts/{post_id}/reports
 POST /api/v1/communities/{community_id}/posts/{post_id}/reports/{report_id}/resolve
 GET  /api/v1/communities/{community_id}/post-reports
+GET  /api/v1/communities/{community_id}/removed-posts
+GET  /api/v1/communities/{community_id}/removed-comments
 ```
 
 Evidence uploads accept PDF, JPEG, PNG, and WebP files. Uploading evidence to a
@@ -168,6 +172,8 @@ Private community posts support:
   and platform admins.
 - `POST /api/v1/communities/{community_id}/posts/{post_id}/remove` for post
   authors, active community managers/owners, and platform admins.
+- `POST /api/v1/communities/{community_id}/posts/{post_id}/restore` for
+  manager/owner/admin restoration of removed posts.
 - Non-members and pending members cannot read or create community posts.
 - Removed posts are hidden from ordinary members; managers/owners/admins can
   query removed or all posts for moderation review.
@@ -180,6 +186,8 @@ Private community posts support:
   member comments, and
   `POST /api/v1/communities/{community_id}/posts/{post_id}/comments/{comment_id}/remove`
   lets comment authors or moderators remove them.
+- `POST /api/v1/communities/{community_id}/posts/{post_id}/comments/{comment_id}/restore`
+  lets managers/owners/admins restore removed comments.
 - `POST /api/v1/communities/{community_id}/posts/{post_id}/reaction` toggles a
   current-user `LIKE` reaction and returns the updated reaction count.
 - `POST /api/v1/communities/{community_id}/posts/{post_id}/reports` creates
@@ -188,6 +196,10 @@ Private community posts support:
 - `GET /api/v1/communities/{community_id}/post-reports` gives the same
   manager set a paginated community-level report queue with post context.
   It supports `status=OPEN|RESOLVED|ALL`, `limit`, and `offset`.
+- `GET /api/v1/communities/{community_id}/removed-posts` and
+  `GET /api/v1/communities/{community_id}/removed-comments` give managers,
+  owners, and admins paginated removed-content queues with remover and parent
+  post context.
 
 ## Phase 3: Alumni
 
@@ -208,14 +220,18 @@ POST   /api/v1/communities/{community_id}/ownership-transfer  # implemented
 GET    /api/v1/communities/{community_id}/posts                 # implemented
 POST   /api/v1/communities/{community_id}/posts                 # implemented
 POST   /api/v1/communities/{community_id}/posts/{post_id}/remove # implemented
+POST   /api/v1/communities/{community_id}/posts/{post_id}/restore # implemented
 GET    /api/v1/communities/{community_id}/posts/{post_id}/comments # implemented
 POST   /api/v1/communities/{community_id}/posts/{post_id}/comments # implemented
 POST   /api/v1/communities/{community_id}/posts/{post_id}/comments/{comment_id}/remove # implemented
+POST   /api/v1/communities/{community_id}/posts/{post_id}/comments/{comment_id}/restore # implemented
 POST   /api/v1/communities/{community_id}/posts/{post_id}/reaction # implemented
 POST   /api/v1/communities/{community_id}/posts/{post_id}/reports # implemented
 GET    /api/v1/communities/{community_id}/posts/{post_id}/reports # implemented
 POST   /api/v1/communities/{community_id}/posts/{post_id}/reports/{report_id}/resolve # implemented
 GET    /api/v1/communities/{community_id}/post-reports # implemented
+GET    /api/v1/communities/{community_id}/removed-posts # implemented
+GET    /api/v1/communities/{community_id}/removed-comments # implemented
 GET    /api/v1/feed
 POST   /api/v1/posts
 GET    /api/v1/posts/{post_id}

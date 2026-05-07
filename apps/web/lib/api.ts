@@ -412,6 +412,34 @@ export type CommunityPostReportQueueResponse = {
   has_more: boolean;
 };
 
+export type CommunityRemovedPostQueueItem = CommunityPost & {
+  removed_by_display_name: string;
+};
+
+export type CommunityRemovedPostQueueResponse = {
+  posts: CommunityRemovedPostQueueItem[];
+  total: number;
+  limit: number;
+  offset: number;
+  has_more: boolean;
+};
+
+export type CommunityRemovedCommentQueueItem = CommunityPostComment & {
+  removed_by_display_name: string;
+  post_author_display_name: string;
+  post_body: string;
+  post_status: string;
+  post_created_at: string;
+};
+
+export type CommunityRemovedCommentQueueResponse = {
+  comments: CommunityRemovedCommentQueueItem[];
+  total: number;
+  limit: number;
+  offset: number;
+  has_more: boolean;
+};
+
 export type CommunityCreatePayload = {
   name: string;
   community_type?: string;
@@ -1172,6 +1200,20 @@ export function removeCommunityPost(
   );
 }
 
+export function restoreCommunityPost(
+  accessToken: string,
+  communityId: string,
+  postId: string
+): Promise<CommunityPost> {
+  return protectedApiFetch<CommunityPost>(
+    `/api/v1/communities/${encodeURIComponent(communityId)}/posts/${encodeURIComponent(postId)}/restore`,
+    {
+      headers: authHeaders(accessToken),
+      method: "POST"
+    }
+  );
+}
+
 export function listCommunityPostComments(
   accessToken: string,
   communityId: string,
@@ -1222,6 +1264,21 @@ export function removeCommunityPostComment(
 ): Promise<CommunityPostComment> {
   return protectedApiFetch<CommunityPostComment>(
     `/api/v1/communities/${encodeURIComponent(communityId)}/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}/remove`,
+    {
+      headers: authHeaders(accessToken),
+      method: "POST"
+    }
+  );
+}
+
+export function restoreCommunityPostComment(
+  accessToken: string,
+  communityId: string,
+  postId: string,
+  commentId: string
+): Promise<CommunityPostComment> {
+  return protectedApiFetch<CommunityPostComment>(
+    `/api/v1/communities/${encodeURIComponent(communityId)}/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}/restore`,
     {
       headers: authHeaders(accessToken),
       method: "POST"
@@ -1306,6 +1363,50 @@ export function listCommunityPostReportQueue(
   const query = searchParams.toString();
   return protectedApiFetch<CommunityPostReportQueueResponse>(
     `/api/v1/communities/${encodeURIComponent(communityId)}/post-reports${query ? `?${query}` : ""}`,
+    {
+      headers: authHeaders(accessToken)
+    }
+  );
+}
+
+export function listCommunityRemovedPosts(
+  accessToken: string,
+  communityId: string,
+  params: { limit?: number; offset?: number } = {}
+): Promise<CommunityRemovedPostQueueResponse> {
+  const searchParams = new URLSearchParams();
+  if (params.limit) {
+    searchParams.set("limit", String(params.limit));
+  }
+  if (params.offset) {
+    searchParams.set("offset", String(params.offset));
+  }
+
+  const query = searchParams.toString();
+  return protectedApiFetch<CommunityRemovedPostQueueResponse>(
+    `/api/v1/communities/${encodeURIComponent(communityId)}/removed-posts${query ? `?${query}` : ""}`,
+    {
+      headers: authHeaders(accessToken)
+    }
+  );
+}
+
+export function listCommunityRemovedComments(
+  accessToken: string,
+  communityId: string,
+  params: { limit?: number; offset?: number } = {}
+): Promise<CommunityRemovedCommentQueueResponse> {
+  const searchParams = new URLSearchParams();
+  if (params.limit) {
+    searchParams.set("limit", String(params.limit));
+  }
+  if (params.offset) {
+    searchParams.set("offset", String(params.offset));
+  }
+
+  const query = searchParams.toString();
+  return protectedApiFetch<CommunityRemovedCommentQueueResponse>(
+    `/api/v1/communities/${encodeURIComponent(communityId)}/removed-comments${query ? `?${query}` : ""}`,
     {
       headers: authHeaders(accessToken)
     }

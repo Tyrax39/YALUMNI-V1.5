@@ -322,3 +322,31 @@ class CommunityPostReportQueueResponse(BaseModel):
     limit: int
     offset: int
     has_more: bool
+
+
+class CommunityRemovedPostQueueItem(CommunityPostResponse):
+    removed_by_display_name: str
+
+
+class CommunityRemovedPostQueueResponse(BaseModel):
+    posts: list[CommunityRemovedPostQueueItem]
+    total: int
+    limit: int
+    offset: int
+    has_more: bool
+
+
+class CommunityRemovedCommentQueueItem(CommunityPostCommentResponse):
+    removed_by_display_name: str
+    post_author_display_name: str
+    post_body: str
+    post_status: str
+    post_created_at: datetime
+
+
+class CommunityRemovedCommentQueueResponse(BaseModel):
+    comments: list[CommunityRemovedCommentQueueItem]
+    total: int
+    limit: int
+    offset: int
+    has_more: bool

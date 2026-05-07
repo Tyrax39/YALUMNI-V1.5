@@ -15,6 +15,7 @@ import {
   MailPlus,
   MapPin,
   MessageSquare,
+  RotateCcw,
   Save,
   Send,
   Settings,
@@ -45,6 +46,10 @@ import {
   CommunityPostListResponse,
   CommunityPostReportQueueItem,
   CommunityPostReportQueueResponse,
+  CommunityRemovedCommentQueueItem,
+  CommunityRemovedCommentQueueResponse,
+  CommunityRemovedPostQueueItem,
+  CommunityRemovedPostQueueResponse,
   createCommunityInvitation,
   createCommunityPostComment,
   createCommunityPost,
@@ -57,11 +62,15 @@ import {
   listCommunityPostComments,
   listCommunityPostReportQueue,
   listCommunityPosts,
+  listCommunityRemovedComments,
+  listCommunityRemovedPosts,
   rejectCommunityMember,
   removeCommunityMember,
   removeCommunityPostComment,
   removeCommunityPost,
   resolveCommunityPostReport,
+  restoreCommunityPostComment,
+  restoreCommunityPost,
   toggleCommunityPostReaction,
   transferCommunityOwnership,
   updateCommunity,
@@ -82,6 +91,8 @@ type DetailState =
       members: CommunityMemberListResponse;
       moderationReports: CommunityPostReportQueueResponse | null;
       posts: CommunityPostListResponse | null;
+      removedComments: CommunityRemovedCommentQueueResponse | null;
+      removedPosts: CommunityRemovedPostQueueResponse | null;
       status: "ready";
       pendingMembers: CommunityMemberListResponse | null;
     }
@@ -93,6 +104,7 @@ const invitationPageSize = 6;
 const postPageSize = 5;
 const commentPageSize = 5;
 const moderationReportPageSize = 6;
+const removedContentPageSize = 4;
 const communityTypeOptions = [
   "COUNTRY_CHAPTER",
   "CITY_CHAPTER",
@@ -177,10 +189,12 @@ function CommunityDetailContent({
   const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
   const [reportedPostIds, setReportedPostIds] = useState<Record<string, boolean>>({});
   const [busyReportId, setBusyReportId] = useState<string | null>(null);
+  const [busyRemovedPostId, setBusyRemovedPostId] = useState<string | null>(null);
+  const [busyRemovedCommentId, setBusyRemovedCommentId] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
-    loadDetail(0, 0, 0, 0, 0)
+    loadDetail(0, 0, 0, 0, 0, 0, 0)
       .then((nextState) => {
         if (isMounted) {
           setState(nextState);
@@ -207,7 +221,9 @@ function CommunityDetailContent({
     pendingOffset: number,
     invitationOffset: number,
     postOffset: number,
-    moderationReportOffset: number
+    moderationReportOffset: number,
+    removedPostOffset: number,
+    removedCommentOffset: number
   ): Promise<DetailState> {
     const [community, members] = await Promise.all([
       getCommunity(accessToken, communityId),
@@ -219,7 +235,14 @@ function CommunityDetailContent({
     ]);
     const canManage = canManageCommunity(userRoles, community);
     const canReadPosts = canAccessCommunityPosts(userRoles, community);
-    const [pendingMembers, invitations, posts, moderationReports] = await Promise.all([
+    const [
+      pendingMembers,
+      invitations,
+      posts,
+      moderationReports,
+      removedPosts,
+      removedComments
+    ] = await Promise.all([
       canManage
         ? listCommunityMembers(accessToken, communityId, {
             limit: pendingPageSize,
@@ -247,6 +270,18 @@ function CommunityDetailContent({
             offset: moderationReportOffset,
             status: "OPEN"
           })
+        : Promise.resolve(null),
+      canManage
+        ? listCommunityRemovedPosts(accessToken, communityId, {
+            limit: removedContentPageSize,
+            offset: removedPostOffset
+          })
+        : Promise.resolve(null),
+      canManage
+        ? listCommunityRemovedComments(accessToken, communityId, {
+            limit: removedContentPageSize,
+            offset: removedCommentOffset
+          })
         : Promise.resolve(null)
     ]);
     return {
@@ -256,6 +291,8 @@ function CommunityDetailContent({
       moderationReports,
       pendingMembers,
       posts,
+      removedComments,
+      removedPosts,
       status: "ready"
     };
   }
@@ -265,7 +302,9 @@ function CommunityDetailContent({
     pendingOffset = state.status === "ready" ? state.pendingMembers?.offset ?? 0 : 0,
     invitationOffset = state.status === "ready" ? state.invitations?.offset ?? 0 : 0,
     postOffset = state.status === "ready" ? state.posts?.offset ?? 0 : 0,
-    moderationReportOffset = state.status === "ready" ? state.moderationReports?.offset ?? 0 : 0
+    moderationReportOffset = state.status === "ready" ? state.moderationReports?.offset ?? 0 : 0,
+    removedPostOffset = state.status === "ready" ? state.removedPosts?.offset ?? 0 : 0,
+    removedCommentOffset = state.status === "ready" ? state.removedComments?.offset ?? 0 : 0
   ) {
     setState(
       await loadDetail(
@@ -273,7 +312,9 @@ function CommunityDetailContent({
         pendingOffset,
         invitationOffset,
         postOffset,
-        moderationReportOffset
+        moderationReportOffset,
+        removedPostOffset,
+        removedCommentOffset
       )
     );
   }
@@ -290,7 +331,9 @@ function CommunityDetailContent({
       state.pendingMembers?.offset ?? 0,
       state.invitations?.offset ?? 0,
       postOffset,
-      state.moderationReports?.offset ?? 0
+      state.moderationReports?.offset ?? 0,
+      state.removedPosts?.offset ?? 0,
+      state.removedComments?.offset ?? 0
     );
   }
 
@@ -637,6 +680,76 @@ function CommunityDetailContent({
     }
   }
 
+  async function handleRestoreRemovedPost(post: CommunityRemovedPostQueueItem) {
+    if (state.status !== "ready") {
+      return;
+    }
+
+    const currentRemovedPosts = state.removedPosts;
+    const nextRemovedPostOffset =
+      currentRemovedPosts && currentRemovedPosts.posts.length === 1 && currentRemovedPosts.offset > 0
+        ? Math.max(0, currentRemovedPosts.offset - currentRemovedPosts.limit)
+        : currentRemovedPosts?.offset ?? 0;
+
+    setMessage(null);
+    setActionError(null);
+    setBusyRemovedPostId(post.id);
+    try {
+      await restoreCommunityPost(accessToken, communityId, post.id);
+      setMessage("Post restored to the active feed.");
+      await refresh(
+        state.members.offset,
+        state.pendingMembers?.offset ?? 0,
+        state.invitations?.offset ?? 0,
+        state.posts?.offset ?? 0,
+        state.moderationReports?.offset ?? 0,
+        nextRemovedPostOffset,
+        state.removedComments?.offset ?? 0
+      );
+    } catch (caught) {
+      setActionError(caught instanceof ApiError ? caught.message : "Post could not be restored.");
+    } finally {
+      setBusyRemovedPostId(null);
+    }
+  }
+
+  async function handleRestoreRemovedComment(comment: CommunityRemovedCommentQueueItem) {
+    if (state.status !== "ready") {
+      return;
+    }
+
+    const currentRemovedComments = state.removedComments;
+    const nextRemovedCommentOffset =
+      currentRemovedComments &&
+      currentRemovedComments.comments.length === 1 &&
+      currentRemovedComments.offset > 0
+        ? Math.max(0, currentRemovedComments.offset - currentRemovedComments.limit)
+        : currentRemovedComments?.offset ?? 0;
+
+    setMessage(null);
+    setActionError(null);
+    setBusyRemovedCommentId(comment.id);
+    try {
+      await restoreCommunityPostComment(accessToken, communityId, comment.post_id, comment.id);
+      setMessage("Comment restored.");
+      await refresh(
+        state.members.offset,
+        state.pendingMembers?.offset ?? 0,
+        state.invitations?.offset ?? 0,
+        state.posts?.offset ?? 0,
+        state.moderationReports?.offset ?? 0,
+        state.removedPosts?.offset ?? 0,
+        nextRemovedCommentOffset
+      );
+    } catch (caught) {
+      setActionError(
+        caught instanceof ApiError ? caught.message : "Comment could not be restored."
+      );
+    } finally {
+      setBusyRemovedCommentId(null);
+    }
+  }
+
   async function handleJoin() {
     setMessage(null);
     setActionError(null);
@@ -784,7 +897,16 @@ function CommunityDetailContent({
     );
   }
 
-  const { community, invitations, members, moderationReports, pendingMembers, posts } = state;
+  const {
+    community,
+    invitations,
+    members,
+    moderationReports,
+    pendingMembers,
+    posts,
+    removedComments,
+    removedPosts
+  } = state;
   const activeMember = community.membership_status === "ACTIVE";
   const pendingMember = community.membership_status === "PENDING";
   const owner = community.membership_role === "OWNER";
@@ -1332,6 +1454,271 @@ function CommunityDetailContent({
               </button>
             </div>
           </div>
+
+          {removedPosts ? (
+            <div className="mt-8">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-secondary">
+                    Removed content
+                  </p>
+                  <h2 className="mt-2 font-display text-2xl font-semibold text-ink">
+                    Removed posts
+                  </h2>
+                </div>
+                <p className="text-sm font-semibold text-muted">
+                  {removedPosts.total} removed post{removedPosts.total === 1 ? "" : "s"}
+                </p>
+              </div>
+              <div className="mt-5 grid gap-3 lg:grid-cols-2">
+                {removedPosts.posts.length === 0 ? (
+                  <p className="border-y border-border bg-white px-4 py-6 text-sm font-semibold text-muted lg:col-span-2">
+                    No removed posts need review.
+                  </p>
+                ) : null}
+                {removedPosts.posts.map((post) => (
+                  <article
+                    className="rounded-lg border border-border bg-white p-4 shadow-soft"
+                    key={post.id}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="font-display text-xl font-semibold text-ink">
+                          {post.author_display_name}
+                        </h3>
+                        <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-muted">
+                          Removed {post.removed_at ? formatDate(post.removed_at) : "recently"}
+                        </p>
+                      </div>
+                      <span className="inline-flex min-h-8 items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 text-xs font-semibold text-red-700">
+                        <Ban aria-hidden="true" className="h-4 w-4" />
+                        {formatLabel(post.status)}
+                      </span>
+                    </div>
+                    <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+                      <div>
+                        <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">
+                          Removed by
+                        </dt>
+                        <dd className="mt-1 font-semibold text-ink">
+                          {post.removed_by_display_name}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">
+                          Original date
+                        </dt>
+                        <dd className="mt-1 font-semibold text-ink">
+                          {formatDate(post.created_at)}
+                        </dd>
+                      </div>
+                    </dl>
+                    <p className="mt-4 whitespace-pre-line rounded-lg border border-border bg-surface px-3 py-3 text-sm leading-6 text-ink">
+                      {truncateText(post.body, 280)}
+                    </p>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <button
+                        className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white transition hover:bg-[#003d7d] disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={busyRemovedPostId === post.id}
+                        onClick={() => void handleRestoreRemovedPost(post)}
+                        type="button"
+                      >
+                        <RotateCcw aria-hidden="true" className="h-4 w-4" />
+                        {busyRemovedPostId === post.id ? "Restoring..." : "Restore post"}
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+              <div className="mt-5 flex flex-col gap-3 border-y border-border bg-white px-4 py-3 text-sm font-semibold text-muted sm:flex-row sm:items-center sm:justify-between">
+                <p>
+                  {removedPosts.total === 0
+                    ? "No removed posts"
+                    : `Showing ${removedPosts.offset + 1}-${removedPosts.offset + removedPosts.posts.length} of ${removedPosts.total}`}
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    className="focus-ring min-h-10 rounded-lg border border-border px-4 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={removedPosts.offset === 0}
+                    onClick={() =>
+                      void refresh(
+                        members.offset,
+                        pendingMembers?.offset ?? 0,
+                        invitations?.offset ?? 0,
+                        posts?.offset ?? 0,
+                        moderationReports.offset,
+                        Math.max(0, removedPosts.offset - removedPosts.limit),
+                        removedComments?.offset ?? 0
+                      )
+                    }
+                    type="button"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    className="focus-ring min-h-10 rounded-lg border border-border px-4 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={!removedPosts.has_more}
+                    onClick={() =>
+                      void refresh(
+                        members.offset,
+                        pendingMembers?.offset ?? 0,
+                        invitations?.offset ?? 0,
+                        posts?.offset ?? 0,
+                        moderationReports.offset,
+                        removedPosts.offset + removedPosts.limit,
+                        removedComments?.offset ?? 0
+                      )
+                    }
+                    type="button"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {removedComments ? (
+            <div className="mt-8">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-secondary">
+                    Removed content
+                  </p>
+                  <h2 className="mt-2 font-display text-2xl font-semibold text-ink">
+                    Removed comments
+                  </h2>
+                </div>
+                <p className="text-sm font-semibold text-muted">
+                  {removedComments.total} removed comment
+                  {removedComments.total === 1 ? "" : "s"}
+                </p>
+              </div>
+              <div className="mt-5 grid gap-3 lg:grid-cols-2">
+                {removedComments.comments.length === 0 ? (
+                  <p className="border-y border-border bg-white px-4 py-6 text-sm font-semibold text-muted lg:col-span-2">
+                    No removed comments need review.
+                  </p>
+                ) : null}
+                {removedComments.comments.map((comment) => (
+                  <article
+                    className="rounded-lg border border-border bg-white p-4 shadow-soft"
+                    key={comment.id}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="font-display text-xl font-semibold text-ink">
+                          {comment.author_display_name}
+                        </h3>
+                        <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-muted">
+                          Removed{" "}
+                          {comment.removed_at ? formatDate(comment.removed_at) : "recently"}
+                        </p>
+                      </div>
+                      <span className="inline-flex min-h-8 items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 text-xs font-semibold text-red-700">
+                        <Ban aria-hidden="true" className="h-4 w-4" />
+                        {formatLabel(comment.status)}
+                      </span>
+                    </div>
+                    <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+                      <div>
+                        <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">
+                          Removed by
+                        </dt>
+                        <dd className="mt-1 font-semibold text-ink">
+                          {comment.removed_by_display_name}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">
+                          Post author
+                        </dt>
+                        <dd className="mt-1 font-semibold text-ink">
+                          {comment.post_author_display_name}
+                        </dd>
+                      </div>
+                    </dl>
+                    <div className="mt-4 rounded-lg border border-border bg-surface px-3 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">
+                        Comment
+                      </p>
+                      <p className="mt-2 whitespace-pre-line text-sm leading-6 text-ink">
+                        {truncateText(comment.body, 240)}
+                      </p>
+                    </div>
+                    <div className="mt-4 border-t border-border pt-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">
+                        Parent post
+                      </p>
+                      <p className="mt-2 whitespace-pre-line text-sm leading-6 text-ink">
+                        {truncateText(comment.post_body, 240)}
+                      </p>
+                      <p className="mt-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted">
+                        {formatLabel(comment.post_status)} - Posted{" "}
+                        {formatDate(comment.post_created_at)}
+                      </p>
+                    </div>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <button
+                        className="focus-ring inline-flex min-h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white transition hover:bg-[#003d7d] disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={busyRemovedCommentId === comment.id}
+                        onClick={() => void handleRestoreRemovedComment(comment)}
+                        type="button"
+                      >
+                        <RotateCcw aria-hidden="true" className="h-4 w-4" />
+                        {busyRemovedCommentId === comment.id ? "Restoring..." : "Restore comment"}
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+              <div className="mt-5 flex flex-col gap-3 border-y border-border bg-white px-4 py-3 text-sm font-semibold text-muted sm:flex-row sm:items-center sm:justify-between">
+                <p>
+                  {removedComments.total === 0
+                    ? "No removed comments"
+                    : `Showing ${removedComments.offset + 1}-${removedComments.offset + removedComments.comments.length} of ${removedComments.total}`}
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    className="focus-ring min-h-10 rounded-lg border border-border px-4 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={removedComments.offset === 0}
+                    onClick={() =>
+                      void refresh(
+                        members.offset,
+                        pendingMembers?.offset ?? 0,
+                        invitations?.offset ?? 0,
+                        posts?.offset ?? 0,
+                        moderationReports.offset,
+                        removedPosts?.offset ?? 0,
+                        Math.max(0, removedComments.offset - removedComments.limit)
+                      )
+                    }
+                    type="button"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    className="focus-ring min-h-10 rounded-lg border border-border px-4 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={!removedComments.has_more}
+                    onClick={() =>
+                      void refresh(
+                        members.offset,
+                        pendingMembers?.offset ?? 0,
+                        invitations?.offset ?? 0,
+                        posts?.offset ?? 0,
+                        moderationReports.offset,
+                        removedPosts?.offset ?? 0,
+                        removedComments.offset + removedComments.limit
+                      )
+                    }
+                    type="button"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </section>
       ) : null}
 

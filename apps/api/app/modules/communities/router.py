@@ -46,6 +46,10 @@ from app.modules.communities.schemas import (
     CommunityPostReportQueueResponse,
     CommunityPostReportResponse,
     CommunityPostResponse,
+    CommunityRemovedCommentQueueItem,
+    CommunityRemovedCommentQueueResponse,
+    CommunityRemovedPostQueueItem,
+    CommunityRemovedPostQueueResponse,
     CommunityResponse,
     CommunityUpdate,
 )
@@ -356,6 +360,36 @@ def _serialize_report_queue_item(report: CommunityPostReport) -> CommunityPostRe
         post_body=post.body,
         post_status=post.status,
         post_removed_at=post.removed_at,
+        post_created_at=post.created_at,
+    )
+
+
+def _serialize_removed_post_queue_item(
+    db: Session,
+    post: CommunityPost,
+    current_user: User,
+    community: Community,
+) -> CommunityRemovedPostQueueItem:
+    return CommunityRemovedPostQueueItem(
+        **_serialize_post(db, post, current_user, community).model_dump(),
+        removed_by_display_name=(
+            post.removed_by_user.display_name if post.removed_by_user else "Removed user"
+        ),
+    )
+
+
+def _serialize_removed_comment_queue_item(
+    comment: CommunityPostComment,
+) -> CommunityRemovedCommentQueueItem:
+    post = comment.post
+    return CommunityRemovedCommentQueueItem(
+        **_serialize_comment(comment).model_dump(),
+        removed_by_display_name=(
+            comment.removed_by_user.display_name if comment.removed_by_user else "Removed user"
+        ),
+        post_author_display_name=post.author.display_name if post.author else "Removed user",
+        post_body=post.body,
+        post_status=post.status,
         post_created_at=post.created_at,
     )
 
@@ -813,6 +847,47 @@ def remove_community_post(
     return _serialize_post(db, post, current_user, community)
 
 
+@router.post("/{community_id}/posts/{post_id}/restore", response_model=CommunityPostResponse)
+def restore_community_post(
+    community_id: uuid.UUID,
+    post_id: uuid.UUID,
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> CommunityPostResponse:
+    community = _get_community_or_404(db, community_id)
+    if not _can_manage_community(current_user, community):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to restore this post",
+        )
+
+    post = _get_post_or_404(db, community, post_id)
+    if post.status != "REMOVED":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only removed posts can be restored",
+        )
+
+    post.status = "ACTIVE"
+    post.removed_by_user_id = None
+    post.removed_at = None
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "community.post_restored",
+        metadata={
+            "community_id": str(community.id),
+            "post_id": str(post.id),
+            "post_author_user_id": str(post.author_user_id) if post.author_user_id else None,
+        },
+    )
+    db.commit()
+    db.refresh(post)
+    return _serialize_post(db, post, current_user, community)
+
+
 @router.get(
     "/{community_id}/posts/{post_id}/comments",
     response_model=CommunityPostCommentListResponse,
@@ -950,6 +1025,52 @@ def remove_community_post_comment(
         request,
         current_user,
         "community.post_comment_removed",
+        metadata={
+            "comment_id": str(comment.id),
+            "community_id": str(community.id),
+            "post_id": str(post.id),
+        },
+    )
+    db.commit()
+    db.refresh(comment)
+    return _serialize_comment(comment)
+
+
+@router.post(
+    "/{community_id}/posts/{post_id}/comments/{comment_id}/restore",
+    response_model=CommunityPostCommentResponse,
+)
+def restore_community_post_comment(
+    community_id: uuid.UUID,
+    post_id: uuid.UUID,
+    comment_id: uuid.UUID,
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> CommunityPostCommentResponse:
+    community = _get_community_or_404(db, community_id)
+    if not _can_manage_community(current_user, community):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to restore this comment",
+        )
+
+    post = _get_post_or_404(db, community, post_id)
+    comment = _get_comment_or_404(db, post, comment_id)
+    if comment.status != "REMOVED":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only removed comments can be restored",
+        )
+
+    comment.status = "ACTIVE"
+    comment.removed_by_user_id = None
+    comment.removed_at = None
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "community.post_comment_restored",
         metadata={
             "comment_id": str(comment.id),
             "community_id": str(community.id),
@@ -1227,6 +1348,101 @@ def list_community_post_report_queue(
         limit=limit,
         offset=offset,
         has_more=offset + len(reports) < total,
+    )
+
+
+@router.get(
+    "/{community_id}/removed-posts",
+    response_model=CommunityRemovedPostQueueResponse,
+)
+def list_community_removed_posts(
+    community_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+    limit: Annotated[int, Query(ge=1, le=50)] = 10,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> CommunityRemovedPostQueueResponse:
+    community = _get_community_or_404(db, community_id)
+    if not _can_manage_community(current_user, community):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to review removed posts",
+        )
+
+    query = (
+        select(CommunityPost)
+        .options(
+            joinedload(CommunityPost.author),
+            joinedload(CommunityPost.removed_by_user),
+        )
+        .where(
+            CommunityPost.community_id == community.id,
+            CommunityPost.status == "REMOVED",
+        )
+    )
+    total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+    posts = db.scalars(
+        query.order_by(CommunityPost.removed_at.desc(), CommunityPost.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+    ).all()
+    return CommunityRemovedPostQueueResponse(
+        posts=[
+            _serialize_removed_post_queue_item(db, post, current_user, community) for post in posts
+        ],
+        total=total,
+        limit=limit,
+        offset=offset,
+        has_more=offset + len(posts) < total,
+    )
+
+
+@router.get(
+    "/{community_id}/removed-comments",
+    response_model=CommunityRemovedCommentQueueResponse,
+)
+def list_community_removed_comments(
+    community_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+    limit: Annotated[int, Query(ge=1, le=50)] = 10,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> CommunityRemovedCommentQueueResponse:
+    community = _get_community_or_404(db, community_id)
+    if not _can_manage_community(current_user, community):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to review removed comments",
+        )
+
+    query = (
+        select(CommunityPostComment)
+        .join(CommunityPost, CommunityPostComment.post_id == CommunityPost.id)
+        .options(
+            joinedload(CommunityPostComment.author),
+            joinedload(CommunityPostComment.removed_by_user),
+            joinedload(CommunityPostComment.post).joinedload(CommunityPost.author),
+        )
+        .where(
+            CommunityPost.community_id == community.id,
+            CommunityPostComment.status == "REMOVED",
+        )
+    )
+    total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+    comments = db.scalars(
+        query.order_by(
+            CommunityPostComment.removed_at.desc(),
+            CommunityPostComment.created_at.desc(),
+        )
+        .offset(offset)
+        .limit(limit)
+    ).all()
+    return CommunityRemovedCommentQueueResponse(
+        comments=[_serialize_removed_comment_queue_item(comment) for comment in comments],
+        total=total,
+        limit=limit,
+        offset=offset,
+        has_more=offset + len(comments) < total,
     )
 
 
