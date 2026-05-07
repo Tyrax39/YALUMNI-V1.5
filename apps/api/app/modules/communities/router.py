@@ -25,6 +25,7 @@ from app.core.security import create_refresh_token, hash_token, utcnow
 from app.core.storage import UploadCategory, upload_response
 from app.modules.auth.dependencies import get_current_user, require_roles
 from app.modules.auth.models import Role, RoleAssignment, SecurityEvent, User
+from app.modules.communities.emails import send_community_invitation_email
 from app.modules.communities.models import (
     Community,
     CommunityInvitation,
@@ -2703,6 +2704,12 @@ def create_community_invitation(
             target_url="/communities/invitations/accept",
             title=f"Invitation to {community.name}",
         )
+    send_community_invitation_email(
+        community=community,
+        invitation=invitation,
+        invitation_token=invitation_token,
+        invited_by=current_user,
+    )
     db.commit()
     db.refresh(invitation)
     return _serialize_invitation(invitation, dev_invitation_token=invitation_token)

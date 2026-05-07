@@ -9,6 +9,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.core.config import get_settings
 from app.core.database import Base, get_db_session
+from app.core.email import clear_email_outbox, email_outbox
 from app.core.rate_limit import clear_rate_limits
 from app.main import app
 from app.modules.alumni import models as alumni_models
@@ -22,6 +23,7 @@ _ = auth_models, alumni_models, community_models, notification_models
 @pytest.fixture
 def client() -> Generator[TestClient]:
     clear_rate_limits()
+    clear_email_outbox()
     engine = create_engine(
         "sqlite+pysqlite:///:memory:",
         connect_args={"check_same_thread": False},
@@ -45,6 +47,7 @@ def client() -> Generator[TestClient]:
     app.dependency_overrides.clear()
     Base.metadata.drop_all(bind=engine)
     clear_rate_limits()
+    clear_email_outbox()
 
 
 def auth_headers(access_token: str) -> dict[str, str]:
@@ -1756,6 +1759,7 @@ def test_community_manager_can_invite_member_and_invited_user_can_accept(
     )
     assert promotion_response.status_code == 200
 
+    clear_email_outbox()
     invite_response = client.post(
         f"/api/v1/communities/{community['id']}/invitations",
         headers=manager_headers,
@@ -1767,6 +1771,11 @@ def test_community_manager_can_invite_member_and_invited_user_can_accept(
     assert invitation["invited_role"] == "MEMBER"
     assert invitation["status"] == "PENDING"
     assert invitation["dev_invitation_token"]
+    outbox = email_outbox()
+    assert len(outbox) == 1
+    assert outbox[0].to_email == "invited.member@example.com"
+    assert outbox[0].subject == "Invitation to Togo Youth Leadership Chapter"
+    assert invitation["dev_invitation_token"] in outbox[0].text_body
 
     duplicate_invite = client.post(
         f"/api/v1/communities/{community['id']}/invitations",

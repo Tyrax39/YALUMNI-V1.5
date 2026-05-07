@@ -15,6 +15,14 @@ class Settings(BaseSettings):
     jwt_refresh_token_days: int = 30
     email_verification_token_hours: int = 24
     password_reset_token_minutes: int = 30
+    email_provider: str = "console"
+    email_from_address: str = "no-reply@yalumni.org"
+    email_from_name: str = "YALUMNI"
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_user: str | None = None
+    smtp_password: str | None = None
+    smtp_use_tls: bool = True
     login_rate_limit_attempts: int = 5
     login_rate_limit_window_seconds: int = 300
     password_reset_rate_limit_attempts: int = 5

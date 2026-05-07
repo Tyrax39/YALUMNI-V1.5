@@ -101,6 +101,17 @@ admins can continue the review loop.
 Profile photo uploads accept JPEG, PNG, and WebP files with authenticated
 download through the profile photo endpoint.
 
+Email delivery support:
+
+- `EMAIL_PROVIDER=console` queues verification, password reset, and invitation
+  messages in the local console/outbox path used by tests.
+- `EMAIL_PROVIDER=smtp` sends the same messages through `SMTP_HOST`,
+  `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, and `SMTP_USE_TLS`.
+- `EMAIL_FROM_ADDRESS`, `EMAIL_FROM_NAME`, and `WEB_BASE_URL` control sender
+  identity and generated account/invitation links.
+- Local/dev auth and invitation responses still include one-time `dev_*` tokens
+  for QA. Production responses suppress those tokens and rely on email links.
+
 Directory search supports:
 
 - `q`
@@ -166,9 +177,12 @@ Community invitations support:
   for canceling pending invitations.
 - `POST /api/v1/communities/invitations/accept` for token-based invitation
   acceptance by the invited account email.
+- Invitation creation now sends an email link to every invited address. Existing
+  platform users also receive in-app notifications when their preferences allow
+  the event.
 
-Local/dev invitation creation responses include `dev_invitation_token` until a
-real email provider is wired. List responses do not repeat invitation tokens.
+Local/dev invitation creation responses include `dev_invitation_token` for QA.
+List responses do not repeat invitation tokens.
 
 Community ownership transfer support:
 
@@ -269,6 +283,9 @@ Notification center support:
   existing users, invitation cancellation/acceptance, post/comment removal and
   restoration, new comments on owned posts, report resolution, new post reports,
   and moderation escalations.
+- Email delivery is currently direct console/SMTP sending for auth and
+  invitation links. Notification digest execution, queue/retry behavior, bounce
+  tracking, and delivery audit exports remain future production work.
 
 ## Phase 3: Alumni
 

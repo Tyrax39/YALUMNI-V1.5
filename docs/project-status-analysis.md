@@ -8,6 +8,72 @@ The current Yalumni project is a useful Laravel 9 alumni management platform, bu
 
 The V1.5 implementation is active in `D:\YALUMNI-V1.5`. The new repository now contains a platform foundation with a FastAPI backend, Next.js web shell, Docker Compose, CI workflow, shared packages, copied YALUMNI logo assets, and documentation.
 
+## Current V1.5 Implementation Update: 2026-05-07 Email Delivery Foundation Slice
+
+Completed after the notification preferences slice:
+
+- Added a backend email delivery abstraction with `console`, `smtp`, and disabled provider modes.
+- Added local/test outbox helpers so email-generating flows can be verified without exposing message contents in public UI.
+- Added email configuration for provider, sender identity, SMTP host/port/credentials/TLS, and `WEB_BASE_URL` link generation.
+- Wired email verification, password reset, and community invitations to generate real web links and send them through the configured provider.
+- Community invitation emails now go to every invited address; existing users still receive in-app notifications when allowed by their preferences.
+- Local/dev responses still include one-time dev tokens for QA, while production responses continue to suppress those tokens.
+- Added API coverage for registration verification emails, password reset emails, missing-account non-disclosure, and community invitation emails.
+- Updated API, roadmap, environment, and status docs for the email delivery slice.
+
+Current plan position:
+
+- Phase 1 remains functionally complete for local foundation.
+- Phase 2 is now roughly 91% complete because identity recovery and verification now have delivery plumbing, not only local/dev tokens.
+- Phase 3 remains roughly 52% complete.
+- Phase 4 remains roughly 31% complete.
+- Phase 5 remains roughly 81% complete because community invitations now include email delivery.
+- Phase 6 feed/moderation remains roughly 54% complete.
+- Phase 7 messaging/notifications is now roughly 27% complete: persisted notifications, community hooks, dashboard inbox, read APIs, SSE snapshots, notification preferences, and initial console/SMTP email delivery exist. Direct messaging, WebSocket/Redis fanout, read receipts, blocks, queue/retry delivery, digest worker execution, push delivery, and delivery audit exports remain open.
+- Overall 24-week MVP implementation is roughly 52% complete.
+
+Implemented now:
+
+- Native landing page.
+- Monorepo foundation, CI, docs, Docker Compose.
+- FastAPI health/status and request middleware.
+- Identity auth, refresh sessions, account recovery, email verification, console/SMTP delivery for account emails, protected platform owner, role-gated admin overview, session management, admin 2FA policy gate, secure cookie-backed web sessions, CSRF protection, and MVP-local rate limiting.
+- Local-only test-account seeding for role and directory QA.
+- Protected dashboard/admin route behavior.
+- Alumni current-user profile model/API/UI with profile photo upload/display/delete.
+- Shared local/S3 upload storage adapter for profile photos, verification evidence, and community feed media.
+- Program affiliation model/API/UI.
+- Verification request submission, member status history, admin queue, review actions, alumni-member role grant, and evidence upload/review.
+- Verified member directory search/profile detail with privacy-aware serializers and authenticated profile-photo display.
+- Dedicated admin audit log viewer backed by `security_events`.
+- Community discovery, creation, detail pages, active rosters, open/request joins, pending review, manager roles, role updates, non-owner member removal, owner/admin settings editing, invitation email delivery, invitation cancellation/acceptance, ownership transfer, gated community posts, media attachments, comments, likes, reports, manager-visible report counts, per-community report queues, removed post/comment queues, restore actions, cross-community admin moderation queues, moderation review metadata, notification inbox, community workflow notification hooks, live notification snapshot streaming, and notification preferences.
+
+Main gaps now:
+
+- Email delivery is synchronous console/SMTP plumbing. Production still needs provider credentials, HTML templates, queue/retry behavior, delivery logs, bounce handling, unsubscribe/compliance flows, and delivery audit exports.
+- Notification preferences are enforced for in-app delivery, but email digest execution, per-channel preferences, admin override rules, and quiet-hours controls remain open.
+- Notification realtime is SSE polling for MVP, not Redis/WebSocket fanout. Production still needs multi-worker pub/sub, reconnection/backoff policy review, batching, and push delivery.
+- Community feed still needs pinned posts, mentions, richer formatting, edit history, audit export tooling, and global feed aggregation.
+- Feed media is storage-backed and moderated, but production media hardening still needs malware scanning, image processing, thumbnail generation, CDN/signed URL decisions, and retention policy.
+- S3 adapter exists, but production still needs real bucket credentials and bucket policy validation.
+- Directory search is database-backed MVP search, not Meilisearch/OpenSearch.
+- Public profile pages, saved searches, recommendations, and richer dedicated search indexing are not implemented.
+- Test accounts are local/dev seed data only; there is no production-safe demo identity lifecycle yet.
+- Skills are stored as MVP JSON rather than normalized skill tables.
+- Audit data is viewable through `security_events`, but richer immutable compliance audit tables and export tooling are not implemented.
+- Redis-backed rate limiting, background jobs, direct messaging, events, initiatives, contributions, and elections are not wired yet.
+- Communities still need chapter analytics and richer notification preference grouping.
+
+Next possible implementation slices:
+
+- Email digest worker foundation using stored digest-frequency preferences.
+- Direct messaging foundation with conversations, participants, and message send/list APIs.
+- Feed post editing with audit history and moderator-visible revision records.
+- Pinned/featured posts and announcements for community owners/managers.
+- Global feed aggregation from community posts and future public posts.
+- Moderator audit exports and immutable compliance event tables.
+- Production email hardening with provider templates, queue/retry, bounce tracking, and delivery logs.
+
 ## Current V1.5 Implementation Update: 2026-05-07 Notification Preferences Slice
 
 Completed after the realtime notification stream slice:

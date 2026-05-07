@@ -8,6 +8,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.core.config import get_settings
 from app.core.database import Base, get_db_session
+from app.core.email import clear_email_outbox, email_outbox
 from app.core.rate_limit import clear_rate_limits
 from app.core.security import hash_password
 from app.core.totp import generate_totp_code
@@ -23,6 +24,7 @@ _ = auth_models, alumni_models
 @pytest.fixture
 def client() -> Generator[TestClient]:
     clear_rate_limits()
+    clear_email_outbox()
     engine = create_engine(
         "sqlite+pysqlite:///:memory:",
         connect_args={"check_same_thread": False},
@@ -46,6 +48,7 @@ def client() -> Generator[TestClient]:
     app.dependency_overrides.clear()
     Base.metadata.drop_all(bind=engine)
     clear_rate_limits()
+    clear_email_outbox()
 
 
 def register_user(client: TestClient, email: str = "amara@example.com") -> dict:
@@ -168,6 +171,11 @@ def test_register_login_me_refresh_and_logout(client: TestClient) -> None:
     assert registered["token_type"] == "bearer"
     assert registered["user"]["email"] == "amara@example.com"
     assert registered["user"]["roles"] == ["UNVERIFIED_USER"]
+    outbox = email_outbox()
+    assert len(outbox) == 1
+    assert outbox[0].to_email == "amara@example.com"
+    assert outbox[0].subject == "Verify your YALUMNI email"
+    assert registered["dev_email_verification_token"] in outbox[0].text_body
 
     me_response = client.get(
         "/api/v1/auth/me",
@@ -405,6 +413,7 @@ def test_email_verification_marks_user_verified_and_rejects_reuse(client: TestCl
 def test_password_forgot_reset_and_login_with_new_password(client: TestClient) -> None:
     register_user(client, email="reset@example.com")
 
+    clear_email_outbox()
     forgot_response = client.post(
         "/api/v1/auth/password/forgot",
         json={"email": "reset@example.com"},
@@ -412,6 +421,11 @@ def test_password_forgot_reset_and_login_with_new_password(client: TestClient) -
     assert forgot_response.status_code == 200
     reset_token = forgot_response.json()["dev_token"]
     assert reset_token
+    outbox = email_outbox()
+    assert len(outbox) == 1
+    assert outbox[0].to_email == "reset@example.com"
+    assert outbox[0].subject == "Reset your YALUMNI password"
+    assert reset_token in outbox[0].text_body
 
     reset_response = client.post(
         "/api/v1/auth/password/reset",
@@ -446,6 +460,7 @@ def test_password_forgot_does_not_disclose_unknown_email(client: TestClient) -> 
 
     assert forgot_response.status_code == 200
     assert forgot_response.json()["dev_token"] is None
+    assert email_outbox() == []
 
 
 def test_password_reset_rate_limit_returns_429_after_repeated_requests(

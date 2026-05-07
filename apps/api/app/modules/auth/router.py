@@ -26,6 +26,7 @@ from app.core.totp import (
     verify_totp_code,
 )
 from app.modules.auth.dependencies import get_current_user, require_roles
+from app.modules.auth.emails import send_email_verification_email, send_password_reset_email
 from app.modules.auth.models import (
     AccountToken,
     AuthSession,
@@ -304,6 +305,7 @@ def register(
         "email_verification",
         utcnow() + timedelta(hours=settings.email_verification_token_hours),
     )
+    send_email_verification_email(user, verification_token)
 
     return _issue_auth_response(
         db,
@@ -698,6 +700,7 @@ def forgot_password(
             utcnow() + timedelta(minutes=settings.password_reset_token_minutes),
         )
         _create_security_event(db, request, user, "auth.password_reset_requested")
+        send_password_reset_email(user, token)
         dev_token = token if _is_local_environment() else None
 
     db.commit()

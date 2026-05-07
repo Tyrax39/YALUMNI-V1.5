@@ -20,8 +20,8 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
 - Local-only development test-account seeds. Implemented.
 - JWT access and refresh tokens. Implemented.
 - Register/login/logout. Implemented.
-- Email verification. Implemented API and local web flow.
-- Password reset. Implemented API and local web flow.
+- Email verification. Implemented API, local web flow, and console/SMTP delivery foundation.
+- Password reset. Implemented API, local web flow, and console/SMTP delivery foundation.
 - Role baseline. Started with global `UNVERIFIED_USER` plus local `SUPER_ADMIN` bootstrap.
 - Protected web route behavior. Implemented with HttpOnly cookie-backed web sessions, Next proxy guards, and a backend API proxy.
 - Role-aware admin overview. Implemented API guard and web console summary.
@@ -65,7 +65,7 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
 - Chapter admin roles. Started with active `MANAGER` memberships.
 - Member management. Started with manager promotion/demotion and active non-owner member removal.
 - Community settings editing. Implemented for admins and community owners.
-- Invitations. Implemented for manager/owner/admin creation, cancellation, and token acceptance.
+- Invitations. Implemented for manager/owner/admin creation, email delivery, cancellation, and token acceptance.
 - Ownership transfer. Implemented for owner/admin succession to active non-owner members.
 - Private content gates. Implemented for active-member community posts, comments,
   likes, post reports, moderation removal/resolution, and removed-content restoration.
@@ -93,11 +93,14 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
   unread-count/latest-notification snapshots and dashboard live refresh.
 - Notification preferences. Started with current-user in-app master toggle,
   muted event types, and digest-frequency preference records.
+- Email delivery foundation. Started with console/SMTP delivery for account
+  verification, password reset, and community invitations.
 - Direct conversations.
 - Message list/send.
 - WebSocket events.
 - Blocks and read receipts.
-- Redis/WebSocket fanout and push/email delivery remain open.
+- Redis/WebSocket fanout, queued delivery, push, email digests, retries, bounces,
+  and delivery audit exports remain open.
 
 ## Phase 8: Events
 
