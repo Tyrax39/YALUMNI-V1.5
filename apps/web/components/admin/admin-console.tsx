@@ -568,7 +568,7 @@ function AuditDetail({ label, value }: { label: string; value: string }) {
   );
 }
 
-function VerificationQueuePanel({ accessToken }: { accessToken: string }) {
+export function VerificationQueuePanel({ accessToken }: { accessToken: string }) {
   const [state, setState] = useState<QueueState>({ status: "loading" });
   const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
   const [busyAction, setBusyAction] = useState<string | null>(null);

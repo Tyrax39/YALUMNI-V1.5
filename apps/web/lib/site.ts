@@ -1,8 +1,8 @@
 export const primaryNav = [
-  { label: "Directory", href: "#directory" },
-  { label: "Chapters", href: "#chapters" },
-  { label: "Opportunities", href: "#opportunities" },
-  { label: "Elections", href: "#trust" }
+  { label: "Directory", href: "/directory" },
+  { label: "Chapters", href: "/communities" },
+  { label: "Opportunities", href: "/opportunities" },
+  { label: "Elections", href: "/elections" }
 ] as const;
 
 export const platformStats = [

@@ -11,6 +11,7 @@
     "dev:web": "npm --workspace @yalumni/web run dev",
     "build:web": "npm --workspace @yalumni/web run build",
     "lint:web": "npm --workspace @yalumni/web run lint",
+    "smoke:web": "npm --workspace @yalumni/web run smoke:routes",
     "typecheck:web": "npm --workspace @yalumni/web run typecheck",
     "test:api": "cd apps/api && python -m pytest",
     "lint:api": "cd apps/api && python -m ruff check .",

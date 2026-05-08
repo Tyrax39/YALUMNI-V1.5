@@ -21,6 +21,8 @@ coverage/
 # Local files
 .local/
 .qa/
+logs/
+test-results/
 *.log
 .DS_Store
 Thumbs.db

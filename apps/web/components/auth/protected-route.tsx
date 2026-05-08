@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { ReactNode, useEffect, useMemo, useState } from "react";
 
 import { ApiError, AuthUser, bootstrapLocalAdmin, getMe } from "@/lib/api";
@@ -42,6 +43,8 @@ export function ProtectedRoute({
   requiredRoles = [],
   title
 }: ProtectedRouteProps) {
+  const pathname = usePathname();
+  const router = useRouter();
   const [state, setState] = useState<AuthState>({ status: "loading" });
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
   const [isBootstrapping, setIsBootstrapping] = useState(false);
@@ -73,6 +76,15 @@ export function ProtectedRoute({
         });
       });
   }, []);
+
+  useEffect(() => {
+    if (state.status !== "anonymous") {
+      return;
+    }
+
+    const next = pathname === "/dashboard" ? "" : `?next=${encodeURIComponent(pathname)}`;
+    router.replace(`/login${next}`);
+  }, [pathname, router, state.status]);
 
   const hasRequiredRole = useMemo(() => {
     if (state.status !== "authenticated" || requiredRoles.length === 0) {
