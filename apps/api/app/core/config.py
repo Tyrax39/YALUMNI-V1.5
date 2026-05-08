@@ -6,8 +6,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     app_env: str = "local"
     app_name: str = "YALI Alumni Platform"
-    api_base_url: str = "http://localhost:8000"
-    web_base_url: str = "http://localhost:3000"
+    api_base_url: str = "http://localhost:8002"
+    web_base_url: str = "http://localhost:3010"
+    admin_console_base_url: str = "http://localhost:3011"
+    super_admin_console_base_url: str = "http://localhost:3012"
     database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/yali_alumni"
     redis_url: str = "redis://localhost:6379/0"
     jwt_secret_key: str = "change-me"
@@ -60,7 +62,10 @@ class Settings(BaseSettings):
     s3_bucket_name: str | None = None
     s3_region: str | None = None
     cors_origins: str = (
-        "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3010,http://127.0.0.1:3010"
+        "http://localhost:3000,http://127.0.0.1:3000,"
+        "http://localhost:3010,http://127.0.0.1:3010,"
+        "http://localhost:3011,http://127.0.0.1:3011,"
+        "http://localhost:3012,http://127.0.0.1:3012"
     )
     sentry_dsn: str | None = None
 

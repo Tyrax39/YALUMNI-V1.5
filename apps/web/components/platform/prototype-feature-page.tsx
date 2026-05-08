@@ -3,7 +3,7 @@
 import Link from "next/link";
 
 import { AppShell } from "@/components/platform/app-shell";
-import { adminRoles } from "@/lib/api";
+import { ADMIN_ROLES, MEMBER_ACCESS_ROLES } from "@yalumni/frontend-shared";
 import {
   FeatureAction,
   FeatureScreenConfig,
@@ -16,9 +16,15 @@ type PrototypeFeaturePageProps = {
   screenKey: FeatureScreenKey;
 };
 
+const openAuthenticatedScreens = new Set<FeatureScreenKey>(["onboarding", "verificationSubmitted"]);
+
 export function PrototypeFeaturePage({ recordId, screenKey }: PrototypeFeaturePageProps) {
   const screen: FeatureScreenConfig = featureScreens[screenKey];
-  const requiredRoles = screen.requiresAdmin ? adminRoles : [];
+  const requiredRoles = screen.requiresAdmin
+    ? ADMIN_ROLES
+    : openAuthenticatedScreens.has(screenKey)
+      ? []
+      : MEMBER_ACCESS_ROLES;
 
   return (
     <AppShell

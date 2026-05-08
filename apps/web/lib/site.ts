@@ -1,9 +1,6 @@
-export const primaryNav = [
-  { label: "Directory", href: "/directory" },
-  { label: "Chapters", href: "/communities" },
-  { label: "Opportunities", href: "/opportunities" },
-  { label: "Elections", href: "/elections" }
-] as const;
+import { PUBLIC_NAV } from "@yalumni/frontend-shared";
+
+export const primaryNav = PUBLIC_NAV;
 
 export const platformStats = [
   { label: "Verified alumni", value: "50k+" },

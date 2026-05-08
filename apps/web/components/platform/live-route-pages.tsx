@@ -9,13 +9,14 @@ import { VerificationRequestPanel } from "@/components/alumni/verification-reque
 import { CommunitiesPanel } from "@/components/communities/communities-panel";
 import { MessagingPanel } from "@/components/messages/messaging-panel";
 import { AppShell } from "@/components/platform/app-shell";
-import { adminRoles } from "@/lib/api";
+import { ADMIN_ROLES, MEMBER_ACCESS_ROLES, isAdminRole } from "@yalumni/frontend-shared";
 
 export function DirectoryRoutePage() {
   return (
     <AppShell
       description="Search verified alumni by country, city, program, cohort, sector, skill, organization, and role."
       eyebrow="Directory"
+      requiredRoles={MEMBER_ACCESS_ROLES}
       title="Alumni directory"
     >
       {({ accessToken }) => <DirectorySearchPanel accessToken={accessToken} />}
@@ -68,10 +69,11 @@ export function CommunitiesRoutePage() {
     <AppShell
       description="Browse, join, and create community spaces backed by the current communities API."
       eyebrow="Communities"
+      requiredRoles={MEMBER_ACCESS_ROLES}
       title="Communities and chapters"
     >
       {({ accessToken, user }) => {
-        const canCreate = user.roles.some((role) => adminRoles.includes(role));
+        const canCreate = isAdminRole(user.roles);
         return <CommunitiesPanel accessToken={accessToken} canCreate={canCreate} />;
       }}
     </AppShell>
@@ -87,7 +89,12 @@ export function MessagesRoutePage({ mode = "inbox" }: { mode?: "conversation" | 
       : "Private member conversations, moderation reporting, block controls, and unread state from the live messaging API.";
 
   return (
-    <AppShell description={description} eyebrow="Messages" title={title}>
+    <AppShell
+      description={description}
+      eyebrow="Messages"
+      requiredRoles={MEMBER_ACCESS_ROLES}
+      title={title}
+    >
       {({ accessToken, user }) => (
         <MessagingPanel accessToken={accessToken} currentUserId={user.id} />
       )}
@@ -101,7 +108,7 @@ export function AdminVerificationRoutePage() {
       allowLocalAdminBootstrap
       description="Review completed member profiles, evidence, and audit notes through the live verification queue."
       eyebrow="Admin verification"
-      requiredRoles={adminRoles}
+      requiredRoles={ADMIN_ROLES}
       title="Verification queue"
     >
       {({ accessToken }) => <VerificationQueuePanel accessToken={accessToken} />}
@@ -115,7 +122,7 @@ export function AdminModerationRoutePage() {
       allowLocalAdminBootstrap
       description="Review community post reports, removed content, direct message reports, and trust escalations."
       eyebrow="Admin moderation"
-      requiredRoles={adminRoles}
+      requiredRoles={ADMIN_ROLES}
       title="Moderation queues"
     >
       {({ accessToken }) => (
@@ -127,4 +134,3 @@ export function AdminModerationRoutePage() {
     </AppShell>
   );
 }
-

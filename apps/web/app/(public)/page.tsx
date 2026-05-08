@@ -116,7 +116,7 @@ const faqs = [
   {
     question: "Can members control privacy?",
     answer:
-      "Yes. Directory and profile responses are planned around explicit visibility settings for email, phone, location, social links, and contact actions."
+      "Yes. Member profiles are planned around explicit visibility settings for email, phone, location, social links, and contact actions."
   }
 ];
 
@@ -158,7 +158,7 @@ export default function LandingPage() {
 
       <section
         className="mx-auto grid max-w-7xl gap-5 px-5 py-12 sm:px-8 lg:grid-cols-4"
-        id="directory"
+        id="capabilities"
       >
         {capabilityCards.map((card, index) => {
           const Icon = iconMap[index];
@@ -398,7 +398,7 @@ export default function LandingPage() {
             </p>
           </div>
           {[
-            ["Network", "Directory", "Chapter map", "Impact reports"],
+            ["Network", "Mission", "Impact overview", "Trust model"],
             ["Support", "Program FAQ", "Contact support", "Verification help"],
             ["Legal", "Privacy policy", "Terms of service", "Brand permissions"]
           ].map(([title, ...links]) => (

@@ -4,20 +4,33 @@
   "private": true,
   "description": "Modern YALI alumni platform rebuild monorepo.",
   "workspaces": [
+    "apps/admin-console",
+    "apps/super-admin-console",
     "apps/web",
     "packages/*"
   ],
   "scripts": {
     "dev:web": "npm --workspace @yalumni/web run dev",
+    "dev:member": "npm --workspace @yalumni/web run dev:member",
+    "dev:admin": "npm --workspace @yalumni/admin-console run dev",
+    "dev:superadmin": "npm --workspace @yalumni/super-admin-console run dev",
     "build:web": "npm --workspace @yalumni/web run build",
+    "build:admin": "npm --workspace @yalumni/admin-console run build",
+    "build:superadmin": "npm --workspace @yalumni/super-admin-console run build",
     "lint:web": "npm --workspace @yalumni/web run lint",
+    "lint:admin": "npm --workspace @yalumni/admin-console run lint",
+    "lint:superadmin": "npm --workspace @yalumni/super-admin-console run lint",
     "smoke:web": "npm --workspace @yalumni/web run smoke:routes",
+    "smoke:admin": "npm --workspace @yalumni/admin-console run smoke:routes",
+    "smoke:superadmin": "npm --workspace @yalumni/super-admin-console run smoke:routes",
     "typecheck:web": "npm --workspace @yalumni/web run typecheck",
+    "typecheck:admin": "npm --workspace @yalumni/admin-console run typecheck",
+    "typecheck:superadmin": "npm --workspace @yalumni/super-admin-console run typecheck",
     "test:api": "cd apps/api && python -m pytest",
     "lint:api": "cd apps/api && python -m ruff check .",
     "format:api": "cd apps/api && python -m ruff format .",
     "worker:api:notification-digests": "cd apps/api && python -m app.workers.notification_digests",
-    "verify": "npm run lint:web && npm run typecheck:web && npm run build:web && npm run lint:api && npm run test:api"
+    "verify": "npm run lint:web && npm run typecheck:web && npm run build:web && npm run lint:admin && npm run typecheck:admin && npm run build:admin && npm run lint:superadmin && npm run typecheck:superadmin && npm run build:superadmin && npm run lint:api && npm run test:api"
   },
   "engines": {
     "node": ">=20.11.0",

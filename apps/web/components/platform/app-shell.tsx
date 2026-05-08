@@ -12,7 +12,6 @@ import {
   BriefcaseBusiness,
   CalendarDays,
   CircleDollarSign,
-  Gauge,
   Handshake,
   Home,
   Landmark,
@@ -25,9 +24,14 @@ import {
   Users,
   Vote
 } from "lucide-react";
+import {
+  MEMBER_NAV,
+  MEMBER_ONBOARDING_NAV,
+  hasMemberWorkspaceAccess,
+  isAdminRole
+} from "@yalumni/frontend-shared";
 
 import { ProtectedRoute, ProtectedRouteContext } from "@/components/auth/protected-route";
-import { adminRoles } from "@/lib/api";
 
 type NavItem = {
   href: string;
@@ -45,34 +49,31 @@ type AppShellProps = {
   title: string;
 };
 
-const primaryNav: NavItem[] = [
-  { href: "/dashboard", icon: Home, label: "Dashboard" },
-  { href: "/directory", icon: Users, label: "Directory" },
-  { href: "/communities", icon: Landmark, label: "Communities" },
-  { href: "/messages", icon: MessageSquare, label: "Messages" },
-  { href: "/initiatives", icon: Rocket, label: "Initiatives" },
-  { href: "/events", icon: CalendarDays, label: "Events" },
-  { href: "/opportunities", icon: BriefcaseBusiness, label: "Opportunities" },
-  { href: "/mentorship", icon: Handshake, label: "Mentorship" },
-  { href: "/resources", icon: Library, label: "Resources" },
-  { href: "/success-stories", icon: BookOpen, label: "Stories" },
-  { href: "/contributions", icon: CircleDollarSign, label: "Contributions" },
-  { href: "/elections", icon: Vote, label: "Elections" }
-];
+const navIconByHref: Record<string, ComponentType<{ className?: string; size?: number }>> = {
+  "/communities": Landmark,
+  "/contributions": CircleDollarSign,
+  "/dashboard": Home,
+  "/directory": Users,
+  "/elections": Vote,
+  "/events": CalendarDays,
+  "/initiatives": Rocket,
+  "/mentorship": Handshake,
+  "/messages": MessageSquare,
+  "/onboarding": Rocket,
+  "/opportunities": BriefcaseBusiness,
+  "/profile/program-affiliation": ShieldCheck,
+  "/profile/setup": Settings,
+  "/resources": Library,
+  "/success-stories": BookOpen,
+  "/verification": ShieldCheck
+};
 
-const adminNav: NavItem[] = [
-  { href: "/admin", icon: Gauge, label: "Admin overview" },
-  { href: "/admin/verification", icon: ShieldCheck, label: "Verification" },
-  { href: "/admin/moderation", icon: MessageSquare, label: "Moderation" },
-  { href: "/admin/opportunities", icon: BriefcaseBusiness, label: "Opportunities" },
-  { href: "/admin/resources", icon: Library, label: "Resources" },
-  { href: "/admin/success-stories", icon: BookOpen, label: "Stories" },
-  { href: "/admin/elections", icon: Vote, label: "Elections" },
-  { href: "/admin/chapters", icon: Landmark, label: "Chapters" },
-  { href: "/admin/treasury", icon: CircleDollarSign, label: "Treasury" }
-];
-
-const mobileNav = primaryNav.slice(0, 5);
+function withIcons(items: readonly { href: string; label: string }[]): NavItem[] {
+  return items.map((item) => ({
+    ...item,
+    icon: navIconByHref[item.href] ?? Home
+  }));
+}
 
 export function AppShell({
   actions,
@@ -117,7 +118,10 @@ function ShellChrome({
   title: string;
 }) {
   const pathname = usePathname();
-  const hasAdminRole = context.user.roles.some((role) => adminRoles.includes(role));
+  const hasAdminRole = isAdminRole(context.user.roles);
+  const hasMemberAccess = hasMemberWorkspaceAccess(context.user.roles);
+  const memberNav = withIcons(hasMemberAccess ? MEMBER_NAV : MEMBER_ONBOARDING_NAV);
+  const mobileNav = memberNav.slice(0, 5);
   const initials = context.user.display_name
     .split(" ")
     .map((part) => part.charAt(0))
@@ -141,7 +145,7 @@ function ShellChrome({
               />
             </Link>
             <nav aria-label="Primary navigation" className="hidden items-center gap-5 xl:flex">
-              {primaryNav.slice(0, 6).map((item) => (
+              {memberNav.slice(0, 6).map((item) => (
                 <TopNavLink isActive={isActivePath(pathname, item.href)} item={item} key={item.href} />
               ))}
             </nav>
@@ -159,6 +163,14 @@ function ShellChrome({
             >
               <Bell aria-hidden="true" className="h-5 w-5" />
             </Link>
+            {hasAdminRole ? (
+              <Link
+                className="focus-ring hidden min-h-10 items-center rounded-lg border border-border bg-white px-3 text-xs font-bold text-muted transition hover:border-primary hover:text-primary md:inline-flex"
+                href="http://127.0.0.1:3011/"
+              >
+                Admin console
+              </Link>
+            ) : null}
             <Link
               aria-label="Settings"
               className="focus-ring inline-flex h-10 w-10 items-center justify-center rounded-full text-muted transition hover:bg-surface hover:text-primary"
@@ -192,9 +204,24 @@ function ShellChrome({
             </div>
           </div>
 
-          <NavGroup items={primaryNav} label="Member workspace" pathname={pathname} />
-          {hasAdminRole || pathname.startsWith("/admin") ? (
-            <NavGroup items={adminNav} label="Admin workspace" pathname={pathname} />
+          <NavGroup
+            items={memberNav}
+            label={hasMemberAccess ? "Member workspace" : "Account setup"}
+            pathname={pathname}
+          />
+          {hasAdminRole ? (
+            <div className="mb-7 rounded-lg border border-border bg-white p-4">
+              <p className="text-sm font-bold text-ink">Administrative access</p>
+              <p className="mt-2 text-sm leading-6 text-muted">
+                Admin surfaces now run in the isolated RBAC console.
+              </p>
+              <Link
+                className="focus-ring mt-4 inline-flex min-h-10 items-center rounded-lg bg-primary px-4 text-sm font-bold text-white"
+                href="http://127.0.0.1:3011/"
+              >
+                Open admin console
+              </Link>
+            </div>
           ) : null}
         </aside>
 
@@ -288,4 +315,3 @@ function isActivePath(pathname: string, href: string) {
 
   return pathname === href || pathname.startsWith(`${href}/`);
 }
-
