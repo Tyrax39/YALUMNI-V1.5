@@ -40,6 +40,16 @@ def message_headers(user: dict) -> dict[str, str]:
     return auth_headers(user["access_token"])
 
 
+def create_admin(client: TestClient, email: str = "messages.admin@example.com") -> dict[str, str]:
+    registered = register_user(client, email, "Messages Admin")
+    bootstrap_response = client.post(
+        "/api/v1/auth/dev/bootstrap-admin",
+        headers=auth_headers(registered["access_token"]),
+    )
+    assert bootstrap_response.status_code == 200
+    return auth_headers(registered["access_token"])
+
+
 def assert_conversation_participants(conversation: dict, emails: set[str]) -> None:
     assert {participant["email"] for participant in conversation["participants"]} == emails
 
@@ -220,3 +230,153 @@ def test_user_block_prevents_new_direct_messages(client: TestClient) -> None:
     )
     assert allowed_create.status_code == 201
     assert allowed_create.json()["last_message"]["body"] == "Now this can be delivered."
+
+
+def test_direct_message_report_admin_review_remove_restore_flow(client: TestClient) -> None:
+    admin_headers = create_admin(client)
+    amara = register_user(client, "report.amara@example.com", "Report Amara")
+    kojo = register_user(client, "report.kojo@example.com", "Report Kojo")
+
+    create_response = client.post(
+        "/api/v1/messages/conversations",
+        headers=message_headers(amara),
+        json={
+            "participant_user_id": kojo["user"]["id"],
+            "initial_message": "This message should be reviewed by moderation.",
+        },
+    )
+    assert create_response.status_code == 201
+    conversation = create_response.json()
+    message = conversation["last_message"]
+
+    report_response = client.post(
+        f"/api/v1/messages/conversations/{conversation['id']}/messages/{message['id']}/reports",
+        headers=message_headers(kojo),
+        json={"reason": "unsafe content", "note": "This needs a moderator."},
+    )
+    assert report_response.status_code == 201
+    report = report_response.json()
+    assert report["reason"] == "UNSAFE_CONTENT"
+    assert report["status"] == "OPEN"
+    assert report["moderator_note"] is None
+
+    duplicate_response = client.post(
+        f"/api/v1/messages/conversations/{conversation['id']}/messages/{message['id']}/reports",
+        headers=message_headers(kojo),
+        json={"reason": "SPAM"},
+    )
+    assert duplicate_response.status_code == 409
+
+    queue_response = client.get(
+        "/api/v1/messages/admin/moderation/reports",
+        headers=admin_headers,
+    )
+    assert queue_response.status_code == 200
+    queue = queue_response.json()
+    assert queue["total"] == 1
+    assert queue["reports"][0]["message_body"] == "This message should be reviewed by moderation."
+
+    review_response = client.patch(
+        f"/api/v1/messages/admin/moderation/reports/{report['id']}/review",
+        headers=admin_headers,
+        json={
+            "escalation_status": "ESCALATED",
+            "moderator_note": "Escalated for trust review.",
+            "severity": "HIGH",
+        },
+    )
+    assert review_response.status_code == 200
+    reviewed_report = review_response.json()
+    assert reviewed_report["severity"] == "HIGH"
+    assert reviewed_report["escalation_status"] == "ESCALATED"
+    assert reviewed_report["escalated_by_user_id"] is not None
+
+    remove_response = client.post(
+        f"/api/v1/messages/admin/moderation/messages/{message['id']}/remove",
+        headers=admin_headers,
+        json={
+            "escalation_status": "ESCALATED",
+            "moderator_note": "Removed after report review.",
+            "severity": "HIGH",
+        },
+    )
+    assert remove_response.status_code == 200
+    removed_message = remove_response.json()
+    assert removed_message["status"] == "DELETED"
+    assert removed_message["body"] == "This message should be reviewed by moderation."
+    assert removed_message["removed_by_user_id"] is not None
+    assert removed_message["removed_at"] is not None
+    assert removed_message["moderation_note"] == "Removed after report review."
+
+    participant_messages = client.get(
+        f"/api/v1/messages/conversations/{conversation['id']}/messages",
+        headers=message_headers(kojo),
+    )
+    assert participant_messages.status_code == 200
+    visible_message = participant_messages.json()["messages"][0]
+    assert visible_message["status"] == "DELETED"
+    assert visible_message["body"] == "This message was removed by moderation."
+    assert visible_message["moderation_note"] is None
+
+    removed_queue_response = client.get(
+        "/api/v1/messages/admin/moderation/removed-messages",
+        headers=admin_headers,
+    )
+    assert removed_queue_response.status_code == 200
+    removed_queue = removed_queue_response.json()
+    assert removed_queue["total"] == 1
+    assert removed_queue["messages"][0]["report_count"] == 1
+
+    resolve_response = client.post(
+        f"/api/v1/messages/admin/moderation/reports/{report['id']}/resolve",
+        headers=admin_headers,
+    )
+    assert resolve_response.status_code == 200
+    assert resolve_response.json()["status"] == "RESOLVED"
+
+    restore_response = client.post(
+        f"/api/v1/messages/admin/moderation/messages/{message['id']}/restore",
+        headers=admin_headers,
+    )
+    assert restore_response.status_code == 200
+    assert restore_response.json()["status"] == "ACTIVE"
+
+    restored_messages = client.get(
+        f"/api/v1/messages/conversations/{conversation['id']}/messages",
+        headers=message_headers(amara),
+    )
+    assert restored_messages.status_code == 200
+    restored_message = restored_messages.json()["messages"][0]
+    assert restored_message["status"] == "ACTIVE"
+    assert restored_message["body"] == "This message should be reviewed by moderation."
+
+
+def test_direct_message_report_requires_participant_and_admin_role(client: TestClient) -> None:
+    amara = register_user(client, "access.amara@example.com", "Access Amara")
+    kojo = register_user(client, "access.kojo@example.com", "Access Kojo")
+    stranger = register_user(client, "access.stranger@example.com", "Access Stranger")
+
+    create_response = client.post(
+        "/api/v1/messages/conversations",
+        headers=message_headers(amara),
+        json={
+            "participant_user_id": kojo["user"]["id"],
+            "initial_message": "Private message for participants only.",
+        },
+    )
+    assert create_response.status_code == 201
+    conversation = create_response.json()
+    message = conversation["last_message"]
+
+    denied_report = client.post(
+        f"/api/v1/messages/conversations/{conversation['id']}/messages/{message['id']}/reports",
+        headers=message_headers(stranger),
+        json={"reason": "SPAM"},
+    )
+    assert denied_report.status_code == 404
+
+    denied_queue = client.get(
+        "/api/v1/messages/admin/moderation/reports",
+        headers=message_headers(kojo),
+    )
+    assert denied_queue.status_code == 403

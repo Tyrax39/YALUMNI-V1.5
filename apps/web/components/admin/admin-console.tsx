@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 
+import { AdminMessageModerationConsole } from "@/components/admin/admin-message-moderation-console";
 import { AdminModerationConsole } from "@/components/admin/admin-moderation-console";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import {
@@ -143,6 +144,7 @@ function AdminOverviewPanel({ accessToken, email }: { accessToken: string; email
 
           <VerificationQueuePanel accessToken={accessToken} />
           <AdminModerationConsole accessToken={accessToken} />
+          <AdminMessageModerationConsole accessToken={accessToken} />
           <EmailDigestPanel accessToken={accessToken} />
           <AuditLogPanel accessToken={accessToken} />
 

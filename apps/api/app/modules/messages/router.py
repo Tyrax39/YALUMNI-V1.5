@@ -3,16 +3,18 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy import and_, func, or_, select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.core.database import get_db_session
+from app.core.permissions import ADMIN_ROLE_NAMES
 from app.core.security import utcnow
-from app.modules.auth.dependencies import get_current_user
+from app.modules.auth.dependencies import get_current_user, require_roles
 from app.modules.auth.models import SecurityEvent, User
 from app.modules.messages.models import (
     Conversation,
     ConversationParticipant,
     DirectMessage,
+    DirectMessageReport,
     UserBlock,
 )
 from app.modules.messages.schemas import (
@@ -22,8 +24,15 @@ from app.modules.messages.schemas import (
     ConversationResponse,
     MessageCreate,
     MessageListResponse,
+    MessageModerationReviewUpdate,
     MessageReadResponse,
+    MessageReportCreate,
+    MessageReportQueueItem,
+    MessageReportQueueResponse,
+    MessageReportResponse,
     MessageResponse,
+    RemovedMessageQueueItem,
+    RemovedMessageQueueResponse,
     UserBlockCreate,
     UserBlockResponse,
 )
@@ -31,6 +40,12 @@ from app.modules.notifications.service import notify_users
 
 router = APIRouter()
 MESSAGE_STATUSES = {"ACTIVE", "DELETED"}
+MESSAGE_REPORT_REASONS = {"HARASSMENT", "IMPERSONATION", "OTHER", "SPAM", "UNSAFE_CONTENT"}
+MESSAGE_REPORT_STATUSES = {"OPEN", "RESOLVED"}
+MESSAGE_MODERATION_SEVERITIES = {"CRITICAL", "HIGH", "LOW", "MEDIUM"}
+MESSAGE_ESCALATION_STATUSES = {"ESCALATED", "NONE"}
+MESSAGE_REMOVED_BODY = "This message was removed by moderation."
+message_admin_dependency = require_roles(*ADMIN_ROLE_NAMES)
 
 
 def _request_context(request: Request) -> tuple[str | None, str | None]:
@@ -73,17 +88,89 @@ def _serialize_participant(
     )
 
 
-def _serialize_message(message: DirectMessage) -> MessageResponse:
+def _serialize_message(
+    message: DirectMessage,
+    *,
+    include_moderation: bool = False,
+) -> MessageResponse:
+    is_removed = message.status != "ACTIVE"
     return MessageResponse(
         id=message.id,
         conversation_id=message.conversation_id,
         sender_user_id=message.sender_user_id,
         sender_display_name=message.sender.display_name if message.sender else "Deleted user",
-        body=message.body,
+        body=message.body if include_moderation or not is_removed else MESSAGE_REMOVED_BODY,
         status=message.status,
+        removed_by_user_id=message.removed_by_user_id,
+        removed_at=message.deleted_at,
+        moderation_note=message.moderation_note if include_moderation else None,
+        moderation_severity=message.moderation_severity if include_moderation else None,
+        escalation_status=message.escalation_status if include_moderation else None,
+        escalated_by_user_id=message.escalated_by_user_id if include_moderation else None,
+        escalated_at=message.escalated_at if include_moderation else None,
         sent_at=message.sent_at,
         created_at=message.created_at,
         updated_at=message.updated_at,
+    )
+
+
+def _serialize_report(
+    report: DirectMessageReport,
+    *,
+    include_moderation: bool = False,
+) -> MessageReportResponse:
+    return MessageReportResponse(
+        id=report.id,
+        message_id=report.message_id,
+        conversation_id=report.conversation_id,
+        reporter_user_id=report.reporter_user_id,
+        reporter_display_name=report.reporter.display_name if report.reporter else "Deleted user",
+        reason=report.reason,
+        note=report.note,
+        status=report.status,
+        moderator_note=report.moderator_note if include_moderation else None,
+        severity=report.severity if include_moderation else None,
+        escalation_status=report.escalation_status if include_moderation else None,
+        escalated_by_user_id=report.escalated_by_user_id if include_moderation else None,
+        escalated_at=report.escalated_at if include_moderation else None,
+        resolved_by_user_id=report.resolved_by_user_id,
+        resolved_at=report.resolved_at,
+        created_at=report.created_at,
+        updated_at=report.updated_at,
+    )
+
+
+def _serialize_report_queue_item(report: DirectMessageReport) -> MessageReportQueueItem:
+    message = report.message
+    return MessageReportQueueItem(
+        **_serialize_report(report, include_moderation=True).model_dump(),
+        sender_display_name=message.sender.display_name if message.sender else "Deleted user",
+        sender_user_id=message.sender_user_id,
+        message_body=message.body,
+        message_status=message.status,
+        message_removed_at=message.deleted_at,
+        message_sent_at=message.sent_at,
+    )
+
+
+def _serialize_removed_message_queue_item(
+    db: Session,
+    message: DirectMessage,
+) -> RemovedMessageQueueItem:
+    report_count = (
+        db.scalar(
+            select(func.count())
+            .select_from(DirectMessageReport)
+            .where(DirectMessageReport.message_id == message.id)
+        )
+        or 0
+    )
+    return RemovedMessageQueueItem(
+        **_serialize_message(message, include_moderation=True).model_dump(),
+        removed_by_display_name=(
+            message.removed_by_user.display_name if message.removed_by_user else "Deleted user"
+        ),
+        report_count=report_count,
     )
 
 
@@ -239,6 +326,93 @@ def _ensure_messaging_allowed(db: Session, user_id: uuid.UUID, other_user_id: uu
         )
 
 
+def _validate_moderation_review_payload(payload: MessageModerationReviewUpdate) -> None:
+    if payload.severity is not None and payload.severity not in MESSAGE_MODERATION_SEVERITIES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid moderation severity",
+        )
+    if (
+        payload.escalation_status is not None
+        and payload.escalation_status not in MESSAGE_ESCALATION_STATUSES
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid escalation status",
+        )
+
+
+def _apply_escalation_review(
+    target: DirectMessage | DirectMessageReport,
+    escalation_status: str | None,
+    current_user: User,
+) -> None:
+    if escalation_status is None:
+        return
+    if escalation_status == "ESCALATED":
+        if target.escalation_status != "ESCALATED":
+            target.escalated_by_user_id = current_user.id
+            target.escalated_at = utcnow()
+    else:
+        target.escalated_by_user_id = None
+        target.escalated_at = None
+    target.escalation_status = escalation_status
+
+
+def _message_options():
+    return (
+        joinedload(DirectMessage.sender),
+        joinedload(DirectMessage.removed_by_user),
+        joinedload(DirectMessage.escalated_by_user),
+    )
+
+
+def _report_options():
+    return (
+        joinedload(DirectMessageReport.reporter),
+        joinedload(DirectMessageReport.message).joinedload(DirectMessage.sender),
+        joinedload(DirectMessageReport.message).joinedload(DirectMessage.removed_by_user),
+    )
+
+
+def _get_message_for_conversation(
+    db: Session,
+    conversation_id: uuid.UUID,
+    message_id: uuid.UUID,
+) -> DirectMessage:
+    message = db.scalar(
+        select(DirectMessage)
+        .options(*_message_options())
+        .where(
+            DirectMessage.id == message_id,
+            DirectMessage.conversation_id == conversation_id,
+        )
+    )
+    if message is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Message not found")
+    return message
+
+
+def _get_message_or_404(db: Session, message_id: uuid.UUID) -> DirectMessage:
+    message = db.scalar(
+        select(DirectMessage).options(*_message_options()).where(DirectMessage.id == message_id)
+    )
+    if message is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Message not found")
+    return message
+
+
+def _get_report_or_404(db: Session, report_id: uuid.UUID) -> DirectMessageReport:
+    report = db.scalar(
+        select(DirectMessageReport)
+        .options(*_report_options())
+        .where(DirectMessageReport.id == report_id)
+    )
+    if report is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
+    return report
+
+
 def _send_message(
     db: Session,
     conversation: Conversation,
@@ -387,7 +561,11 @@ def list_conversation_messages(
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> MessageListResponse:
     _get_conversation_for_user(db, conversation_id, current_user)
-    query = select(DirectMessage).where(DirectMessage.conversation_id == conversation_id)
+    query = (
+        select(DirectMessage)
+        .options(*_message_options())
+        .where(DirectMessage.conversation_id == conversation_id)
+    )
     total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
     messages = db.scalars(
         query.order_by(DirectMessage.created_at.asc()).offset(offset).limit(limit)
@@ -415,6 +593,75 @@ def send_conversation_message(
     return _serialize_message(message)
 
 
+@router.post(
+    "/conversations/{conversation_id}/messages/{message_id}/reports",
+    response_model=MessageReportResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_direct_message_report(
+    conversation_id: uuid.UUID,
+    message_id: uuid.UUID,
+    payload: MessageReportCreate,
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> MessageReportResponse:
+    _get_conversation_for_user(db, conversation_id, current_user)
+    if payload.reason not in MESSAGE_REPORT_REASONS:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid report reason")
+
+    message = _get_message_for_conversation(db, conversation_id, message_id)
+    if message.status != "ACTIVE":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only active messages can be reported",
+        )
+    if message.sender_user_id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You cannot report your own message",
+        )
+
+    existing_open_report = db.scalar(
+        select(DirectMessageReport.id).where(
+            DirectMessageReport.message_id == message.id,
+            DirectMessageReport.reporter_user_id == current_user.id,
+            DirectMessageReport.status == "OPEN",
+        )
+    )
+    if existing_open_report:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="You already have an open report for this message",
+        )
+
+    report = DirectMessageReport(
+        message_id=message.id,
+        conversation_id=conversation_id,
+        reporter_user_id=current_user.id,
+        reason=payload.reason,
+        note=payload.note,
+        status="OPEN",
+    )
+    db.add(report)
+    db.flush()
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "messages.report_created",
+        metadata={
+            "conversation_id": str(conversation_id),
+            "message_id": str(message.id),
+            "reason": report.reason,
+            "report_id": str(report.id),
+        },
+    )
+    db.commit()
+    report = _get_report_or_404(db, report.id)
+    return _serialize_report(report)
+
+
 @router.post("/conversations/{conversation_id}/read", response_model=MessageReadResponse)
 def mark_conversation_read(
     conversation_id: uuid.UUID,
@@ -433,6 +680,326 @@ def mark_conversation_read(
         last_read_at=participant.last_read_at,
         unread_count=_unread_count(db, conversation_id=conversation_id, participant=participant),
     )
+
+
+@router.get(
+    "/admin/moderation/reports",
+    response_model=MessageReportQueueResponse,
+)
+def list_admin_message_report_queue(
+    current_user: Annotated[User, Depends(message_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+    status_filter: Annotated[
+        str,
+        Query(alias="status", pattern="^(OPEN|RESOLVED|ALL)$"),
+    ] = "OPEN",
+    reason: Annotated[
+        str | None,
+        Query(pattern="^(HARASSMENT|IMPERSONATION|OTHER|SPAM|UNSAFE_CONTENT)$"),
+    ] = None,
+    severity: Annotated[
+        str | None,
+        Query(pattern="^(CRITICAL|HIGH|LOW|MEDIUM)$"),
+    ] = None,
+    escalation_status: Annotated[
+        str | None,
+        Query(pattern="^(ESCALATED|NONE)$"),
+    ] = None,
+    q: Annotated[str | None, Query(max_length=120)] = None,
+    limit: Annotated[int, Query(ge=1, le=50)] = 10,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> MessageReportQueueResponse:
+    _ = current_user
+    normalized_status = status_filter.strip().upper()
+    query = (
+        select(DirectMessageReport)
+        .join(DirectMessage, DirectMessageReport.message_id == DirectMessage.id)
+        .options(*_report_options())
+    )
+    if normalized_status != "ALL":
+        query = query.where(DirectMessageReport.status == normalized_status)
+    if reason:
+        query = query.where(DirectMessageReport.reason == reason.strip().upper())
+    if severity:
+        query = query.where(DirectMessageReport.severity == severity.strip().upper())
+    if escalation_status:
+        query = query.where(
+            DirectMessageReport.escalation_status == escalation_status.strip().upper()
+        )
+    if q:
+        search_term = f"%{q.strip()}%"
+        query = query.where(
+            or_(
+                DirectMessage.body.ilike(search_term),
+                DirectMessageReport.note.ilike(search_term),
+                DirectMessageReport.moderator_note.ilike(search_term),
+            )
+        )
+
+    total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+    reports = db.scalars(
+        query.order_by(DirectMessageReport.created_at.desc()).offset(offset).limit(limit)
+    ).all()
+    return MessageReportQueueResponse(
+        reports=[_serialize_report_queue_item(report) for report in reports],
+        total=total,
+        limit=limit,
+        offset=offset,
+        has_more=offset + len(reports) < total,
+    )
+
+
+@router.patch(
+    "/admin/moderation/reports/{report_id}/review",
+    response_model=MessageReportResponse,
+)
+def update_admin_message_report_review(
+    report_id: uuid.UUID,
+    payload: MessageModerationReviewUpdate,
+    request: Request,
+    current_user: Annotated[User, Depends(message_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> MessageReportResponse:
+    _validate_moderation_review_payload(payload)
+    report = _get_report_or_404(db, report_id)
+    if "moderator_note" in payload.model_fields_set:
+        report.moderator_note = payload.moderator_note
+    if payload.severity is not None:
+        report.severity = payload.severity
+    _apply_escalation_review(report, payload.escalation_status, current_user)
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "messages.report_review_updated",
+        metadata={
+            "escalation_status": report.escalation_status,
+            "message_id": str(report.message_id),
+            "report_id": str(report.id),
+            "severity": report.severity,
+        },
+    )
+    db.commit()
+    report = _get_report_or_404(db, report.id)
+    return _serialize_report(report, include_moderation=True)
+
+
+@router.post(
+    "/admin/moderation/reports/{report_id}/resolve",
+    response_model=MessageReportResponse,
+)
+def resolve_admin_message_report(
+    report_id: uuid.UUID,
+    request: Request,
+    current_user: Annotated[User, Depends(message_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> MessageReportResponse:
+    report = _get_report_or_404(db, report_id)
+    if report.status != "OPEN":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only open reports can be resolved",
+        )
+
+    report.status = "RESOLVED"
+    report.resolved_by_user_id = current_user.id
+    report.resolved_at = utcnow()
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "messages.report_resolved",
+        metadata={
+            "conversation_id": str(report.conversation_id),
+            "message_id": str(report.message_id),
+            "report_id": str(report.id),
+        },
+    )
+    if report.reporter_user_id:
+        notify_users(
+            db,
+            [report.reporter_user_id],
+            actor_user_id=current_user.id,
+            body="A direct message report you submitted has been resolved.",
+            event_type="messages.report_resolved",
+            exclude_user_ids={current_user.id},
+            metadata={
+                "conversation_id": str(report.conversation_id),
+                "message_id": str(report.message_id),
+                "report_id": str(report.id),
+            },
+            target_url="/dashboard",
+            title="Message report resolved",
+        )
+    db.commit()
+    report = _get_report_or_404(db, report.id)
+    return _serialize_report(report, include_moderation=True)
+
+
+@router.get(
+    "/admin/moderation/removed-messages",
+    response_model=RemovedMessageQueueResponse,
+)
+def list_admin_removed_message_queue(
+    current_user: Annotated[User, Depends(message_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+    severity: Annotated[
+        str | None,
+        Query(pattern="^(CRITICAL|HIGH|LOW|MEDIUM)$"),
+    ] = None,
+    escalation_status: Annotated[
+        str | None,
+        Query(pattern="^(ESCALATED|NONE)$"),
+    ] = None,
+    q: Annotated[str | None, Query(max_length=120)] = None,
+    limit: Annotated[int, Query(ge=1, le=50)] = 10,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> RemovedMessageQueueResponse:
+    _ = current_user
+    query = (
+        select(DirectMessage).options(*_message_options()).where(DirectMessage.status == "DELETED")
+    )
+    if severity:
+        query = query.where(DirectMessage.moderation_severity == severity.strip().upper())
+    if escalation_status:
+        query = query.where(DirectMessage.escalation_status == escalation_status.strip().upper())
+    if q:
+        search_term = f"%{q.strip()}%"
+        query = query.where(
+            or_(
+                DirectMessage.body.ilike(search_term),
+                DirectMessage.moderation_note.ilike(search_term),
+            )
+        )
+
+    total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+    messages = db.scalars(
+        query.order_by(DirectMessage.deleted_at.desc(), DirectMessage.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+    ).all()
+    return RemovedMessageQueueResponse(
+        messages=[_serialize_removed_message_queue_item(db, message) for message in messages],
+        total=total,
+        limit=limit,
+        offset=offset,
+        has_more=offset + len(messages) < total,
+    )
+
+
+@router.patch(
+    "/admin/moderation/messages/{message_id}/review",
+    response_model=MessageResponse,
+)
+def update_admin_message_moderation_review(
+    message_id: uuid.UUID,
+    payload: MessageModerationReviewUpdate,
+    request: Request,
+    current_user: Annotated[User, Depends(message_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> MessageResponse:
+    _validate_moderation_review_payload(payload)
+    message = _get_message_or_404(db, message_id)
+    if "moderator_note" in payload.model_fields_set:
+        message.moderation_note = payload.moderator_note
+    if payload.severity is not None:
+        message.moderation_severity = payload.severity
+    _apply_escalation_review(message, payload.escalation_status, current_user)
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "messages.moderation_review_updated",
+        metadata={
+            "conversation_id": str(message.conversation_id),
+            "escalation_status": message.escalation_status,
+            "message_id": str(message.id),
+            "severity": message.moderation_severity,
+        },
+    )
+    db.commit()
+    message = _get_message_or_404(db, message.id)
+    return _serialize_message(message, include_moderation=True)
+
+
+@router.post(
+    "/admin/moderation/messages/{message_id}/remove",
+    response_model=MessageResponse,
+)
+def remove_admin_message(
+    message_id: uuid.UUID,
+    request: Request,
+    current_user: Annotated[User, Depends(message_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+    payload: MessageModerationReviewUpdate | None = None,
+) -> MessageResponse:
+    payload = payload or MessageModerationReviewUpdate()
+    _validate_moderation_review_payload(payload)
+    message = _get_message_or_404(db, message_id)
+    if message.status != "ACTIVE":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only active messages can be removed",
+        )
+
+    message.status = "DELETED"
+    message.deleted_at = utcnow()
+    message.removed_by_user_id = current_user.id
+    if "moderator_note" in payload.model_fields_set:
+        message.moderation_note = payload.moderator_note
+    if payload.severity is not None:
+        message.moderation_severity = payload.severity
+    _apply_escalation_review(message, payload.escalation_status, current_user)
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "messages.message_removed",
+        metadata={
+            "conversation_id": str(message.conversation_id),
+            "message_id": str(message.id),
+            "sender_user_id": str(message.sender_user_id) if message.sender_user_id else None,
+        },
+    )
+    db.commit()
+    message = _get_message_or_404(db, message.id)
+    return _serialize_message(message, include_moderation=True)
+
+
+@router.post(
+    "/admin/moderation/messages/{message_id}/restore",
+    response_model=MessageResponse,
+)
+def restore_admin_message(
+    message_id: uuid.UUID,
+    request: Request,
+    current_user: Annotated[User, Depends(message_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> MessageResponse:
+    message = _get_message_or_404(db, message_id)
+    if message.status != "DELETED":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only removed messages can be restored",
+        )
+
+    message.status = "ACTIVE"
+    message.deleted_at = None
+    message.removed_by_user_id = None
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "messages.message_restored",
+        metadata={
+            "conversation_id": str(message.conversation_id),
+            "message_id": str(message.id),
+            "sender_user_id": str(message.sender_user_id) if message.sender_user_id else None,
+        },
+    )
+    db.commit()
+    message = _get_message_or_404(db, message.id)
+    return _serialize_message(message, include_moderation=True)
 
 
 @router.get("/blocks", response_model=list[UserBlockResponse])

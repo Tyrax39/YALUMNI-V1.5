@@ -104,14 +104,18 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
   conversation lists.
 - Message list/send. Implemented for participant-only history, sends, unread
   counts, dashboard reply UI, and received-message notifications.
+- Direct message trust and moderation. Implemented participant reporting,
+  admin report queues, internal review notes, severity/escalation metadata,
+  removed-message redaction, restore actions, and admin console controls.
 - WebSocket events.
 - Blocks and read receipts. Started with user block/unblock APIs, dashboard
   block controls, block enforcement, and conversation-level `last_read_at`
   markers. Per-message receipts remain open.
 - Redis/WebSocket fanout, production worker supervision, queued delivery, push,
-  message attachments, reactions, per-message read receipts, retries, bounces,
-  unsubscribe/compliance controls, distributed worker locking, and delivery
-  audit exports remain open.
+  message attachments, reactions, typing/presence, message search, per-message
+  read receipts, group conversations, retention/export tooling, retries,
+  bounces, unsubscribe/compliance controls, distributed worker locking, and
+  delivery audit exports remain open.
 
 ## Phase 8: Events
 

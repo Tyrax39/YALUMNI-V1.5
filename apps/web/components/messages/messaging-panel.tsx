@@ -2,15 +2,17 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
-import { MessageSquare, Search, Send, ShieldOff } from "lucide-react";
+import { Flag, MessageSquare, Search, Send, ShieldOff } from "lucide-react";
 
 import {
   AlumniDirectoryProfile,
   ApiError,
   blockUser,
   Conversation,
+  createDirectMessageReport,
   createDirectConversation,
   DirectMessage,
+  DirectMessageReportCreatePayload,
   listConversationMessages,
   listConversations,
   listUserBlocks,
@@ -46,6 +48,13 @@ type SearchState =
 const conversationPageSize = 8;
 const messagePageSize = 50;
 const emptyConversations: Conversation[] = [];
+const reportReasons: Array<[NonNullable<DirectMessageReportCreatePayload["reason"]>, string]> = [
+  ["SPAM", "Spam"],
+  ["HARASSMENT", "Harassment"],
+  ["IMPERSONATION", "Impersonation"],
+  ["UNSAFE_CONTENT", "Unsafe content"],
+  ["OTHER", "Other"]
+];
 
 export function MessagingPanel({ accessToken, currentUserId }: MessagingPanelProps) {
   const [conversationState, setConversationState] = useState<ConversationState>({
@@ -60,6 +69,10 @@ export function MessagingPanel({ accessToken, currentUserId }: MessagingPanelPro
   const [draft, setDraft] = useState("");
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [reportingMessageId, setReportingMessageId] = useState<string | null>(null);
+  const [reportReason, setReportReason] =
+    useState<NonNullable<DirectMessageReportCreatePayload["reason"]>>("SPAM");
+  const [reportNote, setReportNote] = useState("");
 
   useEffect(() => {
     void loadConversations();
@@ -214,6 +227,25 @@ export function MessagingPanel({ accessToken, currentUserId }: MessagingPanelPro
     }
   }
 
+  async function handleReportMessage(message: DirectMessage) {
+    setBusyAction(`report:${message.id}`);
+    setNotice(null);
+    try {
+      await createDirectMessageReport(accessToken, message.conversation_id, message.id, {
+        note: reportNote,
+        reason: reportReason
+      });
+      setNotice("Message reported for moderation review.");
+      setReportingMessageId(null);
+      setReportReason("SPAM");
+      setReportNote("");
+    } catch (caught) {
+      setNotice(caught instanceof ApiError ? caught.message : "Message report could not be sent.");
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
   return (
     <section className="mt-10 rounded-lg border border-border bg-white p-6 shadow-soft">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
@@ -357,9 +389,25 @@ export function MessagingPanel({ accessToken, currentUserId }: MessagingPanelPro
                 ) : null}
                 {messageState.messages.map((message) => (
                   <MessageBubble
+                    busyAction={busyAction}
                     currentUserId={currentUserId}
+                    isReporting={reportingMessageId === message.id}
                     key={message.id}
                     message={message}
+                    onCancelReport={() => {
+                      setReportingMessageId(null);
+                      setReportNote("");
+                    }}
+                    onOpenReport={() => {
+                      setReportingMessageId(message.id);
+                      setReportReason("SPAM");
+                      setReportNote("");
+                    }}
+                    onReport={() => handleReportMessage(message)}
+                    onReportNoteChange={setReportNote}
+                    onReportReasonChange={setReportReason}
+                    reportNote={reportNote}
+                    reportReason={reportReason}
                   />
                 ))}
               </div>
@@ -473,15 +521,34 @@ function ConversationButton({
 }
 
 function MessageBubble({
+  busyAction,
   currentUserId,
-  message
+  isReporting,
+  message,
+  onCancelReport,
+  onOpenReport,
+  onReport,
+  onReportNoteChange,
+  onReportReasonChange,
+  reportNote,
+  reportReason
 }: {
+  busyAction: string | null;
   currentUserId: string;
+  isReporting: boolean;
   message: DirectMessage;
+  onCancelReport: () => void;
+  onOpenReport: () => void;
+  onReport: () => void;
+  onReportNoteChange: (value: string) => void;
+  onReportReasonChange: (value: NonNullable<DirectMessageReportCreatePayload["reason"]>) => void;
+  reportNote: string;
+  reportReason: NonNullable<DirectMessageReportCreatePayload["reason"]>;
 }) {
   const isMine = message.sender_user_id === currentUserId;
+  const canReport = !isMine && message.status === "ACTIVE";
   return (
-    <article className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
+    <article className={`grid gap-2 ${isMine ? "justify-items-end" : "justify-items-start"}`}>
       <div
         className={`max-w-[82%] rounded-lg px-4 py-3 ${
           isMine ? "bg-primary text-white" : "border border-border bg-surface text-ink"
@@ -491,7 +558,78 @@ function MessageBubble({
           {message.sender_display_name} · {new Date(message.sent_at).toLocaleString()}
         </p>
         <p className="mt-2 whitespace-pre-wrap text-sm leading-6">{message.body}</p>
+        {message.status !== "ACTIVE" ? (
+          <p className={`mt-2 text-xs font-semibold ${isMine ? "text-white/75" : "text-muted"}`}>
+            Removed
+          </p>
+        ) : null}
       </div>
+      {canReport ? (
+        <div className="max-w-[82%]">
+          {isReporting ? (
+            <div className="grid gap-2 rounded-lg border border-border bg-white p-3 shadow-soft">
+              <div className="grid gap-2 sm:grid-cols-[0.5fr_1fr]">
+                <label className="grid gap-1 text-xs font-semibold text-ink">
+                  Reason
+                  <select
+                    className="h-10 rounded-lg border border-border bg-white px-3 text-sm font-normal text-ink outline-none transition focus:border-primary"
+                    onChange={(event) =>
+                      onReportReasonChange(
+                        event.target.value as NonNullable<
+                          DirectMessageReportCreatePayload["reason"]
+                        >
+                      )
+                    }
+                    value={reportReason}
+                  >
+                    {reportReasons.map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="grid gap-1 text-xs font-semibold text-ink">
+                  Note
+                  <input
+                    className="h-10 rounded-lg border border-border bg-white px-3 text-sm font-normal text-ink outline-none transition focus:border-primary"
+                    maxLength={1000}
+                    onChange={(event) => onReportNoteChange(event.target.value)}
+                    placeholder="Optional context"
+                    value={reportNote}
+                  />
+                </label>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  className="focus-ring inline-flex min-h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-semibold text-white transition hover:bg-[#003d7d] disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={busyAction === `report:${message.id}`}
+                  onClick={onReport}
+                  type="button"
+                >
+                  {busyAction === `report:${message.id}` ? "Reporting..." : "Submit report"}
+                </button>
+                <button
+                  className="focus-ring inline-flex min-h-10 items-center justify-center rounded-lg border border-border px-4 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary"
+                  onClick={onCancelReport}
+                  type="button"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              className="focus-ring inline-flex min-h-9 items-center gap-2 rounded-lg border border-border bg-white px-3 text-xs font-semibold text-muted transition hover:border-danger hover:text-danger"
+              onClick={onOpenReport}
+              type="button"
+            >
+              <Flag aria-hidden="true" className="h-3.5 w-3.5" />
+              Report
+            </button>
+          )}
+        </div>
+      ) : null}
     </article>
   );
 }

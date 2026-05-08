@@ -98,7 +98,15 @@ POST /api/v1/messages/conversations
 GET  /api/v1/messages/conversations/{conversation_id}
 GET  /api/v1/messages/conversations/{conversation_id}/messages
 POST /api/v1/messages/conversations/{conversation_id}/messages
+POST /api/v1/messages/conversations/{conversation_id}/messages/{message_id}/reports
 POST /api/v1/messages/conversations/{conversation_id}/read
+GET  /api/v1/messages/admin/moderation/reports
+PATCH /api/v1/messages/admin/moderation/reports/{report_id}/review
+POST /api/v1/messages/admin/moderation/reports/{report_id}/resolve
+GET  /api/v1/messages/admin/moderation/removed-messages
+PATCH /api/v1/messages/admin/moderation/messages/{message_id}/review
+POST /api/v1/messages/admin/moderation/messages/{message_id}/remove
+POST /api/v1/messages/admin/moderation/messages/{message_id}/restore
 GET  /api/v1/messages/blocks
 POST /api/v1/messages/blocks
 DELETE /api/v1/messages/blocks/{blocked_user_id}
@@ -326,8 +334,27 @@ Direct messaging support:
 - `POST /api/v1/messages/conversations/{conversation_id}/messages` sends a
   direct message, updates `last_message_at`, stamps the sender's read marker,
   and creates received-message notifications for the other participant.
+- `POST /api/v1/messages/conversations/{conversation_id}/messages/{message_id}/reports`
+  lets participants report active messages from other senders. Report reasons
+  are `SPAM`, `HARASSMENT`, `IMPERSONATION`, `UNSAFE_CONTENT`, and `OTHER`.
 - `POST /api/v1/messages/conversations/{conversation_id}/read` updates the
   current participant's `last_read_at` marker.
+- `GET /api/v1/messages/admin/moderation/reports` gives admin roles a
+  paginated direct-message report queue with message context. It supports
+  `status=OPEN|RESOLVED|ALL`, `reason`, `severity`, `escalation_status`, `q`,
+  `limit`, and `offset`.
+- `PATCH /api/v1/messages/admin/moderation/reports/{report_id}/review` and
+  `PATCH /api/v1/messages/admin/moderation/messages/{message_id}/review` save
+  internal moderation notes, `LOW|MEDIUM|HIGH|CRITICAL` severity, and
+  `NONE|ESCALATED` escalation state.
+- `POST /api/v1/messages/admin/moderation/messages/{message_id}/remove`
+  redacts an active message from participant views while preserving admin-only
+  moderation context. `POST /api/v1/messages/admin/moderation/messages/{message_id}/restore`
+  restores a removed message.
+- `GET /api/v1/messages/admin/moderation/removed-messages` lists removed
+  direct messages with remover metadata and report counts.
+- `POST /api/v1/messages/admin/moderation/reports/{report_id}/resolve` closes
+  open direct-message reports and notifies the reporter.
 - `GET /api/v1/messages/blocks`, `POST /api/v1/messages/blocks`, and
   `DELETE /api/v1/messages/blocks/{blocked_user_id}` manage current-user
   contact blocks. Blocks prevent new conversations and sends in either
@@ -392,7 +419,15 @@ POST   /api/v1/messages/conversations                       # implemented
 GET    /api/v1/messages/conversations/{conversation_id}      # implemented
 GET    /api/v1/messages/conversations/{conversation_id}/messages # implemented
 POST   /api/v1/messages/conversations/{conversation_id}/messages # implemented
+POST   /api/v1/messages/conversations/{conversation_id}/messages/{message_id}/reports # implemented
 POST   /api/v1/messages/conversations/{conversation_id}/read # implemented
+GET    /api/v1/messages/admin/moderation/reports # implemented
+PATCH  /api/v1/messages/admin/moderation/reports/{report_id}/review # implemented
+POST   /api/v1/messages/admin/moderation/reports/{report_id}/resolve # implemented
+GET    /api/v1/messages/admin/moderation/removed-messages # implemented
+PATCH  /api/v1/messages/admin/moderation/messages/{message_id}/review # implemented
+POST   /api/v1/messages/admin/moderation/messages/{message_id}/remove # implemented
+POST   /api/v1/messages/admin/moderation/messages/{message_id}/restore # implemented
 GET    /api/v1/messages/blocks                              # implemented
 POST   /api/v1/messages/blocks                              # implemented
 DELETE /api/v1/messages/blocks/{blocked_user_id}            # implemented

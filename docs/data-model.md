@@ -63,7 +63,8 @@
 
 - `conversations` - implemented for direct one-to-one conversation records with creator, type, timestamps, and last-message timestamp.
 - `conversation_participants` - implemented for conversation membership, current-user read marker, archive/mute placeholders, and one record per conversation user.
-- `direct_messages` - implemented for participant-scoped message history with sender, body, active/deleted status, sent timestamp, and edit/delete placeholders.
+- `direct_messages` - implemented for participant-scoped message history with sender, body, active/deleted status, sent timestamp, edit/delete placeholders, moderation notes, severity, escalation state, remover, and removal timestamp.
+- `direct_message_reports` - implemented with reporter, reason, reporter note, open/resolved status, moderator note, severity, escalation state, resolver, resolution timestamp, and admin report queue support.
 - `message_attachments`
 - `message_read_receipts` - not split yet; MVP read state is stored as `conversation_participants.last_read_at`.
 - `message_reactions`

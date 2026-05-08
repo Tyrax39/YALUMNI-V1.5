@@ -206,9 +206,66 @@ export type DirectMessage = {
   sender_display_name: string;
   body: string;
   status: string;
+  removed_by_user_id: string | null;
+  removed_at: string | null;
+  moderation_note: string | null;
+  moderation_severity: string | null;
+  escalation_status: string | null;
+  escalated_by_user_id: string | null;
+  escalated_at: string | null;
   sent_at: string;
   created_at: string;
   updated_at: string;
+};
+
+export type DirectMessageReport = {
+  id: string;
+  message_id: string;
+  conversation_id: string;
+  reporter_user_id: string | null;
+  reporter_display_name: string;
+  reason: string;
+  note: string | null;
+  status: string;
+  moderator_note: string | null;
+  severity: string | null;
+  escalation_status: string | null;
+  escalated_by_user_id: string | null;
+  escalated_at: string | null;
+  resolved_by_user_id: string | null;
+  resolved_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type DirectMessageReportQueueItem = DirectMessageReport & {
+  sender_display_name: string;
+  sender_user_id: string | null;
+  message_body: string;
+  message_status: string;
+  message_removed_at: string | null;
+  message_sent_at: string;
+};
+
+export type DirectMessageReportQueueResponse = {
+  reports: DirectMessageReportQueueItem[];
+  total: number;
+  limit: number;
+  offset: number;
+  has_more: boolean;
+};
+
+export type RemovedDirectMessageQueueItem = DirectMessage & {
+  removed_by_display_name: string;
+  report_count: number;
+};
+
+export type RemovedDirectMessageQueueResponse = {
+  messages: RemovedDirectMessageQueueItem[];
+  total: number;
+  limit: number;
+  offset: number;
+  has_more: boolean;
 };
 
 export type Conversation = {
@@ -245,6 +302,11 @@ export type ConversationCreatePayload = {
 
 export type MessageCreatePayload = {
   body: string;
+};
+
+export type DirectMessageReportCreatePayload = {
+  note?: string | null;
+  reason?: "HARASSMENT" | "IMPERSONATION" | "OTHER" | "SPAM" | "UNSAFE_CONTENT";
 };
 
 export type MessageReadResponse = {
@@ -1141,12 +1203,179 @@ export function sendDirectMessage(
   );
 }
 
+export function createDirectMessageReport(
+  accessToken: string,
+  conversationId: string,
+  messageId: string,
+  payload: DirectMessageReportCreatePayload
+): Promise<DirectMessageReport> {
+  return protectedApiFetch<DirectMessageReport>(
+    `/api/v1/messages/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/reports`,
+    {
+      body: JSON.stringify(payload),
+      headers: authHeaders(accessToken),
+      method: "POST"
+    }
+  );
+}
+
 export function markConversationRead(
   accessToken: string,
   conversationId: string
 ): Promise<MessageReadResponse> {
   return protectedApiFetch<MessageReadResponse>(
     `/api/v1/messages/conversations/${encodeURIComponent(conversationId)}/read`,
+    {
+      headers: authHeaders(accessToken),
+      method: "POST"
+    }
+  );
+}
+
+export function listAdminDirectMessageReports(
+  accessToken: string,
+  params: {
+    escalationStatus?: string;
+    limit?: number;
+    offset?: number;
+    q?: string;
+    reason?: string;
+    severity?: string;
+    status?: string;
+  } = {}
+): Promise<DirectMessageReportQueueResponse> {
+  const searchParams = new URLSearchParams();
+  if (params.status) {
+    searchParams.set("status", params.status);
+  }
+  if (params.reason) {
+    searchParams.set("reason", params.reason);
+  }
+  if (params.severity) {
+    searchParams.set("severity", params.severity);
+  }
+  if (params.escalationStatus) {
+    searchParams.set("escalation_status", params.escalationStatus);
+  }
+  if (params.q) {
+    searchParams.set("q", params.q);
+  }
+  if (params.limit) {
+    searchParams.set("limit", String(params.limit));
+  }
+  if (params.offset) {
+    searchParams.set("offset", String(params.offset));
+  }
+
+  const query = searchParams.toString();
+  return protectedApiFetch<DirectMessageReportQueueResponse>(
+    `/api/v1/messages/admin/moderation/reports${query ? `?${query}` : ""}`,
+    {
+      headers: authHeaders(accessToken)
+    }
+  );
+}
+
+export function listAdminRemovedDirectMessages(
+  accessToken: string,
+  params: {
+    escalationStatus?: string;
+    limit?: number;
+    offset?: number;
+    q?: string;
+    severity?: string;
+  } = {}
+): Promise<RemovedDirectMessageQueueResponse> {
+  const searchParams = new URLSearchParams();
+  if (params.severity) {
+    searchParams.set("severity", params.severity);
+  }
+  if (params.escalationStatus) {
+    searchParams.set("escalation_status", params.escalationStatus);
+  }
+  if (params.q) {
+    searchParams.set("q", params.q);
+  }
+  if (params.limit) {
+    searchParams.set("limit", String(params.limit));
+  }
+  if (params.offset) {
+    searchParams.set("offset", String(params.offset));
+  }
+
+  const query = searchParams.toString();
+  return protectedApiFetch<RemovedDirectMessageQueueResponse>(
+    `/api/v1/messages/admin/moderation/removed-messages${query ? `?${query}` : ""}`,
+    {
+      headers: authHeaders(accessToken)
+    }
+  );
+}
+
+export function resolveDirectMessageReport(
+  accessToken: string,
+  reportId: string
+): Promise<DirectMessageReport> {
+  return protectedApiFetch<DirectMessageReport>(
+    `/api/v1/messages/admin/moderation/reports/${encodeURIComponent(reportId)}/resolve`,
+    {
+      headers: authHeaders(accessToken),
+      method: "POST"
+    }
+  );
+}
+
+export function updateDirectMessageReportReview(
+  accessToken: string,
+  reportId: string,
+  payload: CommunityModerationReviewUpdatePayload
+): Promise<DirectMessageReport> {
+  return protectedApiFetch<DirectMessageReport>(
+    `/api/v1/messages/admin/moderation/reports/${encodeURIComponent(reportId)}/review`,
+    {
+      body: JSON.stringify(payload),
+      headers: authHeaders(accessToken),
+      method: "PATCH"
+    }
+  );
+}
+
+export function updateDirectMessageModerationReview(
+  accessToken: string,
+  messageId: string,
+  payload: CommunityModerationReviewUpdatePayload
+): Promise<DirectMessage> {
+  return protectedApiFetch<DirectMessage>(
+    `/api/v1/messages/admin/moderation/messages/${encodeURIComponent(messageId)}/review`,
+    {
+      body: JSON.stringify(payload),
+      headers: authHeaders(accessToken),
+      method: "PATCH"
+    }
+  );
+}
+
+export function removeDirectMessage(
+  accessToken: string,
+  messageId: string,
+  payload: CommunityModerationReviewUpdatePayload = {}
+): Promise<DirectMessage> {
+  return protectedApiFetch<DirectMessage>(
+    `/api/v1/messages/admin/moderation/messages/${encodeURIComponent(messageId)}/remove`,
+    {
+      body: JSON.stringify(payload),
+      headers: authHeaders(accessToken),
+      method: "POST"
+    }
+  );
+}
+
+export function restoreDirectMessage(
+  accessToken: string,
+  messageId: string
+): Promise<DirectMessage> {
+  return protectedApiFetch<DirectMessage>(
+    `/api/v1/messages/admin/moderation/messages/${encodeURIComponent(messageId)}/restore`,
     {
       headers: authHeaders(accessToken),
       method: "POST"

@@ -67,6 +67,11 @@ class DirectMessage(Base, TimestampMixin):
     __table_args__ = (
         Index("ix_direct_messages_conversation_created", "conversation_id", "created_at"),
         Index("ix_direct_messages_sender_created", "sender_user_id", "created_at"),
+        Index(
+            "ix_direct_messages_moderation_escalation",
+            "moderation_severity",
+            "escalation_status",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -77,8 +82,22 @@ class DirectMessage(Base, TimestampMixin):
     sender_user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"),
     )
+    removed_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+    )
     body: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(String(40), default="ACTIVE", nullable=False)
+    moderation_note: Mapped[str | None] = mapped_column(Text)
+    moderation_severity: Mapped[str] = mapped_column(
+        String(40),
+        default="MEDIUM",
+        nullable=False,
+    )
+    escalation_status: Mapped[str] = mapped_column(String(40), default="NONE", nullable=False)
+    escalated_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+    )
+    escalated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     sent_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=utcnow,
@@ -89,6 +108,57 @@ class DirectMessage(Base, TimestampMixin):
 
     conversation: Mapped[Conversation] = relationship(back_populates="messages")
     sender: Mapped[User | None] = relationship(foreign_keys=[sender_user_id])
+    removed_by_user: Mapped[User | None] = relationship(foreign_keys=[removed_by_user_id])
+    escalated_by_user: Mapped[User | None] = relationship(foreign_keys=[escalated_by_user_id])
+    reports: Mapped[list["DirectMessageReport"]] = relationship(
+        back_populates="message",
+        cascade="all, delete-orphan",
+        order_by="DirectMessageReport.created_at.desc()",
+    )
+
+
+class DirectMessageReport(Base, TimestampMixin):
+    __tablename__ = "direct_message_reports"
+    __table_args__ = (
+        UniqueConstraint("message_id", "reporter_user_id", name="uq_direct_message_reporter"),
+        Index("ix_direct_message_reports_message_status", "message_id", "status"),
+        Index("ix_direct_message_reports_reporter_status", "reporter_user_id", "status"),
+        Index("ix_direct_message_reports_conversation_status", "conversation_id", "status"),
+        Index("ix_direct_message_reports_review", "severity", "escalation_status"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    message_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("direct_messages.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    conversation_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("conversations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    reporter_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+    )
+    reason: Mapped[str] = mapped_column(String(80), nullable=False)
+    note: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(40), default="OPEN", nullable=False)
+    moderator_note: Mapped[str | None] = mapped_column(Text)
+    severity: Mapped[str] = mapped_column(String(40), default="MEDIUM", nullable=False)
+    escalation_status: Mapped[str] = mapped_column(String(40), default="NONE", nullable=False)
+    escalated_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+    )
+    escalated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    resolved_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+    )
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    message: Mapped[DirectMessage] = relationship(back_populates="reports")
+    conversation: Mapped[Conversation] = relationship()
+    reporter: Mapped[User | None] = relationship(foreign_keys=[reporter_user_id])
+    escalated_by_user: Mapped[User | None] = relationship(foreign_keys=[escalated_by_user_id])
+    resolved_by_user: Mapped[User | None] = relationship(foreign_keys=[resolved_by_user_id])
 
 
 class UserBlock(Base, TimestampMixin):

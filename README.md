@@ -68,7 +68,8 @@ The current milestone is platform foundation plus the first identity, alumni pro
 - Registration, login, refresh, logout, current-user lookup, email verification, password reset, role-gated admin overview, session management, and in-process rate limiting
 - Protected platform owner seed, role restoration, and local-only test-account seeding through environment configuration
 - Current-user alumni profile, profile photo upload/display, program affiliation, visibility JSON settings, dashboard profile completion panel, verification request submission, private storage-backed evidence uploads, admin review queue, and verified alumni directory search
-- Role-gated admin overview, verification queue, and audit log viewer for recorded security events
+- Role-gated admin overview, verification queue, audit log viewer, community moderation queues, direct-message report queues, removed-message review, and digest controls
+- Direct conversations with participant guards, unread counts, contact blocking, reporting, admin redaction, and restore controls
 - Docker Compose for PostgreSQL, Redis, API, and web
 - CI workflow for web build and API tests
 - Architecture, API, data model, security, migration, development test-account, and project status docs

@@ -31,6 +31,46 @@ class MessageCreate(BaseModel):
         return normalized
 
 
+class MessageReportCreate(BaseModel):
+    reason: str = Field(default="OTHER", max_length=80)
+    note: str | None = Field(default=None, max_length=1000)
+
+    @field_validator("reason")
+    @classmethod
+    def normalize_reason(cls, value: str) -> str:
+        value = value.strip().upper().replace(" ", "_")
+        return value or "OTHER"
+
+    @field_validator("note")
+    @classmethod
+    def normalize_note(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+
+class MessageModerationReviewUpdate(BaseModel):
+    moderator_note: str | None = Field(default=None, max_length=2000)
+    severity: str | None = Field(default=None, max_length=40)
+    escalation_status: str | None = Field(default=None, max_length=40)
+
+    @field_validator("moderator_note")
+    @classmethod
+    def normalize_note(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+    @field_validator("severity", "escalation_status")
+    @classmethod
+    def normalize_enums(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return value.strip().upper().replace(" ", "_")
+
+
 class UserBlockCreate(BaseModel):
     blocked_user_id: uuid.UUID
     reason: str | None = Field(default=None, max_length=500)
@@ -63,11 +103,70 @@ class MessageResponse(BaseModel):
     sender_display_name: str
     body: str
     status: str
+    removed_by_user_id: uuid.UUID | None
+    removed_at: datetime | None
+    moderation_note: str | None
+    moderation_severity: str | None
+    escalation_status: str | None
+    escalated_by_user_id: uuid.UUID | None
+    escalated_at: datetime | None
     sent_at: datetime
     created_at: datetime
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class MessageReportResponse(BaseModel):
+    id: uuid.UUID
+    message_id: uuid.UUID
+    conversation_id: uuid.UUID
+    reporter_user_id: uuid.UUID | None
+    reporter_display_name: str
+    reason: str
+    note: str | None
+    status: str
+    moderator_note: str | None
+    severity: str | None
+    escalation_status: str | None
+    escalated_by_user_id: uuid.UUID | None
+    escalated_at: datetime | None
+    resolved_by_user_id: uuid.UUID | None
+    resolved_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class MessageReportQueueItem(MessageReportResponse):
+    sender_display_name: str
+    sender_user_id: uuid.UUID | None
+    message_body: str
+    message_status: str
+    message_removed_at: datetime | None
+    message_sent_at: datetime
+
+
+class MessageReportQueueResponse(BaseModel):
+    reports: list[MessageReportQueueItem]
+    total: int
+    limit: int
+    offset: int
+    has_more: bool
+
+
+class RemovedMessageQueueItem(MessageResponse):
+    removed_by_display_name: str
+    report_count: int
+
+
+class RemovedMessageQueueResponse(BaseModel):
+    messages: list[RemovedMessageQueueItem]
+    total: int
+    limit: int
+    offset: int
+    has_more: bool
 
 
 class ConversationResponse(BaseModel):
