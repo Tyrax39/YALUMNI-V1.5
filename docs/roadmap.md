@@ -95,9 +95,10 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
   muted event types, and digest-frequency preference records.
 - Email delivery foundation. Started with console/SMTP delivery for account
   verification, password reset, and community invitations.
-- Email digest worker foundation. Started with admin-run dry-run/delivery
-  endpoint, digest sent tracking, admin console controls, and console/SMTP
-  notification summary emails.
+- Email digest worker foundation. Implemented for admin-run dry-run/delivery
+  endpoint, digest sent tracking, admin console controls, console/SMTP
+  notification summary emails, and a standalone CLI worker with daily/weekly
+  cadence, dry-run, force, loop, and audit-event recording.
 - Direct conversations. Implemented for one-to-one conversations, participant
   guards, conversation reuse, dashboard search/start UI, and current-user
   conversation lists.
@@ -107,9 +108,10 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
 - Blocks and read receipts. Started with user block/unblock APIs, dashboard
   block controls, block enforcement, and conversation-level `last_read_at`
   markers. Per-message receipts remain open.
-- Redis/WebSocket fanout, scheduled worker execution, queued delivery, push,
+- Redis/WebSocket fanout, production worker supervision, queued delivery, push,
   message attachments, reactions, per-message read receipts, retries, bounces,
-  unsubscribe/compliance controls, and delivery audit exports remain open.
+  unsubscribe/compliance controls, distributed worker locking, and delivery
+  audit exports remain open.
 
 ## Phase 8: Events
 

@@ -15,6 +15,7 @@
     "test:api": "cd apps/api && python -m pytest",
     "lint:api": "cd apps/api && python -m ruff check .",
     "format:api": "cd apps/api && python -m ruff format .",
+    "worker:api:notification-digests": "cd apps/api && python -m app.workers.notification_digests",
     "verify": "npm run lint:web && npm run typecheck:web && npm run build:web && npm run lint:api && npm run test:api"
   },
   "engines": {

@@ -36,6 +36,16 @@ Web:
 npm run dev:web
 ```
 
+Notification digest worker:
+
+```bash
+npm run worker:api:notification-digests -- --once
+```
+
+Remove `--once` to run the worker loop. The worker uses
+`NOTIFICATION_DIGEST_WORKER_*` settings and records digest worker events in the
+admin audit log.
+
 Docker:
 
 ```bash

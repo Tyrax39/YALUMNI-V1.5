@@ -49,6 +49,11 @@ class Settings(BaseSettings):
     community_post_media_upload_max_bytes: int = 8 * 1024 * 1024
     community_post_media_allowed_types: str = "image/jpeg,image/png,image/webp,application/pdf"
     notification_stream_poll_seconds: int = 8
+    notification_digest_worker_interval_seconds: int = 3600
+    notification_digest_worker_frequencies: str = "DAILY,WEEKLY"
+    notification_digest_worker_limit: int = 100
+    notification_digest_worker_max_items_per_email: int = 10
+    notification_digest_worker_include_read: bool = False
     s3_endpoint_url: str | None = None
     s3_access_key_id: str | None = None
     s3_secret_access_key: str | None = None

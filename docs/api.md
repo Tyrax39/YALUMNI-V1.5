@@ -121,6 +121,9 @@ Email delivery support:
   identity and generated account/invitation links.
 - The same delivery abstraction now supports admin-run notification digest
   emails for users with `DAILY` or `WEEKLY` digest preferences.
+- Notification digests can also be processed by the background worker entrypoint
+  `python -m app.workers.notification_digests` from `apps/api`, or with
+  `npm run worker:api:notification-digests -- --once` from the monorepo root.
 - Local/dev auth and invitation responses still include one-time `dev_*` tokens
   for QA. Production responses suppress those tokens and rely on email links.
 
@@ -290,6 +293,11 @@ Notification center support:
   a dry-run or delivery pass for daily/weekly email digests. Delivered
   notifications are stamped with `email_digest_sent_at` so later runs do not
   resend them.
+- The notification digest worker processes `DAILY` and `WEEKLY` frequencies on
+  cadence, records `notifications.email_digest_worker.*` events in
+  `security_events`, supports `--dry-run`, `--force`, `--once`,
+  `--interval-seconds`, `--limit`, and `--max-items-per-email`, and does not let
+  dry runs advance delivery cadence.
 - `POST /api/v1/notifications/{notification_id}/read` marks a single current
   user notification as read. Other users' notification IDs return 404.
 - `POST /api/v1/notifications/read-all` marks all current-user unread
@@ -300,9 +308,9 @@ Notification center support:
   restoration, new comments on owned posts, report resolution, new post reports,
   moderation escalations, and received direct messages.
 - Email delivery is currently direct console/SMTP sending for auth,
-  invitation, and admin-run digest emails. Queue/retry behavior, scheduled
-  worker execution, bounce tracking, and delivery audit exports remain future
-  production work.
+  invitation, admin-run digest emails, and worker-run digest emails.
+  Queue/retry behavior, distributed worker locking, bounce tracking, and
+  delivery audit exports remain future production work.
 
 Direct messaging support:
 

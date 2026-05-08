@@ -47,7 +47,8 @@
 ### Notifications
 
 - `notifications` - implemented as the user-facing notification inbox with recipient, optional actor, event type, title, body, target URL, metadata, read timestamp, email digest sent timestamp, and created/updated timestamps.
-- `notification_preferences` - implemented as current-user notification controls with in-app master toggle, digest frequency, muted event type list, and one record per user. Admin-run digest delivery now consumes these preferences; scheduled worker execution remains a production hardening task.
+- `notification_preferences` - implemented as current-user notification controls with in-app master toggle, digest frequency, muted event type list, and one record per user. Admin-run and worker-run digest delivery both consume these preferences.
+- `security_events` - also records notification digest worker dry-run, success, and failure events using `notifications.email_digest_worker.*` event types so the worker has lightweight cadence and audit state without adding a dedicated job table yet.
 
 ### Feed
 
