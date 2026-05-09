@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import {
   type AdminVerificationAction,
+  type AdminVerificationEvidence,
   type AdminVerificationRequest,
   type CommunityPostReport,
   type DirectMessageReport,
@@ -20,21 +21,31 @@ import {
   restoreCommunityPostComment,
   restoreDirectMessage,
   reviewAdminVerificationRequest,
+  updateCommunityPostCommentModerationReview,
+  updateCommunityPostModerationReview,
+  updateCommunityPostReportReview,
+  updateDirectMessageModerationReview,
+  updateDirectMessageReportReview,
+  verificationEvidenceDownloadUrl,
   type CommunityRemovedComment,
   type CommunityRemovedCommentResponse,
   type CommunityRemovedPost,
   type CommunityRemovedPostResponse,
   type CommunityPostReportResponse,
   type DirectMessageReportResponse,
+  type ModerationReviewPayload,
   type RemovedDirectMessage,
   type RemovedDirectMessageResponse
 } from "@yalumni/frontend-shared";
 import {
   CheckCircle2,
   ClipboardCheck,
+  Download,
+  FileText,
   MessageSquareWarning,
   RefreshCcw,
   RotateCcw,
+  Save,
   ShieldAlert,
   UserCheck,
   XCircle
@@ -191,6 +202,7 @@ export function LiveVerificationQueue() {
                         value={`${request.evidence?.length ?? request.evidence_count ?? 0} file(s)`}
                       />
                     </div>
+                    <EvidenceList evidence={request.evidence ?? []} requestId={request.id} />
                   </div>
                   <div className="min-w-64">
                     <label className="text-xs font-bold uppercase tracking-[0.12em] text-muted">
@@ -372,6 +384,13 @@ export function LiveModerationQueues() {
                       "Community report resolved."
                     )
                   }
+                  onSaveReview={(item, payload) =>
+                    runAction(
+                      `community-report-review:${item.id}`,
+                      () => updateCommunityPostReportReview(item, payload),
+                      "Community report review saved."
+                    )
+                  }
                   report={report}
                 />
               ))
@@ -404,6 +423,13 @@ export function LiveModerationQueues() {
                       "Message report resolved."
                     )
                   }
+                  onSaveReview={(item, payload) =>
+                    runAction(
+                      `message-report-review:${item.id}`,
+                      () => updateDirectMessageReportReview(item.id, payload),
+                      "Message report review saved."
+                    )
+                  }
                   report={report}
                 />
               ))
@@ -428,6 +454,13 @@ export function LiveModerationQueues() {
                         `post-restore:${item.id}`,
                         () => restoreCommunityPost(item),
                         "Post restored."
+                      )
+                    }
+                    onSaveReview={(item, payload) =>
+                      runAction(
+                        `post-review:${item.id}`,
+                        () => updateCommunityPostModerationReview(item, payload),
+                        "Post review metadata saved."
                       )
                     }
                     post={post}
@@ -456,6 +489,13 @@ export function LiveModerationQueues() {
                         "Comment restored."
                       )
                     }
+                    onSaveReview={(item, payload) =>
+                      runAction(
+                        `comment-review:${item.id}`,
+                        () => updateCommunityPostCommentModerationReview(item, payload),
+                        "Comment review metadata saved."
+                      )
+                    }
                   />
                 ))
               ) : (
@@ -479,6 +519,13 @@ export function LiveModerationQueues() {
                         `message-restore:${messageItem.id}`,
                         () => restoreDirectMessage(messageItem.id),
                         "Direct message restored."
+                      )
+                    }
+                    onSaveReview={(messageItem, payload) =>
+                      runAction(
+                        `message-review:${messageItem.id}`,
+                        () => updateDirectMessageModerationReview(messageItem.id, payload),
+                        "Message review metadata saved."
                       )
                     }
                   />
@@ -574,22 +621,31 @@ function QueuePanel({
 function CommunityReportRow({
   busyAction,
   onResolve,
+  onSaveReview,
   report
 }: {
   busyAction: string | null;
   onResolve: (report: CommunityPostReport) => void;
+  onSaveReview: (report: CommunityPostReport, payload: ModerationReviewPayload) => void;
   report: CommunityPostReport;
 }) {
   return (
     <ModerationRow
       actions={
-        <ActionButton
-          busy={busyAction === `community-report:${report.id}`}
-          icon={<CheckCircle2 aria-hidden="true" className="h-4 w-4" />}
-          label="Resolve"
-          onClick={() => onResolve(report)}
-          tone="primary"
-        />
+        <div className="grid gap-2">
+          <ActionButton
+            busy={busyAction === `community-report:${report.id}`}
+            icon={<CheckCircle2 aria-hidden="true" className="h-4 w-4" />}
+            label="Resolve"
+            onClick={() => onResolve(report)}
+            tone="primary"
+          />
+          <ReviewControls
+            busy={busyAction === `community-report-review:${report.id}`}
+            onSave={(payload) => onSaveReview(report, payload)}
+            source={report}
+          />
+        </div>
       }
       body={report.post_body || "No post preview available."}
       meta={[
@@ -607,30 +663,39 @@ function DirectMessageReportRow({
   busyAction,
   onRemove,
   onResolve,
+  onSaveReview,
   report
 }: {
   busyAction: string | null;
   onRemove: (report: DirectMessageReport) => void;
   onResolve: (report: DirectMessageReport) => void;
+  onSaveReview: (report: DirectMessageReport, payload: ModerationReviewPayload) => void;
   report: DirectMessageReport;
 }) {
   return (
     <ModerationRow
       actions={
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
-          <ActionButton
-            busy={busyAction === `message-report:${report.id}`}
-            icon={<CheckCircle2 aria-hidden="true" className="h-4 w-4" />}
-            label="Resolve"
-            onClick={() => onResolve(report)}
-            tone="primary"
-          />
-          <ActionButton
-            busy={busyAction === `message-remove:${report.message_id}`}
-            icon={<MessageSquareWarning aria-hidden="true" className="h-4 w-4" />}
-            label="Remove"
-            onClick={() => onRemove(report)}
-            tone="danger"
+        <div className="grid gap-2">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
+            <ActionButton
+              busy={busyAction === `message-report:${report.id}`}
+              icon={<CheckCircle2 aria-hidden="true" className="h-4 w-4" />}
+              label="Resolve"
+              onClick={() => onResolve(report)}
+              tone="primary"
+            />
+            <ActionButton
+              busy={busyAction === `message-remove:${report.message_id}`}
+              icon={<MessageSquareWarning aria-hidden="true" className="h-4 w-4" />}
+              label="Remove"
+              onClick={() => onRemove(report)}
+              tone="danger"
+            />
+          </div>
+          <ReviewControls
+            busy={busyAction === `message-report-review:${report.id}`}
+            onSave={(payload) => onSaveReview(report, payload)}
+            source={report}
           />
         </div>
       }
@@ -649,10 +714,12 @@ function DirectMessageReportRow({
 function RemovedPostRow({
   busyAction,
   onRestore,
+  onSaveReview,
   post
 }: {
   busyAction: string | null;
   onRestore: (post: CommunityRemovedPost) => void;
+  onSaveReview: (post: CommunityRemovedPost, payload: ModerationReviewPayload) => void;
   post: CommunityRemovedPost;
 }) {
   return (
@@ -661,6 +728,13 @@ function RemovedPostRow({
       busy={busyAction === `post-restore:${post.id}`}
       meta={`${post.community_name ?? "Community"} · removed by ${post.removed_by_display_name ?? "unknown"}`}
       onRestore={() => onRestore(post)}
+      reviewControls={
+        <ReviewControls
+          busy={busyAction === `post-review:${post.id}`}
+          onSave={(payload) => onSaveReview(post, payload)}
+          source={post}
+        />
+      }
       title={post.author_display_name || "Removed post"}
     />
   );
@@ -669,11 +743,13 @@ function RemovedPostRow({
 function RemovedCommentRow({
   busyAction,
   comment,
-  onRestore
+  onRestore,
+  onSaveReview
 }: {
   busyAction: string | null;
   comment: CommunityRemovedComment;
   onRestore: (comment: CommunityRemovedComment) => void;
+  onSaveReview: (comment: CommunityRemovedComment, payload: ModerationReviewPayload) => void;
 }) {
   return (
     <RemovedContentRow
@@ -681,6 +757,13 @@ function RemovedCommentRow({
       busy={busyAction === `comment-restore:${comment.id}`}
       meta={`${comment.community_name ?? "Community"} · removed by ${comment.removed_by_display_name ?? "unknown"}`}
       onRestore={() => onRestore(comment)}
+      reviewControls={
+        <ReviewControls
+          busy={busyAction === `comment-review:${comment.id}`}
+          onSave={(payload) => onSaveReview(comment, payload)}
+          source={comment}
+        />
+      }
       title={comment.author_display_name || "Removed comment"}
     />
   );
@@ -689,11 +772,13 @@ function RemovedCommentRow({
 function RemovedMessageRow({
   busyAction,
   item,
-  onRestore
+  onRestore,
+  onSaveReview
 }: {
   busyAction: string | null;
   item: RemovedDirectMessage;
   onRestore: (item: RemovedDirectMessage) => void;
+  onSaveReview: (item: RemovedDirectMessage, payload: ModerationReviewPayload) => void;
 }) {
   return (
     <RemovedContentRow
@@ -701,6 +786,13 @@ function RemovedMessageRow({
       busy={busyAction === `message-restore:${item.id}`}
       meta={`Sender ${item.sender_display_name ?? "unknown"} · ${item.report_count ?? 0} reports`}
       onRestore={() => onRestore(item)}
+      reviewControls={
+        <ReviewControls
+          busy={busyAction === `message-review:${item.id}`}
+          onSave={(payload) => onSaveReview(item, payload)}
+          source={item}
+        />
+      }
       title="Removed direct message"
     />
   );
@@ -721,7 +813,7 @@ function ModerationRow({
 }) {
   return (
     <article className="rounded-lg border border-border bg-white p-4">
-      <div className="grid gap-4 lg:grid-cols-[1fr_auto]">
+      <div className="grid gap-4 lg:grid-cols-[1fr_280px]">
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <h4 className="text-sm font-bold text-ink">{title}</h4>
@@ -734,7 +826,7 @@ function ModerationRow({
             {meta.join(" · ")}
           </p>
         </div>
-        <div className="min-w-40">{actions}</div>
+        <div>{actions}</div>
       </div>
     </article>
   );
@@ -745,12 +837,14 @@ function RemovedContentRow({
   busy,
   meta,
   onRestore,
+  reviewControls,
   title
 }: {
   body: string;
   busy: boolean;
   meta: string;
   onRestore: () => void;
+  reviewControls: ReactNode;
   title: string;
 }) {
   return (
@@ -758,7 +852,7 @@ function RemovedContentRow({
       <h4 className="text-sm font-bold text-ink">{title}</h4>
       <p className="mt-2 text-sm leading-6 text-muted">{truncate(body, 140)}</p>
       <p className="mt-3 text-xs font-semibold uppercase tracking-[0.1em] text-muted">{meta}</p>
-      <div className="mt-3">
+      <div className="mt-3 grid gap-3">
         <ActionButton
           busy={busy}
           icon={<RotateCcw aria-hidden="true" className="h-4 w-4" />}
@@ -766,6 +860,7 @@ function RemovedContentRow({
           onClick={onRestore}
           tone="neutral"
         />
+        {reviewControls}
       </div>
     </article>
   );
@@ -801,6 +896,138 @@ function ActionButton({
       {icon}
       {busy ? "Working" : label}
     </button>
+  );
+}
+
+function ReviewControls({
+  busy,
+  onSave,
+  source
+}: {
+  busy: boolean;
+  onSave: (payload: ModerationReviewPayload) => void;
+  source: ReviewSource;
+}) {
+  const [note, setNote] = useState(source.moderator_note ?? source.moderation_note ?? source.note ?? "");
+  const [severity, setSeverity] = useState(source.severity ?? source.moderation_severity ?? "");
+  const [escalationStatus, setEscalationStatus] = useState(source.escalation_status ?? "");
+
+  function handleSave() {
+    const payload: ModerationReviewPayload = {
+      moderator_note: note.trim() || null
+    };
+
+    if (severity) {
+      payload.severity = severity;
+    }
+    if (escalationStatus) {
+      payload.escalation_status = escalationStatus;
+    }
+    onSave(payload);
+  }
+
+  return (
+    <div className="rounded-lg border border-border bg-surface p-3">
+      <label className="text-xs font-bold uppercase tracking-[0.1em] text-muted">
+        Review metadata
+      </label>
+      <textarea
+        className="mt-2 min-h-20 w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-ink outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+        onChange={(event) => setNote(event.target.value)}
+        placeholder="Moderator note"
+        value={note}
+      />
+      <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
+        <select
+          className="min-h-10 rounded-md border border-border bg-white px-3 text-sm font-semibold text-ink outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+          onChange={(event) => setSeverity(event.target.value)}
+          value={severity}
+        >
+          <option value="">Keep severity</option>
+          <option value="LOW">Low</option>
+          <option value="MEDIUM">Medium</option>
+          <option value="HIGH">High</option>
+          <option value="CRITICAL">Critical</option>
+        </select>
+        <select
+          className="min-h-10 rounded-md border border-border bg-white px-3 text-sm font-semibold text-ink outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+          onChange={(event) => setEscalationStatus(event.target.value)}
+          value={escalationStatus}
+        >
+          <option value="">Keep escalation</option>
+          <option value="NONE">None</option>
+          <option value="ESCALATED">Escalated</option>
+        </select>
+      </div>
+      <div className="mt-2">
+        <ActionButton
+          busy={busy}
+          icon={<Save aria-hidden="true" className="h-4 w-4" />}
+          label="Save review"
+          onClick={handleSave}
+          tone="neutral"
+        />
+      </div>
+    </div>
+  );
+}
+
+type ReviewSource = {
+  escalation_status?: string | null;
+  moderation_note?: string | null;
+  moderation_severity?: string | null;
+  moderator_note?: string | null;
+  note?: string | null;
+  severity?: string | null;
+};
+
+function EvidenceList({
+  evidence,
+  requestId
+}: {
+  evidence: AdminVerificationEvidence[];
+  requestId: string;
+}) {
+  if (!evidence.length) {
+    return (
+      <div className="mt-4 rounded-lg border border-dashed border-border bg-white px-4 py-3 text-sm font-semibold text-muted">
+        No evidence files attached.
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4 rounded-lg border border-border bg-white">
+      <div className="border-b border-border px-4 py-3 text-xs font-bold uppercase tracking-[0.12em] text-muted">
+        Evidence files
+      </div>
+      <div className="divide-y divide-border">
+        {evidence.map((item) => (
+          <div className="grid gap-3 px-4 py-3 sm:grid-cols-[1fr_auto] sm:items-center" key={item.id}>
+            <div className="min-w-0">
+              <p className="flex items-center gap-2 truncate text-sm font-bold text-ink">
+                <FileText aria-hidden="true" className="h-4 w-4 shrink-0 text-primary" />
+                {item.file_name ?? item.label ?? "Evidence file"}
+              </p>
+              <p className="mt-1 text-xs font-semibold text-muted">
+                {[item.label, item.content_type, formatFileSize(item.file_size_bytes)]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
+            </div>
+            <a
+              className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-border bg-white px-3 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary"
+              href={verificationEvidenceDownloadUrl(requestId, item.id)}
+              rel="noreferrer"
+              target="_blank"
+            >
+              <Download aria-hidden="true" className="h-4 w-4" />
+              Download
+            </a>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -877,6 +1104,21 @@ function reviewMessage(action: AdminVerificationAction) {
 
 function truncate(value: string, maxLength = 220) {
   return value.length > maxLength ? `${value.slice(0, maxLength - 1)}...` : value;
+}
+
+function formatFileSize(value: null | number | undefined) {
+  if (typeof value !== "number") {
+    return null;
+  }
+
+  if (value < 1024) {
+    return `${value} B`;
+  }
+  if (value < 1024 * 1024) {
+    return `${(value / 1024).toFixed(1)} KB`;
+  }
+
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function compactStrings(values: Array<null | string | undefined>) {

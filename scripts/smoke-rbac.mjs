@@ -4,6 +4,7 @@ const superAdminBaseUrl = (process.env.SMOKE_SUPERADMIN_URL ?? "http://127.0.0.1
 
 const superAdminEmail = process.env.SMOKE_SUPERADMIN_EMAIL;
 const superAdminPassword = process.env.SMOKE_SUPERADMIN_PASSWORD;
+const superAdminJars = new Map();
 
 class CookieJar {
   cookies = new Map();
@@ -129,8 +130,16 @@ async function login(baseUrl, email, password) {
   return jar;
 }
 
+async function loginSuperAdmin(baseUrl) {
+  if (!superAdminJars.has(baseUrl)) {
+    superAdminJars.set(baseUrl, await login(baseUrl, superAdminEmail, superAdminPassword));
+  }
+
+  return superAdminJars.get(baseUrl);
+}
+
 async function assertSuperAdminAccess(baseUrl, label, expectedRoute) {
-  const jar = await login(baseUrl, superAdminEmail, superAdminPassword);
+  const jar = await loginSuperAdmin(baseUrl);
   const meResponse = await request(baseUrl, "/api/backend/api/v1/auth/me", {}, jar);
   assert(meResponse.status === 200, `${label} /auth/me should return 200, got ${meResponse.status}`);
   const me = await readJson(meResponse);

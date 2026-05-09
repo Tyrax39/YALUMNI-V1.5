@@ -39,6 +39,17 @@ export type AdminAuditEventListResponse = {
   total: number;
 };
 
+export type AdminVerificationEvidence = {
+  content_type?: string | null;
+  created_at?: string;
+  file_name?: string | null;
+  file_size_bytes?: number | null;
+  id: string;
+  label?: string | null;
+  storage_provider?: string | null;
+  uploaded_by_user_id?: string | null;
+};
+
 export type AdminVerificationRequest = {
   affiliation_country?: string | null;
   affiliation_notes?: string | null;
@@ -46,7 +57,7 @@ export type AdminVerificationRequest = {
   created_at: string;
   display_name?: string | null;
   email?: string | null;
-  evidence?: Array<{ id: string; label?: string | null; file_name?: string | null }>;
+  evidence?: AdminVerificationEvidence[];
   evidence_count?: number;
   id: string;
   profile_snapshot?: {
@@ -80,6 +91,12 @@ export type AdminVerificationRequestListResponse = {
 
 export type AdminVerificationAction = "approve" | "reject" | "request-info";
 
+export type ModerationReviewPayload = {
+  escalation_status?: string | null;
+  moderator_note?: string | null;
+  severity?: string | null;
+};
+
 export type CommunityPostReport = {
   community_id: string;
   community_name?: string | null;
@@ -87,6 +104,8 @@ export type CommunityPostReport = {
   created_at: string;
   escalation_status?: string | null;
   id: string;
+  moderator_note?: string | null;
+  note?: string | null;
   post_author_display_name?: string | null;
   post_body?: string | null;
   post_id: string;
@@ -104,6 +123,7 @@ export type CommunityRemovedPost = {
   community_slug?: string | null;
   escalation_status?: string | null;
   id: string;
+  moderation_note?: string | null;
   moderation_severity?: string | null;
   removed_at?: string | null;
   removed_by_display_name?: string | null;
@@ -117,6 +137,7 @@ export type CommunityRemovedComment = {
   community_slug?: string | null;
   escalation_status?: string | null;
   id: string;
+  moderation_note?: string | null;
   moderation_severity?: string | null;
   post_body?: string | null;
   post_id: string;
@@ -133,6 +154,8 @@ export type DirectMessageReport = {
   message_removed_at?: string | null;
   message_sent_at?: string | null;
   message_status?: string | null;
+  moderator_note?: string | null;
+  note?: string | null;
   reason: string;
   reporter_display_name?: string | null;
   sender_display_name?: string | null;
@@ -145,6 +168,7 @@ export type RemovedDirectMessage = {
   body?: string | null;
   escalation_status?: string | null;
   id: string;
+  moderation_note?: string | null;
   moderation_severity?: string | null;
   removed_at?: string | null;
   removed_by_display_name?: string | null;
@@ -292,6 +316,12 @@ export function reviewAdminVerificationRequest(
   );
 }
 
+export function verificationEvidenceDownloadUrl(requestId: string, evidenceId: string): string {
+  return `/api/backend/api/v1/alumni/verification-requests/${encodeURIComponent(
+    requestId
+  )}/evidence/${encodeURIComponent(evidenceId)}/download`;
+}
+
 export function fetchCommunityPostReports(limit = 8): Promise<CommunityPostReportResponse> {
   return fetchJson<CommunityPostReportResponse>(
     `/api/backend/api/v1/communities/admin/moderation/post-reports?status=OPEN&limit=${limit}`
@@ -314,6 +344,39 @@ export function resolveCommunityPostReport(report: CommunityPostReport): Promise
   return mutateJson<CommunityPostReport>(
     `/api/backend/api/v1/communities/${report.community_id}/posts/${report.post_id}/reports/${report.id}/resolve`,
     "POST"
+  );
+}
+
+export function updateCommunityPostReportReview(
+  report: CommunityPostReport,
+  payload: ModerationReviewPayload
+): Promise<CommunityPostReport> {
+  return mutateJson<CommunityPostReport>(
+    `/api/backend/api/v1/communities/${report.community_id}/posts/${report.post_id}/reports/${report.id}/review`,
+    "PATCH",
+    payload
+  );
+}
+
+export function updateCommunityPostModerationReview(
+  post: CommunityRemovedPost,
+  payload: ModerationReviewPayload
+): Promise<CommunityRemovedPost> {
+  return mutateJson<CommunityRemovedPost>(
+    `/api/backend/api/v1/communities/${post.community_id}/posts/${post.id}/moderation-review`,
+    "PATCH",
+    payload
+  );
+}
+
+export function updateCommunityPostCommentModerationReview(
+  comment: CommunityRemovedComment,
+  payload: ModerationReviewPayload
+): Promise<CommunityRemovedComment> {
+  return mutateJson<CommunityRemovedComment>(
+    `/api/backend/api/v1/communities/${comment.community_id}/posts/${comment.post_id}/comments/${comment.id}/moderation-review`,
+    "PATCH",
+    payload
   );
 }
 
@@ -352,10 +415,36 @@ export function resolveDirectMessageReport(reportId: string): Promise<DirectMess
   );
 }
 
-export function removeDirectMessage(messageId: string): Promise<DirectMessageReport> {
+export function updateDirectMessageReportReview(
+  reportId: string,
+  payload: ModerationReviewPayload
+): Promise<DirectMessageReport> {
+  return mutateJson<DirectMessageReport>(
+    `/api/backend/api/v1/messages/admin/moderation/reports/${reportId}/review`,
+    "PATCH",
+    payload
+  );
+}
+
+export function updateDirectMessageModerationReview(
+  messageId: string,
+  payload: ModerationReviewPayload
+): Promise<RemovedDirectMessage> {
+  return mutateJson<RemovedDirectMessage>(
+    `/api/backend/api/v1/messages/admin/moderation/messages/${messageId}/review`,
+    "PATCH",
+    payload
+  );
+}
+
+export function removeDirectMessage(
+  messageId: string,
+  payload: ModerationReviewPayload = {}
+): Promise<DirectMessageReport> {
   return mutateJson<DirectMessageReport>(
     `/api/backend/api/v1/messages/admin/moderation/messages/${messageId}/remove`,
-    "POST"
+    "POST",
+    payload
   );
 }
 
