@@ -216,6 +216,16 @@ export type RemovedDirectMessageResponse = {
   total: number;
 };
 
+export type ModerationQueueFilters = {
+  escalationStatus?: string;
+  limit?: number;
+  offset?: number;
+  q?: string;
+  reason?: string;
+  severity?: string;
+  status?: string;
+};
+
 export class ApiClientError extends Error {
   status: number;
 
@@ -322,21 +332,46 @@ export function verificationEvidenceDownloadUrl(requestId: string, evidenceId: s
   )}/evidence/${encodeURIComponent(evidenceId)}/download`;
 }
 
-export function fetchCommunityPostReports(limit = 8): Promise<CommunityPostReportResponse> {
+function moderationQueryString(filters: ModerationQueueFilters, defaults: ModerationQueueFilters = {}) {
+  const params = new URLSearchParams();
+  const merged = { ...defaults, ...filters };
+
+  for (const [key, value] of Object.entries(merged)) {
+    if (typeof value === "undefined" || value === null || value === "") {
+      continue;
+    }
+
+    const queryKey = key === "escalationStatus" ? "escalation_status" : key;
+    params.set(queryKey, String(value));
+  }
+
+  return params.toString();
+}
+
+export function fetchCommunityPostReports(
+  filters: ModerationQueueFilters = {}
+): Promise<CommunityPostReportResponse> {
+  const query = moderationQueryString(filters, { limit: 8, offset: 0, status: "OPEN" });
   return fetchJson<CommunityPostReportResponse>(
-    `/api/backend/api/v1/communities/admin/moderation/post-reports?status=OPEN&limit=${limit}`
+    `/api/backend/api/v1/communities/admin/moderation/post-reports?${query}`
   );
 }
 
-export function fetchCommunityRemovedPosts(limit = 6): Promise<CommunityRemovedPostResponse> {
+export function fetchCommunityRemovedPosts(
+  filters: ModerationQueueFilters = {}
+): Promise<CommunityRemovedPostResponse> {
+  const query = moderationQueryString(filters, { limit: 6, offset: 0 });
   return fetchJson<CommunityRemovedPostResponse>(
-    `/api/backend/api/v1/communities/admin/moderation/removed-posts?limit=${limit}`
+    `/api/backend/api/v1/communities/admin/moderation/removed-posts?${query}`
   );
 }
 
-export function fetchCommunityRemovedComments(limit = 6): Promise<CommunityRemovedCommentResponse> {
+export function fetchCommunityRemovedComments(
+  filters: ModerationQueueFilters = {}
+): Promise<CommunityRemovedCommentResponse> {
+  const query = moderationQueryString(filters, { limit: 6, offset: 0 });
   return fetchJson<CommunityRemovedCommentResponse>(
-    `/api/backend/api/v1/communities/admin/moderation/removed-comments?limit=${limit}`
+    `/api/backend/api/v1/communities/admin/moderation/removed-comments?${query}`
   );
 }
 
@@ -396,15 +431,21 @@ export function restoreCommunityPostComment(
   );
 }
 
-export function fetchDirectMessageReports(limit = 8): Promise<DirectMessageReportResponse> {
+export function fetchDirectMessageReports(
+  filters: ModerationQueueFilters = {}
+): Promise<DirectMessageReportResponse> {
+  const query = moderationQueryString(filters, { limit: 8, offset: 0, status: "OPEN" });
   return fetchJson<DirectMessageReportResponse>(
-    `/api/backend/api/v1/messages/admin/moderation/reports?status=OPEN&limit=${limit}`
+    `/api/backend/api/v1/messages/admin/moderation/reports?${query}`
   );
 }
 
-export function fetchRemovedDirectMessages(limit = 6): Promise<RemovedDirectMessageResponse> {
+export function fetchRemovedDirectMessages(
+  filters: ModerationQueueFilters = {}
+): Promise<RemovedDirectMessageResponse> {
+  const query = moderationQueryString(filters, { limit: 6, offset: 0 });
   return fetchJson<RemovedDirectMessageResponse>(
-    `/api/backend/api/v1/messages/admin/moderation/removed-messages?limit=${limit}`
+    `/api/backend/api/v1/messages/admin/moderation/removed-messages?${query}`
   );
 }
 

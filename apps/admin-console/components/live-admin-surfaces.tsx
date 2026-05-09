@@ -33,19 +33,25 @@ import {
   type CommunityRemovedPostResponse,
   type CommunityPostReportResponse,
   type DirectMessageReportResponse,
+  type ModerationQueueFilters,
   type ModerationReviewPayload,
   type RemovedDirectMessage,
   type RemovedDirectMessageResponse
 } from "@yalumni/frontend-shared";
 import {
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   ClipboardCheck,
   Download,
+  Eye,
+  FilterX,
   FileText,
   MessageSquareWarning,
   RefreshCcw,
   RotateCcw,
   Save,
+  Search,
   ShieldAlert,
   UserCheck,
   XCircle
@@ -68,17 +74,48 @@ type ModerationState =
     }
   | { message: string; status: "error" };
 
+type ModerationQueueKey =
+  | "communityRemovedComments"
+  | "communityRemovedPosts"
+  | "communityReports"
+  | "messageReports"
+  | "removedMessages";
+
+type ModerationFilterState = {
+  escalationStatus: string;
+  q: string;
+  severity: string;
+  status: "ALL" | "OPEN" | "RESOLVED";
+};
+
+const MODERATION_QUEUE_LIMITS: Record<ModerationQueueKey, number> = {
+  communityRemovedComments: 6,
+  communityRemovedPosts: 6,
+  communityReports: 8,
+  messageReports: 8,
+  removedMessages: 6
+};
+
+const INITIAL_MODERATION_OFFSETS: Record<ModerationQueueKey, number> = {
+  communityRemovedComments: 0,
+  communityRemovedPosts: 0,
+  communityReports: 0,
+  messageReports: 0,
+  removedMessages: 0
+};
+
 export function LiveVerificationQueue() {
   const [state, setState] = useState<VerificationState>({ status: "loading" });
   const [reloadKey, setReloadKey] = useState(0);
   const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState("PENDING_REVIEW");
   const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
 
-    fetchAdminVerificationRequests()
+    fetchAdminVerificationRequests(statusFilter)
       .then((response) => {
         if (!isMounted) {
           return;
@@ -99,11 +136,16 @@ export function LiveVerificationQueue() {
     return () => {
       isMounted = false;
     };
-  }, [reloadKey]);
+  }, [reloadKey, statusFilter]);
 
   function refreshVerificationQueue() {
     setState({ status: "loading" });
     setReloadKey((current) => current + 1);
+  }
+
+  function updateVerificationStatus(value: string) {
+    setStatusFilter(value);
+    setState({ status: "loading" });
   }
 
   const metrics = useMemo(() => {
@@ -161,6 +203,20 @@ export function LiveVerificationQueue() {
 
       <MetricStrip metrics={metrics} />
       <Notice message={message} />
+      <div className="mt-5 rounded-lg border border-border bg-surface p-4">
+        <FilterSelect
+          label="Verification queue"
+          onChange={updateVerificationStatus}
+          options={[
+            ["PENDING_REVIEW", "Pending review"],
+            ["MORE_INFO_REQUESTED", "More info requested"],
+            ["APPROVED", "Approved"],
+            ["REJECTED", "Rejected"],
+            ["ALL", "All requests"]
+          ]}
+          value={statusFilter}
+        />
+      </div>
 
       {state.status === "loading" ? (
         <LoadingPanel label="Loading pending verification requests." />
@@ -259,17 +315,57 @@ export function LiveModerationQueues() {
   const [state, setState] = useState<ModerationState>({ status: "loading" });
   const [reloadKey, setReloadKey] = useState(0);
   const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [filters, setFilters] = useState<ModerationFilterState>({
+    escalationStatus: "",
+    q: "",
+    severity: "",
+    status: "OPEN"
+  });
+  const [offsets, setOffsets] = useState<Record<ModerationQueueKey, number>>(
+    INITIAL_MODERATION_OFFSETS
+  );
   const [message, setMessage] = useState<string | null>(null);
+
+  const sharedFilters = useMemo<ModerationQueueFilters>(
+    () => ({
+      escalationStatus: filters.escalationStatus || undefined,
+      q: filters.q.trim() || undefined,
+      severity: filters.severity || undefined
+    }),
+    [filters.escalationStatus, filters.q, filters.severity]
+  );
 
   useEffect(() => {
     let isMounted = true;
 
     Promise.all([
-      fetchCommunityPostReports(),
-      fetchCommunityRemovedPosts(),
-      fetchCommunityRemovedComments(),
-      fetchDirectMessageReports(),
-      fetchRemovedDirectMessages()
+      fetchCommunityPostReports({
+        ...sharedFilters,
+        limit: MODERATION_QUEUE_LIMITS.communityReports,
+        offset: offsets.communityReports,
+        status: filters.status
+      }),
+      fetchCommunityRemovedPosts({
+        ...sharedFilters,
+        limit: MODERATION_QUEUE_LIMITS.communityRemovedPosts,
+        offset: offsets.communityRemovedPosts
+      }),
+      fetchCommunityRemovedComments({
+        ...sharedFilters,
+        limit: MODERATION_QUEUE_LIMITS.communityRemovedComments,
+        offset: offsets.communityRemovedComments
+      }),
+      fetchDirectMessageReports({
+        ...sharedFilters,
+        limit: MODERATION_QUEUE_LIMITS.messageReports,
+        offset: offsets.messageReports,
+        status: filters.status
+      }),
+      fetchRemovedDirectMessages({
+        ...sharedFilters,
+        limit: MODERATION_QUEUE_LIMITS.removedMessages,
+        offset: offsets.removedMessages
+      })
     ])
       .then(
         ([
@@ -305,11 +401,42 @@ export function LiveModerationQueues() {
     return () => {
       isMounted = false;
     };
-  }, [reloadKey]);
+  }, [filters.status, offsets, reloadKey, sharedFilters]);
 
   function refreshModerationQueues() {
     setState({ status: "loading" });
     setReloadKey((current) => current + 1);
+  }
+
+  function updateFilter(patch: Partial<ModerationFilterState>) {
+    setFilters((current) => ({ ...current, ...patch }));
+    setOffsets(INITIAL_MODERATION_OFFSETS);
+    setState({ status: "loading" });
+  }
+
+  function resetFilters() {
+    setFilters({
+      escalationStatus: "",
+      q: "",
+      severity: "",
+      status: "OPEN"
+    });
+    setOffsets(INITIAL_MODERATION_OFFSETS);
+    setState({ status: "loading" });
+  }
+
+  function moveQueue(queue: ModerationQueueKey, direction: "next" | "previous") {
+    setOffsets((current) => {
+      const limit = MODERATION_QUEUE_LIMITS[queue];
+      return {
+        ...current,
+        [queue]:
+          direction === "next"
+            ? current[queue] + limit
+            : Math.max(0, current[queue] - limit)
+      };
+    });
+    setState({ status: "loading" });
   }
 
   const metrics = useMemo(() => {
@@ -361,6 +488,7 @@ export function LiveModerationQueues() {
 
       <MetricStrip metrics={metrics} />
       <Notice message={message} />
+      <ModerationFilterBar filters={filters} onChange={updateFilter} onReset={resetFilters} />
 
       {state.status === "loading" ? <LoadingPanel label="Loading moderation queues." /> : null}
       {state.status === "error" ? <ErrorPanel message={state.message} /> : null}
@@ -370,6 +498,14 @@ export function LiveModerationQueues() {
           <QueuePanel
             count={state.communityReports.total}
             description="Reported posts across communities."
+            footer={
+              <QueuePager
+                itemCount={state.communityReports.reports.length}
+                onNext={() => moveQueue("communityReports", "next")}
+                onPrevious={() => moveQueue("communityReports", "previous")}
+                response={state.communityReports}
+              />
+            }
             title="Community post reports"
           >
             {state.communityReports.reports.length ? (
@@ -402,6 +538,14 @@ export function LiveModerationQueues() {
           <QueuePanel
             count={state.messageReports.total}
             description="Reported direct messages that may require moderator action."
+            footer={
+              <QueuePager
+                itemCount={state.messageReports.reports.length}
+                onNext={() => moveQueue("messageReports", "next")}
+                onPrevious={() => moveQueue("messageReports", "previous")}
+                response={state.messageReports}
+              />
+            }
             title="Direct message reports"
           >
             {state.messageReports.reports.length ? (
@@ -442,6 +586,14 @@ export function LiveModerationQueues() {
             <QueuePanel
               count={state.communityRemovedPosts.total}
               description="Removed community posts available for restoration."
+              footer={
+                <QueuePager
+                  itemCount={state.communityRemovedPosts.posts.length}
+                  onNext={() => moveQueue("communityRemovedPosts", "next")}
+                  onPrevious={() => moveQueue("communityRemovedPosts", "previous")}
+                  response={state.communityRemovedPosts}
+                />
+              }
               title="Removed posts"
             >
               {state.communityRemovedPosts.posts.length ? (
@@ -474,6 +626,14 @@ export function LiveModerationQueues() {
             <QueuePanel
               count={state.communityRemovedComments.total}
               description="Removed comments available for restoration."
+              footer={
+                <QueuePager
+                  itemCount={state.communityRemovedComments.comments.length}
+                  onNext={() => moveQueue("communityRemovedComments", "next")}
+                  onPrevious={() => moveQueue("communityRemovedComments", "previous")}
+                  response={state.communityRemovedComments}
+                />
+              }
               title="Removed comments"
             >
               {state.communityRemovedComments.comments.length ? (
@@ -506,6 +666,14 @@ export function LiveModerationQueues() {
             <QueuePanel
               count={state.removedMessages.total}
               description="Removed direct messages available for restoration."
+              footer={
+                <QueuePager
+                  itemCount={state.removedMessages.messages.length}
+                  onNext={() => moveQueue("removedMessages", "next")}
+                  onPrevious={() => moveQueue("removedMessages", "previous")}
+                  response={state.removedMessages}
+                />
+              }
               title="Removed messages"
             >
               {state.removedMessages.messages.length ? (
@@ -597,11 +765,13 @@ function QueuePanel({
   children,
   count,
   description,
+  footer,
   title
 }: {
   children: ReactNode;
   count: number;
   description: string;
+  footer?: ReactNode;
   title: string;
 }) {
   return (
@@ -614,7 +784,154 @@ function QueuePanel({
         <Pill label={`${count} total`} />
       </div>
       <div className="mt-4 grid gap-3">{children}</div>
+      {footer ? <div className="mt-4 border-t border-border pt-3">{footer}</div> : null}
     </section>
+  );
+}
+
+function ModerationFilterBar({
+  filters,
+  onChange,
+  onReset
+}: {
+  filters: ModerationFilterState;
+  onChange: (patch: Partial<ModerationFilterState>) => void;
+  onReset: () => void;
+}) {
+  return (
+    <div className="mt-5 rounded-lg border border-border bg-surface p-4">
+      <div className="grid gap-3 lg:grid-cols-[1fr_repeat(3,160px)_auto] lg:items-end">
+        <label className="grid gap-2 text-sm font-semibold text-ink">
+          Search queues
+          <span className="relative">
+            <Search
+              aria-hidden="true"
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted"
+            />
+            <input
+              className="min-h-11 w-full rounded-lg border border-border bg-white py-2 pl-9 pr-3 text-sm text-ink outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+              onChange={(event) => onChange({ q: event.target.value })}
+              placeholder="Search content, notes, or communities"
+              type="search"
+              value={filters.q}
+            />
+          </span>
+        </label>
+        <FilterSelect
+          label="Reports"
+          onChange={(value) => onChange({ status: value as ModerationFilterState["status"] })}
+          options={[
+            ["OPEN", "Open"],
+            ["RESOLVED", "Resolved"],
+            ["ALL", "All"]
+          ]}
+          value={filters.status}
+        />
+        <FilterSelect
+          label="Severity"
+          onChange={(value) => onChange({ severity: value })}
+          options={[
+            ["", "Any severity"],
+            ["LOW", "Low"],
+            ["MEDIUM", "Medium"],
+            ["HIGH", "High"],
+            ["CRITICAL", "Critical"]
+          ]}
+          value={filters.severity}
+        />
+        <FilterSelect
+          label="Escalation"
+          onChange={(value) => onChange({ escalationStatus: value })}
+          options={[
+            ["", "Any status"],
+            ["NONE", "Not escalated"],
+            ["ESCALATED", "Escalated"]
+          ]}
+          value={filters.escalationStatus}
+        />
+        <button
+          className="focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-border bg-white px-4 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary"
+          onClick={onReset}
+          type="button"
+        >
+          <FilterX aria-hidden="true" className="h-4 w-4" />
+          Reset
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function FilterSelect({
+  label,
+  onChange,
+  options,
+  value
+}: {
+  label: string;
+  onChange: (value: string) => void;
+  options: Array<[string, string]>;
+  value: string;
+}) {
+  return (
+    <label className="grid gap-2 text-sm font-semibold text-ink">
+      {label}
+      <select
+        className="min-h-11 rounded-lg border border-border bg-white px-3 text-sm font-semibold text-ink outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+        onChange={(event) => onChange(event.target.value)}
+        value={value}
+      >
+        {options.map(([optionValue, optionLabel]) => (
+          <option key={optionValue || optionLabel} value={optionValue}>
+            {optionLabel}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function QueuePager({
+  itemCount,
+  onNext,
+  onPrevious,
+  response
+}: {
+  itemCount: number;
+  onNext: () => void;
+  onPrevious: () => void;
+  response: { has_more?: boolean; limit?: number; offset?: number; total: number };
+}) {
+  const offset = response.offset ?? 0;
+  const start = response.total ? offset + 1 : 0;
+  const end = response.total ? offset + itemCount : 0;
+
+  return (
+    <div className="flex flex-col gap-3 text-sm font-semibold text-muted sm:flex-row sm:items-center sm:justify-between">
+      <span>
+        Showing {start}-{end} of {response.total}
+      </span>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <button
+          className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-border bg-white px-3 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={offset <= 0}
+          onClick={onPrevious}
+          type="button"
+        >
+          <ChevronLeft aria-hidden="true" className="h-4 w-4" />
+          Previous
+        </button>
+        <button
+          className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-border bg-white px-3 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={!response.has_more}
+          onClick={onNext}
+          type="button"
+        >
+          Next
+          <ChevronRight aria-hidden="true" className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -988,6 +1305,9 @@ function EvidenceList({
   evidence: AdminVerificationEvidence[];
   requestId: string;
 }) {
+  const [previewEvidenceId, setPreviewEvidenceId] = useState<string | null>(null);
+  const previewItem = evidence.find((item) => item.id === previewEvidenceId) ?? null;
+
   if (!evidence.length) {
     return (
       <div className="mt-4 rounded-lg border border-dashed border-border bg-white px-4 py-3 text-sm font-semibold text-muted">
@@ -1015,18 +1335,68 @@ function EvidenceList({
                   .join(" · ")}
               </p>
             </div>
-            <a
-              className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-border bg-white px-3 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary"
-              href={verificationEvidenceDownloadUrl(requestId, item.id)}
-              rel="noreferrer"
-              target="_blank"
-            >
-              <Download aria-hidden="true" className="h-4 w-4" />
-              Download
-            </a>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {isPreviewableEvidence(item) ? (
+                <button
+                  className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-border bg-white px-3 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary"
+                  onClick={() =>
+                    setPreviewEvidenceId((current) => (current === item.id ? null : item.id))
+                  }
+                  type="button"
+                >
+                  <Eye aria-hidden="true" className="h-4 w-4" />
+                  {previewEvidenceId === item.id ? "Hide" : "Preview"}
+                </button>
+              ) : null}
+              <a
+                className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-border bg-white px-3 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary"
+                href={verificationEvidenceDownloadUrl(requestId, item.id)}
+                rel="noreferrer"
+                target="_blank"
+              >
+                <Download aria-hidden="true" className="h-4 w-4" />
+                Download
+              </a>
+            </div>
           </div>
         ))}
       </div>
+      {previewItem ? <EvidencePreview item={previewItem} requestId={requestId} /> : null}
+    </div>
+  );
+}
+
+function EvidencePreview({
+  item,
+  requestId
+}: {
+  item: AdminVerificationEvidence;
+  requestId: string;
+}) {
+  const url = verificationEvidenceDownloadUrl(requestId, item.id);
+  const contentType = item.content_type ?? "";
+
+  return (
+    <div className="border-t border-border bg-surface p-4">
+      <p className="text-xs font-bold uppercase tracking-[0.12em] text-muted">
+        Previewing {item.file_name ?? item.label ?? "evidence"}
+      </p>
+      {contentType.startsWith("image/") ? (
+        // Private evidence previews must use the browser session cookie directly.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          alt={item.file_name ?? item.label ?? "Verification evidence preview"}
+          className="mt-3 max-h-[420px] w-full rounded-lg border border-border bg-white object-contain"
+          src={url}
+        />
+      ) : null}
+      {contentType === "application/pdf" ? (
+        <iframe
+          className="mt-3 h-[420px] w-full rounded-lg border border-border bg-white"
+          src={url}
+          title={item.file_name ?? item.label ?? "Verification evidence PDF preview"}
+        />
+      ) : null}
     </div>
   );
 }
@@ -1119,6 +1489,12 @@ function formatFileSize(value: null | number | undefined) {
   }
 
   return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function isPreviewableEvidence(item: AdminVerificationEvidence) {
+  return Boolean(
+    item.content_type?.startsWith("image/") || item.content_type === "application/pdf"
+  );
 }
 
 function compactStrings(values: Array<null | string | undefined>) {
