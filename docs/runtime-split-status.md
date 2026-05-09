@@ -9,6 +9,9 @@ The project now has three isolated frontend runtimes backed by one FastAPI servi
 - Super-admin console: `http://127.0.0.1:3012`
 - Backend API: `http://127.0.0.1:8002`
 
+The latest slice wired the separated Admin RBAC console to live verification and moderation APIs,
+instead of leaving those routes as status-only shells.
+
 ## Implemented
 
 - `apps/web` remains the public and alumni/member app.
@@ -17,6 +20,9 @@ The project now has three isolated frontend runtimes backed by one FastAPI servi
 - `packages/frontend-shared` contains shared role rules, route constants, design tokens, and proxy-aware API helpers.
 - Public navigation no longer exposes member-only features before login.
 - Member dashboard has been rebuilt as a dashboard hub with live API widgets and links to dedicated routes.
+- Admin verification on `3011` now loads pending verification requests from the live backend and supports approve, reject, and request-info actions.
+- Admin moderation on `3011` now loads community post reports, removed posts/comments, direct-message reports, and removed direct messages from the live backend, with resolve/remove/restore actions.
+- `npm run smoke:rbac` checks public-nav visibility, anonymous API blocking, and super-admin access across the member, admin, and super-admin apps when local credentials are supplied through environment variables.
 - Backend CORS/env defaults include ports `3010`, `3011`, and `3012`.
 
 ## RBAC Surface Map
@@ -30,7 +36,8 @@ The project now has three isolated frontend runtimes backed by one FastAPI servi
 
 ## Remaining Gaps
 
-- Admin console deep queue actions still need full component wiring for verification/moderation review actions inside the new app.
+- Admin verification still needs evidence download/preview inside `3011`; the decision workflow itself is live.
+- Admin moderation still needs review-note/severity/escalation edit forms in `3011`; core resolve/remove/restore actions are live.
 - Events, elections, contributions, opportunities, resources, mentorship, initiatives, stories, treasury, and analytics still need backend modules.
 - Route-level backend RBAC exists for current auth/admin APIs, but every future module must add backend enforcement before enabling write actions.
 - Super-admin diagnostics are read-only until backend diagnostic/action endpoints are designed.

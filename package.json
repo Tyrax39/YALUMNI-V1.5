@@ -23,6 +23,7 @@
     "smoke:web": "npm --workspace @yalumni/web run smoke:routes",
     "smoke:admin": "npm --workspace @yalumni/admin-console run smoke:routes",
     "smoke:superadmin": "npm --workspace @yalumni/super-admin-console run smoke:routes",
+    "smoke:rbac": "node scripts/smoke-rbac.mjs",
     "typecheck:web": "npm --workspace @yalumni/web run typecheck",
     "typecheck:admin": "npm --workspace @yalumni/admin-console run typecheck",
     "typecheck:superadmin": "npm --workspace @yalumni/super-admin-console run typecheck",

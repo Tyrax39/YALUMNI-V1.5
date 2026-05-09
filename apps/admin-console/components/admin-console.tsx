@@ -32,6 +32,8 @@ import {
   Vote
 } from "lucide-react";
 
+import { LiveModerationQueues, LiveVerificationQueue } from "./live-admin-surfaces";
+
 type AdminConsoleProps = {
   surfaceId: AdminSurfaceId;
 };
@@ -148,7 +150,7 @@ const surfaceDetails = {
     title: "Treasury console"
   },
   verification: {
-    cta: "Verification APIs are live; use the member app routes for full evidence review until this console gets deep queue wiring.",
+    cta: "Verification APIs are live in this console for approve, reject, and request-info decisions.",
     rows: [
       ["Pending evidence", "live count", "approve/reject in API"],
       ["Program affiliation", "live", "profile-backed"],
@@ -299,36 +301,13 @@ export function AdminConsole({ surfaceId }: AdminConsoleProps) {
         </section>
 
         <section className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
-          <div className="rounded-lg border border-border bg-white p-5 shadow-soft sm:p-6">
-            <div className="flex items-start gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary text-white">
-                <SurfaceIcon surfaceId={surfaceId} />
-              </div>
-              <div>
-                <h2 className="font-display text-2xl font-semibold text-ink">Operational scope</h2>
-                <p className="mt-2 text-sm leading-6 text-muted">{detail.cta}</p>
-              </div>
-            </div>
-
-            <div className="mt-6 overflow-hidden rounded-lg border border-border">
-              <div className="hidden bg-surface px-4 py-3 text-xs font-bold uppercase tracking-[0.12em] text-muted md:grid md:grid-cols-3">
-                <span>Queue</span>
-                <span>Signal</span>
-                <span>Next action</span>
-              </div>
-              <div className="divide-y divide-border">
-                {detail.rows.map((row) => (
-                  <div className="grid gap-2 px-4 py-4 text-sm md:grid-cols-3" key={row.join(":")}>
-                    {row.map((cell, index) => (
-                      <p className="font-semibold text-ink" key={`${cell}:${index}`}>
-                        {cell}
-                      </p>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+          {surfaceId === "verification" ? (
+            <LiveVerificationQueue />
+          ) : surfaceId === "moderation" ? (
+            <LiveModerationQueues />
+          ) : (
+            <OperationalScope detail={detail} surfaceId={surfaceId} />
+          )}
 
           <div className="rounded-lg border border-border bg-white p-5 shadow-soft sm:p-6">
             <h2 className="font-display text-2xl font-semibold text-ink">Recent audit</h2>
@@ -452,6 +431,41 @@ function Shell({
         ))}
       </nav>
     </main>
+  );
+}
+
+function OperationalScope({ detail, surfaceId }: { detail: SurfaceDetail; surfaceId: AdminSurfaceId }) {
+  return (
+    <div className="rounded-lg border border-border bg-white p-5 shadow-soft sm:p-6">
+      <div className="flex items-start gap-4">
+        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary text-white">
+          <SurfaceIcon surfaceId={surfaceId} />
+        </div>
+        <div>
+          <h2 className="font-display text-2xl font-semibold text-ink">Operational scope</h2>
+          <p className="mt-2 text-sm leading-6 text-muted">{detail.cta}</p>
+        </div>
+      </div>
+
+      <div className="mt-6 overflow-hidden rounded-lg border border-border">
+        <div className="hidden bg-surface px-4 py-3 text-xs font-bold uppercase tracking-[0.12em] text-muted md:grid md:grid-cols-3">
+          <span>Queue</span>
+          <span>Signal</span>
+          <span>Next action</span>
+        </div>
+        <div className="divide-y divide-border">
+          {detail.rows.map((row) => (
+            <div className="grid gap-2 px-4 py-4 text-sm md:grid-cols-3" key={row.join(":")}>
+              {row.map((cell, index) => (
+                <p className="font-semibold text-ink" key={`${cell}:${index}`}>
+                  {cell}
+                </p>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 
