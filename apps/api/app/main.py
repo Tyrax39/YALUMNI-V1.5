@@ -14,6 +14,7 @@ from app.modules.auth.test_accounts import ensure_test_accounts, test_accounts_a
 from app.modules.communities.router import router as communities_router
 from app.modules.messages.router import router as messages_router
 from app.modules.notifications.router import router as notifications_router
+from app.modules.opportunities.router import router as opportunities_router
 from app.modules.system.router import router as system_router
 
 settings = get_settings()
@@ -68,3 +69,4 @@ app.include_router(alumni_router, prefix="/api/v1/alumni", tags=["alumni"])
 app.include_router(communities_router, prefix="/api/v1/communities", tags=["communities"])
 app.include_router(messages_router, prefix="/api/v1/messages", tags=["messages"])
 app.include_router(notifications_router, prefix="/api/v1/notifications", tags=["notifications"])
+app.include_router(opportunities_router, prefix="/api/v1/opportunities", tags=["opportunities"])

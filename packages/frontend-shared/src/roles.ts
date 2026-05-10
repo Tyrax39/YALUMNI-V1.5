@@ -76,7 +76,7 @@ export const ADMIN_SURFACES: readonly AdminSurface[] = [
     href: "/opportunities",
     id: "opportunities",
     label: "Opportunities",
-    status: "prototype"
+    status: "partial"
   },
   {
     allowedRoles: moderatorRoles,

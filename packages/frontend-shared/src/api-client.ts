@@ -216,6 +216,64 @@ export type RemovedDirectMessageResponse = {
   total: number;
 };
 
+export type Opportunity = {
+  application_url?: string | null;
+  country?: string | null;
+  created_at: string;
+  created_by_display_name?: string | null;
+  created_by_user_id?: string | null;
+  deadline_at?: string | null;
+  description: string;
+  id: string;
+  location?: string | null;
+  opportunity_type: string;
+  organization: string;
+  published_at?: string | null;
+  remote_policy: string;
+  reviewed_at?: string | null;
+  reviewed_by_display_name?: string | null;
+  reviewed_by_user_id?: string | null;
+  reviewer_note?: string | null;
+  status: string;
+  title: string;
+  updated_at: string;
+};
+
+export type OpportunityListResponse = {
+  has_more: boolean;
+  limit: number;
+  offset: number;
+  opportunities: Opportunity[];
+  total: number;
+};
+
+export type OpportunityPayload = {
+  application_url?: string | null;
+  country?: string | null;
+  deadline_at?: string | null;
+  description: string;
+  location?: string | null;
+  opportunity_type?: string;
+  organization: string;
+  remote_policy?: string;
+  title: string;
+};
+
+export type OpportunityFilters = {
+  country?: string;
+  limit?: number;
+  mine?: boolean;
+  offset?: number;
+  opportunityType?: string;
+  q?: string;
+  remotePolicy?: string;
+  status?: string;
+};
+
+export type OpportunityReviewPayload = {
+  reviewer_note?: string | null;
+};
+
 export type ModerationQueueFilters = {
   escalationStatus?: string;
   limit?: number;
@@ -346,6 +404,81 @@ function moderationQueryString(filters: ModerationQueueFilters, defaults: Modera
   }
 
   return params.toString();
+}
+
+function opportunityQueryString(filters: OpportunityFilters = {}) {
+  const params = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(filters)) {
+    if (typeof value === "undefined" || value === null || value === "") {
+      continue;
+    }
+
+    const queryKey =
+      key === "opportunityType" ? "opportunity_type" : key === "remotePolicy" ? "remote_policy" : key;
+    params.set(queryKey, String(value));
+  }
+
+  return params.toString();
+}
+
+export function fetchOpportunities(
+  filters: OpportunityFilters = {}
+): Promise<OpportunityListResponse> {
+  const query = opportunityQueryString({ limit: 12, offset: 0, ...filters });
+  return fetchJson<OpportunityListResponse>(`/api/backend/api/v1/opportunities?${query}`);
+}
+
+export function fetchOpportunity(opportunityId: string): Promise<Opportunity> {
+  return fetchJson<Opportunity>(
+    `/api/backend/api/v1/opportunities/${encodeURIComponent(opportunityId)}`
+  );
+}
+
+export function createOpportunity(payload: OpportunityPayload): Promise<Opportunity> {
+  return mutateJson<Opportunity>("/api/backend/api/v1/opportunities", "POST", payload);
+}
+
+export function fetchAdminOpportunityQueue(
+  filters: OpportunityFilters = {}
+): Promise<OpportunityListResponse> {
+  const query = opportunityQueryString({ limit: 12, offset: 0, status: "PENDING_REVIEW", ...filters });
+  return fetchJson<OpportunityListResponse>(
+    `/api/backend/api/v1/opportunities/admin/review-queue?${query}`
+  );
+}
+
+export function approveOpportunity(
+  opportunityId: string,
+  payload: OpportunityReviewPayload = {}
+): Promise<Opportunity> {
+  return mutateJson<Opportunity>(
+    `/api/backend/api/v1/opportunities/admin/${encodeURIComponent(opportunityId)}/approve`,
+    "POST",
+    payload
+  );
+}
+
+export function rejectOpportunity(
+  opportunityId: string,
+  payload: OpportunityReviewPayload = {}
+): Promise<Opportunity> {
+  return mutateJson<Opportunity>(
+    `/api/backend/api/v1/opportunities/admin/${encodeURIComponent(opportunityId)}/reject`,
+    "POST",
+    payload
+  );
+}
+
+export function requestOpportunityChanges(
+  opportunityId: string,
+  payload: OpportunityReviewPayload = {}
+): Promise<Opportunity> {
+  return mutateJson<Opportunity>(
+    `/api/backend/api/v1/opportunities/admin/${encodeURIComponent(opportunityId)}/request-changes`,
+    "POST",
+    payload
+  );
 }
 
 export function fetchCommunityPostReports(

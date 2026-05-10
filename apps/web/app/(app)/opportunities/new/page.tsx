@@ -1,6 +1,5 @@
-import { PrototypeFeaturePage } from "@/components/platform/prototype-feature-page";
+import { OpportunityCreate } from "@/components/opportunities/opportunity-surfaces";
 
 export default function NewOpportunityPage() {
-  return <PrototypeFeaturePage screenKey="opportunityNew" />;
+  return <OpportunityCreate />;
 }
-

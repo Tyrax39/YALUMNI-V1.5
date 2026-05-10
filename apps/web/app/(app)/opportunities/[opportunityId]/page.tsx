@@ -1,4 +1,4 @@
-import { PrototypeFeaturePage } from "@/components/platform/prototype-feature-page";
+import { OpportunityDetail } from "@/components/opportunities/opportunity-surfaces";
 
 type OpportunityPageProps = {
   params: Promise<{
@@ -9,6 +9,5 @@ type OpportunityPageProps = {
 export default async function OpportunityPage({ params }: OpportunityPageProps) {
   const { opportunityId } = await params;
 
-  return <PrototypeFeaturePage recordId={opportunityId} screenKey="opportunityDetail" />;
+  return <OpportunityDetail opportunityId={opportunityId} />;
 }
-

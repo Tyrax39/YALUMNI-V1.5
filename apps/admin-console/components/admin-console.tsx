@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 
 import { LiveModerationQueues, LiveVerificationQueue } from "./live-admin-surfaces";
+import { LiveOpportunityReviewQueue } from "./live-opportunity-review";
 
 type AdminConsoleProps = {
   surfaceId: AdminSurfaceId;
@@ -105,11 +106,11 @@ const surfaceDetails = {
     title: "Moderation queues"
   },
   opportunities: {
-    cta: "Opportunity listings will plug into this queue when the marketplace backend lands.",
+    cta: "Opportunity listing review is live; approved records publish into the member workspace.",
     rows: [
-      ["Civic innovation grant", "partner org", "pending review"],
-      ["Climate fellowship", "regional hub", "approved fixture"],
-      ["Program manager role", "chapter partner", "pending review"]
+      ["Submitted listings", "live", "approve/reject/request changes"],
+      ["Member visibility", "live", "published records only"],
+      ["Application tracking", "planned", "backend pending"]
     ],
     title: "Opportunity moderation"
   },
@@ -305,6 +306,8 @@ export function AdminConsole({ surfaceId }: AdminConsoleProps) {
             <LiveVerificationQueue />
           ) : surfaceId === "moderation" ? (
             <LiveModerationQueues />
+          ) : surfaceId === "opportunities" ? (
+            <LiveOpportunityReviewQueue />
           ) : (
             <OperationalScope detail={detail} surfaceId={surfaceId} />
           )}
