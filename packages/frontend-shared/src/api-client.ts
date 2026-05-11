@@ -331,6 +331,68 @@ export type ResourceReviewPayload = {
   reviewer_note?: string | null;
 };
 
+export type SuccessStory = {
+  beneficiary_count?: number | null;
+  body: string;
+  cohort_year?: number | null;
+  country?: string | null;
+  created_at: string;
+  created_by_display_name?: string | null;
+  created_by_user_id?: string | null;
+  external_url?: string | null;
+  id: string;
+  impact_metric?: string | null;
+  media_url?: string | null;
+  program?: string | null;
+  published_at?: string | null;
+  reviewed_at?: string | null;
+  reviewed_by_display_name?: string | null;
+  reviewed_by_user_id?: string | null;
+  reviewer_note?: string | null;
+  sector?: string | null;
+  status: string;
+  summary: string;
+  title: string;
+  updated_at: string;
+};
+
+export type SuccessStoryListResponse = {
+  has_more: boolean;
+  limit: number;
+  offset: number;
+  stories: SuccessStory[];
+  total: number;
+};
+
+export type SuccessStoryPayload = {
+  beneficiary_count?: number | null;
+  body: string;
+  cohort_year?: number | null;
+  country?: string | null;
+  external_url?: string | null;
+  impact_metric?: string | null;
+  media_url?: string | null;
+  program?: string | null;
+  sector?: string | null;
+  summary: string;
+  title: string;
+};
+
+export type SuccessStoryFilters = {
+  country?: string;
+  limit?: number;
+  mine?: boolean;
+  offset?: number;
+  program?: string;
+  q?: string;
+  sector?: string;
+  status?: string;
+};
+
+export type SuccessStoryReviewPayload = {
+  reviewer_note?: string | null;
+};
+
 export type ModerationQueueFilters = {
   escalationStatus?: string;
   limit?: number;
@@ -604,6 +666,84 @@ export function requestResourceChanges(
 ): Promise<ResourceItem> {
   return mutateJson<ResourceItem>(
     `/api/backend/api/v1/resources/admin/${encodeURIComponent(resourceId)}/request-changes`,
+    "POST",
+    payload
+  );
+}
+
+function successStoryQueryString(filters: SuccessStoryFilters = {}) {
+  const params = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(filters)) {
+    if (typeof value === "undefined" || value === null || value === "") {
+      continue;
+    }
+
+    params.set(key, String(value));
+  }
+
+  return params.toString();
+}
+
+export function fetchSuccessStories(
+  filters: SuccessStoryFilters = {}
+): Promise<SuccessStoryListResponse> {
+  const query = successStoryQueryString({ limit: 12, offset: 0, ...filters });
+  return fetchJson<SuccessStoryListResponse>(`/api/backend/api/v1/success-stories?${query}`);
+}
+
+export function fetchSuccessStory(storyId: string): Promise<SuccessStory> {
+  return fetchJson<SuccessStory>(
+    `/api/backend/api/v1/success-stories/${encodeURIComponent(storyId)}`
+  );
+}
+
+export function createSuccessStory(payload: SuccessStoryPayload): Promise<SuccessStory> {
+  return mutateJson<SuccessStory>("/api/backend/api/v1/success-stories", "POST", payload);
+}
+
+export function fetchAdminSuccessStoryQueue(
+  filters: SuccessStoryFilters = {}
+): Promise<SuccessStoryListResponse> {
+  const query = successStoryQueryString({
+    limit: 12,
+    offset: 0,
+    status: "PENDING_REVIEW",
+    ...filters
+  });
+  return fetchJson<SuccessStoryListResponse>(
+    `/api/backend/api/v1/success-stories/admin/review-queue?${query}`
+  );
+}
+
+export function approveSuccessStory(
+  storyId: string,
+  payload: SuccessStoryReviewPayload = {}
+): Promise<SuccessStory> {
+  return mutateJson<SuccessStory>(
+    `/api/backend/api/v1/success-stories/admin/${encodeURIComponent(storyId)}/approve`,
+    "POST",
+    payload
+  );
+}
+
+export function rejectSuccessStory(
+  storyId: string,
+  payload: SuccessStoryReviewPayload = {}
+): Promise<SuccessStory> {
+  return mutateJson<SuccessStory>(
+    `/api/backend/api/v1/success-stories/admin/${encodeURIComponent(storyId)}/reject`,
+    "POST",
+    payload
+  );
+}
+
+export function requestSuccessStoryChanges(
+  storyId: string,
+  payload: SuccessStoryReviewPayload = {}
+): Promise<SuccessStory> {
+  return mutateJson<SuccessStory>(
+    `/api/backend/api/v1/success-stories/admin/${encodeURIComponent(storyId)}/request-changes`,
     "POST",
     payload
   );

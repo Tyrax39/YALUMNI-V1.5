@@ -1,4 +1,4 @@
-import { PrototypeFeaturePage } from "@/components/platform/prototype-feature-page";
+import { SuccessStoryDetail } from "@/components/success-stories/success-story-surfaces";
 
 type SuccessStoryPageProps = {
   params: Promise<{
@@ -9,6 +9,5 @@ type SuccessStoryPageProps = {
 export default async function SuccessStoryPage({ params }: SuccessStoryPageProps) {
   const { storyId } = await params;
 
-  return <PrototypeFeaturePage recordId={storyId} screenKey="successStoryDetail" />;
+  return <SuccessStoryDetail storyId={storyId} />;
 }
-

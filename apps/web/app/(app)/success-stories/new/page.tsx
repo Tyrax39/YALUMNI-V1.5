@@ -1,6 +1,5 @@
-import { PrototypeFeaturePage } from "@/components/platform/prototype-feature-page";
+import { SuccessStoryCreate } from "@/components/success-stories/success-story-surfaces";
 
 export default function NewSuccessStoryPage() {
-  return <PrototypeFeaturePage screenKey="successStoryNew" />;
+  return <SuccessStoryCreate />;
 }
-

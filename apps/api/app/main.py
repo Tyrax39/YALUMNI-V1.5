@@ -16,6 +16,7 @@ from app.modules.messages.router import router as messages_router
 from app.modules.notifications.router import router as notifications_router
 from app.modules.opportunities.router import router as opportunities_router
 from app.modules.resources.router import router as resources_router
+from app.modules.success_stories.router import router as success_stories_router
 from app.modules.system.router import router as system_router
 
 settings = get_settings()
@@ -79,4 +80,9 @@ app.include_router(
     resources_router,
     prefix="/api/v1/resources",
     tags=["resources"],
+)
+app.include_router(
+    success_stories_router,
+    prefix="/api/v1/success-stories",
+    tags=["success-stories"],
 )

@@ -1,6 +1,5 @@
-import { PrototypeFeaturePage } from "@/components/platform/prototype-feature-page";
+import { SuccessStoriesHub } from "@/components/success-stories/success-story-surfaces";
 
 export default function SuccessStoriesPage() {
-  return <PrototypeFeaturePage screenKey="successStoriesHub" />;
+  return <SuccessStoriesHub />;
 }
-

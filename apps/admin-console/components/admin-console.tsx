@@ -35,6 +35,7 @@ import {
 import { LiveModerationQueues, LiveVerificationQueue } from "./live-admin-surfaces";
 import { LiveOpportunityReviewQueue } from "./live-opportunity-review";
 import { LiveResourceReviewQueue } from "./live-resource-review";
+import { LiveSuccessStoryReviewQueue } from "./live-success-story-review";
 
 type AdminConsoleProps = {
   surfaceId: AdminSurfaceId;
@@ -102,7 +103,7 @@ const surfaceDetails = {
     rows: [
       ["Community reports", "live", "triage reported posts"],
       ["Direct messages", "live", "review safety reports"],
-      ["Stories/resources/opportunities", "partial", "resources and opportunities live"]
+      ["Stories/resources/opportunities", "partial", "content review flows live"]
     ],
     title: "Moderation queues"
   },
@@ -134,11 +135,11 @@ const surfaceDetails = {
     title: "Resource review"
   },
   "success-stories": {
-    cta: "Story publishing and evidence review will become active when editorial backend lands.",
+    cta: "Story publishing review is live; approved stories publish into the member workspace.",
     rows: [
-      ["Agri-tech in Zambia", "Zambia", "pending media"],
-      ["Girls in STEM bootcamp", "Nigeria", "needs edits"],
-      ["Open budget fellows", "Kenya", "approved fixture"]
+      ["Submitted stories", "live", "approve/reject/request changes"],
+      ["Member visibility", "live", "published records only"],
+      ["Media storage", "planned", "backend pending"]
     ],
     title: "Success story moderation"
   },
@@ -311,6 +312,8 @@ export function AdminConsole({ surfaceId }: AdminConsoleProps) {
             <LiveOpportunityReviewQueue />
           ) : surfaceId === "resources" ? (
             <LiveResourceReviewQueue />
+          ) : surfaceId === "success-stories" ? (
+            <LiveSuccessStoryReviewQueue />
           ) : (
             <OperationalScope detail={detail} surfaceId={surfaceId} />
           )}

@@ -12,6 +12,7 @@ from app.modules.messages import models as message_models
 from app.modules.notifications import models as notification_models
 from app.modules.opportunities import models as opportunity_models
 from app.modules.resources import models as resource_models
+from app.modules.success_stories import models as success_story_models
 
 _ = (
     auth_models,
@@ -21,6 +22,7 @@ _ = (
     notification_models,
     opportunity_models,
     resource_models,
+    success_story_models,
 )
 
 config = context.config

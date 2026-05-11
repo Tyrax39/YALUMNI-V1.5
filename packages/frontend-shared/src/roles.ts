@@ -92,7 +92,7 @@ export const ADMIN_SURFACES: readonly AdminSurface[] = [
     href: "/success-stories",
     id: "success-stories",
     label: "Success Stories",
-    status: "prototype"
+    status: "partial"
   },
   {
     allowedRoles: electionRoles,
