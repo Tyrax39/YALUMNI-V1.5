@@ -1,6 +1,5 @@
-import { PrototypeFeaturePage } from "@/components/platform/prototype-feature-page";
+import { ResourceHub } from "@/components/resources/resource-surfaces";
 
 export default function ResourcesPage() {
-  return <PrototypeFeaturePage screenKey="resourcesHub" />;
+  return <ResourceHub />;
 }
-

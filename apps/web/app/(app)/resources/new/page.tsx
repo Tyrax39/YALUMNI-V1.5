@@ -1,6 +1,5 @@
-import { PrototypeFeaturePage } from "@/components/platform/prototype-feature-page";
+import { ResourceCreate } from "@/components/resources/resource-surfaces";
 
 export default function NewResourcePage() {
-  return <PrototypeFeaturePage screenKey="resourceNew" />;
+  return <ResourceCreate />;
 }
-

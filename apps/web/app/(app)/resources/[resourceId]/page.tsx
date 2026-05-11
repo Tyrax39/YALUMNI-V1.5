@@ -1,4 +1,4 @@
-import { PrototypeFeaturePage } from "@/components/platform/prototype-feature-page";
+import { ResourceDetail } from "@/components/resources/resource-surfaces";
 
 type ResourcePageProps = {
   params: Promise<{
@@ -9,6 +9,5 @@ type ResourcePageProps = {
 export default async function ResourcePage({ params }: ResourcePageProps) {
   const { resourceId } = await params;
 
-  return <PrototypeFeaturePage recordId={resourceId} screenKey="resourceDetail" />;
+  return <ResourceDetail resourceId={resourceId} />;
 }
-

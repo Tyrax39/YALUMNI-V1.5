@@ -274,6 +274,63 @@ export type OpportunityReviewPayload = {
   reviewer_note?: string | null;
 };
 
+export type ResourceItem = {
+  country?: string | null;
+  created_at: string;
+  created_by_display_name?: string | null;
+  created_by_user_id?: string | null;
+  description: string;
+  external_url?: string | null;
+  id: string;
+  language?: string | null;
+  published_at?: string | null;
+  resource_format: string;
+  resource_type: string;
+  reviewed_at?: string | null;
+  reviewed_by_display_name?: string | null;
+  reviewed_by_user_id?: string | null;
+  reviewer_note?: string | null;
+  status: string;
+  title: string;
+  topic?: string | null;
+  updated_at: string;
+};
+
+export type ResourceListResponse = {
+  has_more: boolean;
+  limit: number;
+  offset: number;
+  resources: ResourceItem[];
+  total: number;
+};
+
+export type ResourcePayload = {
+  country?: string | null;
+  description: string;
+  external_url?: string | null;
+  language?: string | null;
+  resource_format?: string;
+  resource_type?: string;
+  title: string;
+  topic?: string | null;
+};
+
+export type ResourceFilters = {
+  country?: string;
+  limit?: number;
+  mine?: boolean;
+  offset?: number;
+  q?: string;
+  resourceFormat?: string;
+  resourceType?: string;
+  status?: string;
+  topic?: string;
+};
+
+export type ResourceReviewPayload = {
+  reviewer_note?: string | null;
+};
+
 export type ModerationQueueFilters = {
   escalationStatus?: string;
   limit?: number;
@@ -476,6 +533,77 @@ export function requestOpportunityChanges(
 ): Promise<Opportunity> {
   return mutateJson<Opportunity>(
     `/api/backend/api/v1/opportunities/admin/${encodeURIComponent(opportunityId)}/request-changes`,
+    "POST",
+    payload
+  );
+}
+
+function resourceQueryString(filters: ResourceFilters = {}) {
+  const params = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(filters)) {
+    if (typeof value === "undefined" || value === null || value === "") {
+      continue;
+    }
+
+    const queryKey =
+      key === "resourceType" ? "resource_type" : key === "resourceFormat" ? "resource_format" : key;
+    params.set(queryKey, String(value));
+  }
+
+  return params.toString();
+}
+
+export function fetchResources(filters: ResourceFilters = {}): Promise<ResourceListResponse> {
+  const query = resourceQueryString({ limit: 12, offset: 0, ...filters });
+  return fetchJson<ResourceListResponse>(`/api/backend/api/v1/resources?${query}`);
+}
+
+export function fetchResource(resourceId: string): Promise<ResourceItem> {
+  return fetchJson<ResourceItem>(`/api/backend/api/v1/resources/${encodeURIComponent(resourceId)}`);
+}
+
+export function createResource(payload: ResourcePayload): Promise<ResourceItem> {
+  return mutateJson<ResourceItem>("/api/backend/api/v1/resources", "POST", payload);
+}
+
+export function fetchAdminResourceQueue(
+  filters: ResourceFilters = {}
+): Promise<ResourceListResponse> {
+  const query = resourceQueryString({ limit: 12, offset: 0, status: "PENDING_REVIEW", ...filters });
+  return fetchJson<ResourceListResponse>(
+    `/api/backend/api/v1/resources/admin/review-queue?${query}`
+  );
+}
+
+export function approveResource(
+  resourceId: string,
+  payload: ResourceReviewPayload = {}
+): Promise<ResourceItem> {
+  return mutateJson<ResourceItem>(
+    `/api/backend/api/v1/resources/admin/${encodeURIComponent(resourceId)}/approve`,
+    "POST",
+    payload
+  );
+}
+
+export function rejectResource(
+  resourceId: string,
+  payload: ResourceReviewPayload = {}
+): Promise<ResourceItem> {
+  return mutateJson<ResourceItem>(
+    `/api/backend/api/v1/resources/admin/${encodeURIComponent(resourceId)}/reject`,
+    "POST",
+    payload
+  );
+}
+
+export function requestResourceChanges(
+  resourceId: string,
+  payload: ResourceReviewPayload = {}
+): Promise<ResourceItem> {
+  return mutateJson<ResourceItem>(
+    `/api/backend/api/v1/resources/admin/${encodeURIComponent(resourceId)}/request-changes`,
     "POST",
     payload
   );

@@ -11,6 +11,7 @@ from app.modules.communities import models as community_models
 from app.modules.messages import models as message_models
 from app.modules.notifications import models as notification_models
 from app.modules.opportunities import models as opportunity_models
+from app.modules.resources import models as resource_models
 
 _ = (
     auth_models,
@@ -19,6 +20,7 @@ _ = (
     message_models,
     notification_models,
     opportunity_models,
+    resource_models,
 )
 
 config = context.config
