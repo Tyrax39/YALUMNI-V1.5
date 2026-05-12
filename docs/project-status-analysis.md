@@ -8,6 +8,51 @@ The current Yalumni project is a useful Laravel 9 alumni management platform, bu
 
 The V1.5 implementation is active in `D:\YALUMNI-V1.5`. The new repository now contains a platform foundation with a FastAPI backend, Next.js web shell, Docker Compose, CI workflow, shared packages, copied YALUMNI logo assets, and documentation.
 
+## Current V1.5 Implementation Update: 2026-05-12 Events Member Workflow Slice
+
+Completed after the success-story editorial review slice:
+
+- Added a live FastAPI Events module with `events`, `event_agenda_items`, and `event_attendees` persistence.
+- Added Alembic migration `20260512_0022_events`.
+- Added authenticated member APIs for event list/search, create, detail, agenda, attendees, and RSVP.
+- Added security audit events for event creation and RSVP registration.
+- Replaced the route-complete Events prototypes with live member UI for `/events`, `/events/new`, `/events/[eventId]`, `/events/[eventId]/agenda`, and `/events/[eventId]/attendees`.
+- Updated the shared frontend API client and screen parity/status docs for Events.
+- Added API tests covering create/list/detail/agenda/attendees/RSVP, validation, filtering, and auth-required behavior.
+
+Current plan position:
+
+- Phase 1 remains functionally complete for local foundation.
+- Phase 2 remains roughly 91% complete.
+- Phase 3 remains roughly 52% complete.
+- Phase 4 remains roughly 31% complete.
+- Phase 5 remains roughly 81% complete.
+- Phase 6 feed/moderation remains roughly 55% complete.
+- Phase 7 messaging/notifications remains roughly 51% complete.
+- Phase 8 events is now roughly 28% complete: event persistence, member creation, browsing, detail, agenda, attendees, RSVP, and basic audit records now exist.
+- Overall 24-week MVP implementation is roughly 59% complete.
+
+Implemented now:
+
+- Runtime split across public/member `3010`, admin RBAC `3011`, super-admin `3012`, and FastAPI `8002`.
+- Auth, protected platform owner seed, web sessions, CSRF, 2FA enforcement, rate limiting, verification, directory, communities, notifications, direct messages, moderation, opportunities, resources, success stories, and member events.
+- Route parity exists for exported screens; live data is wired for the modules listed above, while later governance/finance modules remain prototype-backed.
+
+Main gaps now:
+
+- Events still need organizer/admin review, edit/draft/publish workflows, RSVP cancellation, waitlists, calendar exports, reminders, check-in, ticketing, event media, and notification hooks.
+- Elections, contributions/payments/receipts, initiatives, mentorship, chapter analytics, and treasury still need backend modules.
+- Opportunities, resources, and success stories have live MVP workflows, but still need richer attachments/media, notifications, and audit depth.
+- Production hardening remains for Redis/WebSocket fanout, background worker supervision, email delivery logs/bounces/unsubscribe, malware scanning, CDN/signed URLs, and compliance exports.
+
+Next possible implementation slices:
+
+- Initiatives backend and member proposal/detail workflow.
+- Mentorship backend for mentor profile/settings, discovery, and requests.
+- Contributions campaign/payment/receipt backend foundation.
+- Election backend foundation with voter roll, candidate review, ballot integrity, and audit logs.
+- Events admin/organizer workflow with edits, approvals, cancellation, RSVP cancellation, calendar export, and reminders.
+
 ## Current V1.5 Implementation Update: 2026-05-08 Direct Message Trust And Moderation Slice
 
 Completed after the scheduled digest worker foundation slice:

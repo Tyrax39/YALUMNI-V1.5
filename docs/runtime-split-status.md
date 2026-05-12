@@ -12,7 +12,8 @@ The project now has three isolated frontend runtimes backed by one FastAPI servi
 The latest slices wired the separated Admin RBAC console to live verification and moderation APIs,
 then added evidence preview/download access, queue filters, pagination, moderation review metadata
 controls, the first backend-backed opportunity marketplace review flow, a metadata-backed
-resource library submission and review workflow, and a live success-story editorial review flow.
+resource library submission and review workflow, a live success-story editorial review flow, and
+a live member event workflow with agenda and attendee tracking.
 
 ## Implemented
 
@@ -30,6 +31,7 @@ resource library submission and review workflow, and a live success-story editor
 - Opportunities now have a FastAPI module, database migration, member submission/list/detail UI on `3010`, and an admin review queue on `3011` for approve, reject, and request-changes actions.
 - Resources now have a FastAPI module, database migration, member submission/list/detail UI on `3010`, and an admin review queue on `3011` for approve, reject, and request-changes actions.
 - Success stories now have a FastAPI module, database migration, member submission/list/detail UI on `3010`, and an admin editorial review queue on `3011` for approve, reject, and request-changes actions.
+- Events now have a FastAPI module, database migration, member list/create/detail UI on `3010`, agenda views, attendee lists, RSVP registration, and audit events for creation and RSVP actions.
 - `npm run smoke:rbac` checks public-nav visibility, anonymous API blocking, and super-admin access across the member, admin, and super-admin apps when local credentials are supplied through environment variables.
 - Backend CORS/env defaults include ports `3010`, `3011`, and `3012`.
 
@@ -46,9 +48,10 @@ resource library submission and review workflow, and a live success-story editor
 
 - Admin verification still needs richer evidence metadata/audit context, but authenticated download and inline image/PDF previews are implemented.
 - Admin moderation has live review-note/severity/escalation edit forms plus filters and pagination; bulk actions and richer audit detail are still pending in `3011`.
-- Events, elections, contributions, mentorship, initiatives, treasury, and analytics still need backend modules.
+- Elections, contributions, mentorship, initiatives, treasury, and analytics still need backend modules.
 - Opportunities still need application tracking, saved opportunities, partner organization management, notifications to submitters/admins, and richer audit history.
 - Resources still need file upload/storage, download permission checks, versioning, reuse/license metadata, featured collections, notifications to submitters/admins, and richer audit history.
 - Success stories still need media upload/storage, consent/evidence attachments, editorial revisions, featured story placement, notifications to submitters/admins, and richer audit history.
+- Events still need organizer/admin moderation, draft/publish approvals, RSVP cancellation, waitlists, calendar exports, reminders, check-in, ticketing, event media, and notification hooks.
 - Route-level backend RBAC exists for current auth/admin APIs, but every future module must add backend enforcement before enabling write actions.
 - Super-admin diagnostics are read-only until backend diagnostic/action endpoints are designed.

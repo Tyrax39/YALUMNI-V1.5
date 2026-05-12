@@ -72,12 +72,11 @@
 
 ### Events
 
-- `events`
+- `events` - implemented for member-created published events with type, mode, location, date window, capacity, creator, status, and registration URL metadata.
+- `event_agenda_items` - implemented for event session/agenda rows with speaker, description, sort order, and optional start/end times.
+- `event_attendees` - implemented for member RSVP registration with unique event/user pairs and active registration status.
 - `event_tickets`
-- `event_registrations`
 - `event_checkins`
-- `event_sessions`
-- `event_speakers`
 - `event_assets`
 
 ## Post-MVP Tables

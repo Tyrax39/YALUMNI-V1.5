@@ -274,6 +274,90 @@ export type OpportunityReviewPayload = {
   reviewer_note?: string | null;
 };
 
+export type EventItem = {
+  attendee_count: number;
+  capacity?: number | null;
+  city?: string | null;
+  country?: string | null;
+  created_at: string;
+  created_by_display_name?: string | null;
+  created_by_user_id?: string | null;
+  description: string;
+  ends_at: string;
+  event_type: string;
+  id: string;
+  is_registered: boolean;
+  location?: string | null;
+  mode: string;
+  registration_url?: string | null;
+  starts_at: string;
+  status: string;
+  summary: string;
+  timezone: string;
+  title: string;
+  updated_at: string;
+};
+
+export type EventAgendaItem = {
+  description?: string | null;
+  ends_at?: string | null;
+  id: string;
+  sort_order: number;
+  speaker_name?: string | null;
+  starts_at?: string | null;
+  title: string;
+};
+
+export type EventAttendee = {
+  display_name: string;
+  email: string;
+  id: string;
+  registered_at: string;
+  status: string;
+  user_id: string;
+};
+
+export type EventListResponse = {
+  events: EventItem[];
+  has_more: boolean;
+  limit: number;
+  offset: number;
+  total: number;
+};
+
+export type EventPayload = {
+  agenda_items?: Array<{
+    description?: string | null;
+    ends_at?: string | null;
+    speaker_name?: string | null;
+    starts_at?: string | null;
+    title: string;
+  }>;
+  capacity?: number | null;
+  city?: string | null;
+  country?: string | null;
+  description: string;
+  ends_at: string;
+  event_type?: string;
+  location?: string | null;
+  mode?: string;
+  registration_url?: string | null;
+  starts_at: string;
+  summary: string;
+  timezone?: string;
+  title: string;
+};
+
+export type EventFilters = {
+  country?: string;
+  eventType?: string;
+  limit?: number;
+  mine?: boolean;
+  mode?: string;
+  offset?: number;
+  q?: string;
+};
+
 export type ResourceItem = {
   country?: string | null;
   created_at: string;
@@ -597,6 +681,53 @@ export function requestOpportunityChanges(
     `/api/backend/api/v1/opportunities/admin/${encodeURIComponent(opportunityId)}/request-changes`,
     "POST",
     payload
+  );
+}
+
+function eventQueryString(filters: EventFilters = {}) {
+  const params = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(filters)) {
+    if (typeof value === "undefined" || value === null || value === "") {
+      continue;
+    }
+
+    const queryKey = key === "eventType" ? "event_type" : key;
+    params.set(queryKey, String(value));
+  }
+
+  return params.toString();
+}
+
+export function fetchEvents(filters: EventFilters = {}): Promise<EventListResponse> {
+  const query = eventQueryString({ limit: 12, offset: 0, ...filters });
+  return fetchJson<EventListResponse>(`/api/backend/api/v1/events?${query}`);
+}
+
+export function fetchEvent(eventId: string): Promise<EventItem> {
+  return fetchJson<EventItem>(`/api/backend/api/v1/events/${encodeURIComponent(eventId)}`);
+}
+
+export function createEvent(payload: EventPayload): Promise<EventItem> {
+  return mutateJson<EventItem>("/api/backend/api/v1/events", "POST", payload);
+}
+
+export function fetchEventAgenda(eventId: string): Promise<EventAgendaItem[]> {
+  return fetchJson<EventAgendaItem[]>(
+    `/api/backend/api/v1/events/${encodeURIComponent(eventId)}/agenda`
+  );
+}
+
+export function fetchEventAttendees(eventId: string): Promise<EventAttendee[]> {
+  return fetchJson<EventAttendee[]>(
+    `/api/backend/api/v1/events/${encodeURIComponent(eventId)}/attendees`
+  );
+}
+
+export function rsvpEvent(eventId: string): Promise<EventItem> {
+  return mutateJson<EventItem>(
+    `/api/backend/api/v1/events/${encodeURIComponent(eventId)}/rsvp`,
+    "POST"
   );
 }
 

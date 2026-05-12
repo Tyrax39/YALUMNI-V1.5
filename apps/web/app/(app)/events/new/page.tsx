@@ -1,6 +1,5 @@
-import { PrototypeFeaturePage } from "@/components/platform/prototype-feature-page";
+import { EventCreate } from "@/components/events/event-surfaces";
 
 export default function NewEventPage() {
-  return <PrototypeFeaturePage screenKey="eventNew" />;
+  return <EventCreate />;
 }
-

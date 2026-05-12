@@ -1,6 +1,5 @@
-import { PrototypeFeaturePage } from "@/components/platform/prototype-feature-page";
+import { EventsHub } from "@/components/events/event-surfaces";
 
 export default function EventsPage() {
-  return <PrototypeFeaturePage screenKey="eventsHub" />;
+  return <EventsHub />;
 }
-

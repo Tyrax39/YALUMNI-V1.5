@@ -19,11 +19,11 @@ Audit date: 2026-05-08
 | --- | --- | --- | --- | --- | --- |
 | `admin_election_console` | `/admin/elections/[electionId]` | route-complete prototype | fixture | not implemented | Admin election operations shell with fixture controls. |
 | `admin_verification_queue` | `/admin/verification` | live route | live API | implemented | Wraps the live verification queue. |
-| `agenda_speaker_planner` | `/events/[eventId]/agenda` | route-complete prototype | fixture | not implemented | Agenda and speaker planner route. |
+| `agenda_speaker_planner` | `/events/[eventId]/agenda` | live route | live API | implemented | Agenda and speaker planner route backed by event agenda records. |
 | `alumni_directory` | `/directory` | live route | live API | implemented | Uses current directory search API. |
 | `alumni_directory_mobile` | `/directory` | responsive reference | live API | implemented | Mobile behavior folded into canonical directory. |
 | `alumni_verification` | `/verification` | live route | live API | implemented | Uses current member verification APIs. |
-| `annual_gathering_hub` | `/events/[eventId]` | route-complete prototype | fixture | not implemented | Event detail and gathering hub. |
+| `annual_gathering_hub` | `/events/[eventId]` | live route | live API | implemented | Event detail and gathering hub backed by live event records. |
 | `ballot_privacy_integrity_controls` | `/admin/elections/[electionId]/privacy` | route-complete prototype | fixture | not implemented | Ballot privacy and integrity controls. |
 | `candidate_review_queue` | `/admin/elections/[electionId]/candidates` | route-complete prototype | fixture | not implemented | Candidate review queue. |
 | `chapter_analytics_dashboard` | `/admin/chapters/[chapterId]/analytics` | route-complete prototype | fixture | not implemented | Chapter analytics shell. |
@@ -33,7 +33,7 @@ Audit date: 2026-05-08
 | `contribute_to_campaign` | `/contributions/[campaignId]/pay` | route-complete prototype | fixture | not implemented | Contribution checkout shell, no real payments. |
 | `contribution_campaign_detail` | `/contributions/[campaignId]` | route-complete prototype | fixture | not implemented | Contribution campaign detail. |
 | `contribution_receipt` | `/contributions/receipts/[receiptId]` | route-complete prototype | fixture | not implemented | Receipt preview route. |
-| `create_gathering_wizard` | `/events/new` | route-complete prototype | fixture | not implemented | Event creation wizard. |
+| `create_gathering_wizard` | `/events/new` | live route | live API | implemented | Event creation wizard publishes member events with optional agenda metadata. |
 | `create_new_election_wizard` | `/admin/elections/new` | route-complete prototype | fixture | not implemented | Admin election creation wizard. |
 | `direct_conversation` | `/messages/[conversationId]` | live route | live API | implemented | Wraps live direct messaging. |
 | `direct_message_detail_desktop` | `/messages/[conversationId]` | responsive reference | live API | implemented | Desktop detail maps to the same route. |
@@ -66,7 +66,7 @@ Audit date: 2026-05-08
 | `resource_detail_view` | `/resources/[resourceId]` | route-complete prototype | fixture | not implemented | Resource detail. |
 | `resource_library_hub` | `/resources` | route-complete prototype | fixture | not implemented | Resource library. |
 | `resource_management_console` | `/admin/resources` | route-complete prototype | fixture | not implemented | Admin resource management. |
-| `rsvp_attendee_management` | `/events/[eventId]/attendees` | route-complete prototype | fixture | not implemented | RSVP and attendee management. |
+| `rsvp_attendee_management` | `/events/[eventId]/attendees` | live route | live API | implemented | RSVP and attendee management backed by event attendee records. |
 | `share_your_impact_story` | `/success-stories/new` | route-complete prototype | fixture | not implemented | Impact story submission form. |
 | `story_detail_empowering_agri_tech_in_zambia` | `/success-stories/[storyId]` | route-complete prototype | fixture | not implemented | Story detail. |
 | `success_stories_hub` | `/success-stories` | route-complete prototype | fixture | not implemented | Success stories hub. |
@@ -89,7 +89,6 @@ These routes were necessary to map every export cleanly:
 
 ## Current Backend Gap Summary
 
-- Implemented live modules: auth, profile, program affiliation, verification, directory, communities, direct messages, notifications, admin overview, admin verification, admin moderation, audit log, notification digests.
-- Missing backend modules: events, initiatives, opportunities, mentorship, resources, success stories, contributions/payments/receipts, elections/voter rolls/ballots/audits, chapter analytics, treasury.
+- Implemented live modules: auth, profile, program affiliation, verification, directory, communities, direct messages, notifications, admin overview, admin verification, admin moderation, audit log, notification digests, opportunities, resources, success stories, events.
+- Missing backend modules: initiatives, mentorship, contributions/payments/receipts, elections/voter rolls/ballots/audits, chapter analytics, treasury.
 - Current route parity status: frontend routes exist for all exported screens; data is live only where the backend already exists.
-

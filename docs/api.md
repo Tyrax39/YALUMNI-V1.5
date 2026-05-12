@@ -448,13 +448,16 @@ POST   /api/v1/notifications/read-all                 # implemented
 ## Phase 7: Events
 
 ```text
-GET    /api/v1/events
-POST   /api/v1/events
-GET    /api/v1/events/{event_id}
-PATCH  /api/v1/events/{event_id}
-POST   /api/v1/events/{event_id}/publish
-POST   /api/v1/events/{event_id}/register
-GET    /api/v1/events/{event_id}/registrations
+GET    /api/v1/events                         # implemented
+POST   /api/v1/events                         # implemented
+GET    /api/v1/events/{event_id}              # implemented
+GET    /api/v1/events/{event_id}/agenda       # implemented
+GET    /api/v1/events/{event_id}/attendees    # implemented
+POST   /api/v1/events/{event_id}/rsvp         # implemented
+PATCH  /api/v1/events/{event_id}              # planned organizer/admin edit
+POST   /api/v1/events/{event_id}/publish      # planned draft workflow
+POST   /api/v1/events/{event_id}/cancel-rsvp  # planned
+POST   /api/v1/events/{event_id}/check-in     # planned
 ```
 
 ## Admin

@@ -119,8 +119,9 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
 
 ## Phase 8: Events
 
-- Events.
-- RSVPs and registrations.
+- Events. Started with member list/create/detail APIs and UI.
+- RSVPs and registrations. Started with member RSVP and attendee list APIs/UI.
+- Agenda/session planning. Started with agenda item persistence and attendee-facing agenda route.
 - Tickets.
 - Organizer view.
 - Check-in later.

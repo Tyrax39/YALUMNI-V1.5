@@ -1,4 +1,4 @@
-import { PrototypeFeaturePage } from "@/components/platform/prototype-feature-page";
+import { EventAttendees } from "@/components/events/event-surfaces";
 
 type EventAttendeesPageProps = {
   params: Promise<{
@@ -9,6 +9,5 @@ type EventAttendeesPageProps = {
 export default async function EventAttendeesPage({ params }: EventAttendeesPageProps) {
   const { eventId } = await params;
 
-  return <PrototypeFeaturePage recordId={eventId} screenKey="eventAttendees" />;
+  return <EventAttendees eventId={eventId} />;
 }
-
