@@ -128,7 +128,7 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
 
 ## Post-MVP
 
-- Initiatives.
+- Initiatives. Started with member proposal/list/detail APIs, milestone persistence, and member UI.
 - Opportunities.
 - Mentorship.
 - Contributions and ledger.

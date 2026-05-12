@@ -43,8 +43,8 @@ Audit date: 2026-05-08
 | `election_results_audit` | `/elections/[electionId]/results` | route-complete prototype | fixture | not implemented | Member results audit. |
 | `election_voting_details` | `/elections/[electionId]/vote` | route-complete prototype | fixture | not implemented | Voting detail route with disabled cast action. |
 | `find_a_mentor` | `/mentorship/find` | route-complete prototype | fixture | not implemented | Mentor discovery route. |
-| `initiative_details` | `/initiatives/[initiativeId]` | route-complete prototype | fixture | not implemented | Initiative detail route. |
-| `initiative_hub` | `/initiatives` | route-complete prototype | fixture | not implemented | Initiative hub. |
+| `initiative_details` | `/initiatives/[initiativeId]` | live route | live API | implemented | Initiative detail route backed by live initiative and milestone records. |
+| `initiative_hub` | `/initiatives` | live route | live API | implemented | Initiative hub backed by live initiative search and current-user initiatives. |
 | `introduction_requests` | `/messages/introductions` | route-complete prototype | fixture | not implemented | Introduction request center. |
 | `introduction_requests_desktop` | `/messages/introductions` | responsive reference | fixture | not implemented | Desktop reference for the same route. |
 | `member_dashboard` | `/dashboard` | live route | live API | partially implemented | Existing dashboard remains the high-level hub. |
@@ -59,7 +59,7 @@ Audit date: 2026-05-08
 | `opportunity_moderation_queue` | `/admin/opportunities` | route-complete prototype | fixture | not implemented | Admin opportunity moderation. |
 | `post_new_opportunity` | `/opportunities/new` | route-complete prototype | fixture | not implemented | Opportunity posting form. |
 | `program_affiliation` | `/profile/program-affiliation` | live route | live API | implemented | Uses profile affiliation APIs. |
-| `propose_new_initiative` | `/initiatives/new` | route-complete prototype | fixture | not implemented | Initiative proposal form. |
+| `propose_new_initiative` | `/initiatives/new` | live route | live API | implemented | Initiative proposal form creates live member initiatives with optional first milestone. |
 | `public_landing_page` | `/` | live route | live API | implemented | Existing code-native public landing. |
 | `public_landing_page_mobile` | `/` | responsive reference | live API | implemented | Mobile landing reference. |
 | `request_mentorship` | `/mentorship/request` | route-complete prototype | fixture | not implemented | Mentorship request form. |
@@ -89,6 +89,6 @@ These routes were necessary to map every export cleanly:
 
 ## Current Backend Gap Summary
 
-- Implemented live modules: auth, profile, program affiliation, verification, directory, communities, direct messages, notifications, admin overview, admin verification, admin moderation, audit log, notification digests, opportunities, resources, success stories, events.
-- Missing backend modules: initiatives, mentorship, contributions/payments/receipts, elections/voter rolls/ballots/audits, chapter analytics, treasury.
+- Implemented live modules: auth, profile, program affiliation, verification, directory, communities, direct messages, notifications, admin overview, admin verification, admin moderation, audit log, notification digests, opportunities, resources, success stories, events, initiatives.
+- Missing backend modules: mentorship, contributions/payments/receipts, elections/voter rolls/ballots/audits, chapter analytics, treasury.
 - Current route parity status: frontend routes exist for all exported screens; data is live only where the backend already exists.

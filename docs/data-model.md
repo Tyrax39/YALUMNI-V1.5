@@ -83,9 +83,9 @@
 
 ### Initiatives
 
-- `initiatives`
+- `initiatives` - implemented for member-created initiatives with title, summary, description, focus area, stage, country/city, partner organization, target beneficiaries, impact goal, support needed, date window, creator, and status metadata.
 - `initiative_members`
-- `initiative_milestones`
+- `initiative_milestones` - implemented for planned/in-progress/completed/blocked initiative milestones with title, description, due date, and sort order.
 - `initiative_tasks`
 - `initiative_updates`
 - `initiative_documents`

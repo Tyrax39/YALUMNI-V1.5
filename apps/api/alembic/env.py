@@ -9,6 +9,7 @@ from app.modules.alumni import models as alumni_models
 from app.modules.auth import models as auth_models
 from app.modules.communities import models as community_models
 from app.modules.events import models as event_models
+from app.modules.initiatives import models as initiative_models
 from app.modules.messages import models as message_models
 from app.modules.notifications import models as notification_models
 from app.modules.opportunities import models as opportunity_models
@@ -20,6 +21,7 @@ _ = (
     alumni_models,
     community_models,
     event_models,
+    initiative_models,
     message_models,
     notification_models,
     opportunity_models,

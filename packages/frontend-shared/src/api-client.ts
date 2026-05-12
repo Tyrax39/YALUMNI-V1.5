@@ -358,6 +358,79 @@ export type EventFilters = {
   q?: string;
 };
 
+export type InitiativeMilestone = {
+  description?: string | null;
+  due_at?: string | null;
+  id: string;
+  sort_order: number;
+  status: string;
+  title: string;
+};
+
+export type InitiativeItem = {
+  city?: string | null;
+  country?: string | null;
+  created_at: string;
+  created_by_display_name?: string | null;
+  created_by_user_id?: string | null;
+  description: string;
+  ends_at?: string | null;
+  focus_area: string;
+  id: string;
+  impact_goal?: string | null;
+  milestone_count: number;
+  milestones: InitiativeMilestone[];
+  partner_organization?: string | null;
+  stage: string;
+  starts_at?: string | null;
+  status: string;
+  summary: string;
+  support_needed?: string | null;
+  target_beneficiaries?: number | null;
+  title: string;
+  updated_at: string;
+};
+
+export type InitiativeListResponse = {
+  has_more: boolean;
+  initiatives: InitiativeItem[];
+  limit: number;
+  offset: number;
+  total: number;
+};
+
+export type InitiativePayload = {
+  city?: string | null;
+  country?: string | null;
+  description: string;
+  ends_at?: string | null;
+  focus_area?: string;
+  impact_goal?: string | null;
+  milestones?: Array<{
+    description?: string | null;
+    due_at?: string | null;
+    status?: string;
+    title: string;
+  }>;
+  partner_organization?: string | null;
+  stage?: string;
+  starts_at?: string | null;
+  summary: string;
+  support_needed?: string | null;
+  target_beneficiaries?: number | null;
+  title: string;
+};
+
+export type InitiativeFilters = {
+  country?: string;
+  focusArea?: string;
+  limit?: number;
+  mine?: boolean;
+  offset?: number;
+  q?: string;
+  stage?: string;
+};
+
 export type ResourceItem = {
   country?: string | null;
   created_at: string;
@@ -729,6 +802,38 @@ export function rsvpEvent(eventId: string): Promise<EventItem> {
     `/api/backend/api/v1/events/${encodeURIComponent(eventId)}/rsvp`,
     "POST"
   );
+}
+
+function initiativeQueryString(filters: InitiativeFilters = {}) {
+  const params = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(filters)) {
+    if (typeof value === "undefined" || value === null || value === "") {
+      continue;
+    }
+
+    const queryKey = key === "focusArea" ? "focus_area" : key;
+    params.set(queryKey, String(value));
+  }
+
+  return params.toString();
+}
+
+export function fetchInitiatives(
+  filters: InitiativeFilters = {}
+): Promise<InitiativeListResponse> {
+  const query = initiativeQueryString({ limit: 12, offset: 0, ...filters });
+  return fetchJson<InitiativeListResponse>(`/api/backend/api/v1/initiatives?${query}`);
+}
+
+export function fetchInitiative(initiativeId: string): Promise<InitiativeItem> {
+  return fetchJson<InitiativeItem>(
+    `/api/backend/api/v1/initiatives/${encodeURIComponent(initiativeId)}`
+  );
+}
+
+export function createInitiative(payload: InitiativePayload): Promise<InitiativeItem> {
+  return mutateJson<InitiativeItem>("/api/backend/api/v1/initiatives", "POST", payload);
 }
 
 function resourceQueryString(filters: ResourceFilters = {}) {

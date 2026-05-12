@@ -1,6 +1,5 @@
-import { PrototypeFeaturePage } from "@/components/platform/prototype-feature-page";
+import { InitiativesHub } from "@/components/initiatives/initiative-surfaces";
 
 export default function InitiativesPage() {
-  return <PrototypeFeaturePage screenKey="initiativesHub" />;
+  return <InitiativesHub />;
 }
-

@@ -460,6 +460,18 @@ POST   /api/v1/events/{event_id}/cancel-rsvp  # planned
 POST   /api/v1/events/{event_id}/check-in     # planned
 ```
 
+## Post-MVP: Initiatives
+
+```text
+GET    /api/v1/initiatives                    # implemented
+POST   /api/v1/initiatives                    # implemented
+GET    /api/v1/initiatives/{initiative_id}    # implemented
+PATCH  /api/v1/initiatives/{initiative_id}    # planned creator/admin edit
+POST   /api/v1/initiatives/{initiative_id}/milestones # planned milestone edits
+POST   /api/v1/initiatives/{initiative_id}/members    # planned team roles
+POST   /api/v1/initiatives/{initiative_id}/updates    # planned progress updates
+```
+
 ## Admin
 
 Started through role-protected auth admin overview, verification queue, and audit-event endpoints.

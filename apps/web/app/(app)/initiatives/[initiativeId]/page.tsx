@@ -1,4 +1,4 @@
-import { PrototypeFeaturePage } from "@/components/platform/prototype-feature-page";
+import { InitiativeDetail } from "@/components/initiatives/initiative-surfaces";
 
 type InitiativePageProps = {
   params: Promise<{
@@ -9,6 +9,5 @@ type InitiativePageProps = {
 export default async function InitiativePage({ params }: InitiativePageProps) {
   const { initiativeId } = await params;
 
-  return <PrototypeFeaturePage recordId={initiativeId} screenKey="initiativeDetail" />;
+  return <InitiativeDetail initiativeId={initiativeId} />;
 }
-
