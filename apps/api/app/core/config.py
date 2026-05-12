@@ -39,6 +39,14 @@ class Settings(BaseSettings):
     platform_owner_password: str | None = None
     seed_test_accounts: bool = False
     test_accounts_password: str = "YalumniTest@12345!"
+    mwf_directory_fellows_url: str = (
+        "https://www.mandelawashingtonfellowship.org/wp-json/yali/v1/fellows/"
+    )
+    mwf_directory_filters_url: str = (
+        "https://www.mandelawashingtonfellowship.org/wp-json/yali/v1/directory_filters/"
+    )
+    mwf_directory_user_agent: str = "YALUMNI-V1.5/1.0 (+https://yalumni.org)"
+    mwf_directory_cache_ttl_hours: int = 24
     upload_storage_provider: str = "LOCAL"
     upload_storage_prefix: str = "yalumni"
     verification_upload_dir: str = ".local/uploads/verification"

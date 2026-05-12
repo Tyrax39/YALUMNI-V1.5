@@ -203,3 +203,55 @@ class AlumniDirectorySearchResponse(BaseModel):
     limit: int
     offset: int
     has_more: bool
+
+
+class MwfAlumniProfileResponse(BaseModel):
+    source_id: int
+    display_name: str
+    first_name: str | None
+    last_name: str | None
+    country_slug: str | None
+    country_label: str | None
+    bio: str | None
+    field_of_study: str | None
+    expertise_labels: list[str]
+    leadership_institute: str | None
+    us_state: str | None
+    program_years: list[str]
+    image_url: str | None
+    source_detail_url: str | None
+    last_seen_at: datetime
+
+
+class MwfAlumniSyncRunResponse(BaseModel):
+    id: uuid.UUID
+    source_url: str
+    status: str
+    started_at: datetime
+    finished_at: datetime | None
+    fetched_count: int
+    imported_count: int
+    updated_count: int
+    deactivated_count: int
+    error_message: str | None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class MwfAlumniSyncStatusResponse(BaseModel):
+    active_profile_count: int
+    cache_stale: bool
+    cache_empty: bool
+    sync_in_progress: bool
+    cache_ttl_hours: int
+    last_synced_at: datetime | None
+    latest_run: MwfAlumniSyncRunResponse | None
+
+
+class MwfAlumniSearchResponse(BaseModel):
+    profiles: list[MwfAlumniProfileResponse]
+    total: int
+    limit: int
+    offset: int
+    has_more: bool
+    sync: MwfAlumniSyncStatusResponse

@@ -148,6 +148,21 @@ Directory search supports:
 - `offset`
 - `sort=name|recent|country|sector`
 
+MWF alumni directory cache supports:
+
+- `GET /api/v1/alumni/mwf/search` for authenticated `ALUMNI_MEMBER` or
+  `SUPER_ADMIN` users. It searches the local cached public Mandela Washington
+  Fellowship alumni directory and supports `q`, `country`, `year`,
+  `field_of_study`, `expertise`, `leadership_institute`, `limit`, `offset`, and
+  `sort=name|country|year|recent`.
+- `GET /api/v1/alumni/mwf/{source_id}` for authenticated member/super-admin
+  detail lookup.
+- `GET /api/v1/alumni/admin/mwf-sync` for `SUPER_ADMIN` cache status.
+- `POST /api/v1/alumni/admin/mwf-sync` for `SUPER_ADMIN` manual refresh.
+- Member search always reads local cache. If the cache is stale, the response
+  includes sync metadata and queues a background refresh when one is not already
+  running.
+
 Community listing supports:
 
 - `q`

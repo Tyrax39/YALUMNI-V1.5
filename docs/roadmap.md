@@ -53,6 +53,7 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
 - Profile detail API and protected web detail page. Implemented for verified member profiles.
 - Privacy-aware serializers. Started using profile visibility settings.
 - Dashboard directory search UI. Implemented.
+- MWF Alumni hybrid cache. Implemented as member-only directory tab backed by public Mandela Washington Fellowship alumni records, local cache tables, cache status metadata, and super-admin refresh controls.
 - Saved searches, facets, recommendations, profile-to-profile contact, and dedicated search indexing later.
 
 ## Phase 5: Communities

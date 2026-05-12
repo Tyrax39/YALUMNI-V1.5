@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, Text, Uuid
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, Integer, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -136,3 +136,54 @@ class VerificationEvidence(Base, TimestampMixin):
         back_populates="evidence_items"
     )
     uploaded_by_user: Mapped[User | None] = relationship()
+
+
+class MwfAlumniProfile(Base, TimestampMixin):
+    __tablename__ = "mwf_alumni_profiles"
+    __table_args__ = (
+        Index("ix_mwf_alumni_profiles_active_name", "active", "display_name"),
+        Index("ix_mwf_alumni_profiles_active_country", "active", "country_label"),
+        Index("ix_mwf_alumni_profiles_active_field", "active", "field_of_study"),
+        Index("ix_mwf_alumni_profiles_active_institute", "active", "leadership_institute"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    source_id: Mapped[int] = mapped_column(Integer, unique=True, nullable=False, index=True)
+    first_name: Mapped[str | None] = mapped_column(String(120))
+    last_name: Mapped[str | None] = mapped_column(String(120))
+    display_name: Mapped[str] = mapped_column(String(240), nullable=False)
+    country_slug: Mapped[str | None] = mapped_column(String(120))
+    country_label: Mapped[str | None] = mapped_column(String(160))
+    bio: Mapped[str | None] = mapped_column(Text)
+    field_of_study: Mapped[str | None] = mapped_column(String(180))
+    expertise_slugs: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    expertise_labels: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    leadership_institute: Mapped[str | None] = mapped_column(String(220))
+    us_state: Mapped[str | None] = mapped_column(String(120))
+    program_years: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    image_url: Mapped[str | None] = mapped_column(String(500))
+    source_detail_url: Mapped[str | None] = mapped_column(String(500))
+    raw_source_payload: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    imported_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    deactivated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class MwfAlumniSyncRun(Base):
+    __tablename__ = "mwf_alumni_sync_runs"
+    __table_args__ = (
+        Index("ix_mwf_alumni_sync_runs_status_started", "status", "started_at"),
+        Index("ix_mwf_alumni_sync_runs_finished", "finished_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    source_url: Mapped[str] = mapped_column(String(500), nullable=False)
+    status: Mapped[str] = mapped_column(String(30), default="STARTED", nullable=False)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    fetched_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    imported_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    updated_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    deactivated_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    error_message: Mapped[str | None] = mapped_column(Text)

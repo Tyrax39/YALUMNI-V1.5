@@ -22,6 +22,29 @@ export type AdminOverview = {
   verified_users?: number;
 };
 
+export type MwfAlumniSyncRun = {
+  deactivated_count: number;
+  error_message: string | null;
+  fetched_count: number;
+  finished_at: string | null;
+  id: string;
+  imported_count: number;
+  source_url: string;
+  started_at: string;
+  status: string;
+  updated_count: number;
+};
+
+export type MwfAlumniSyncStatus = {
+  active_profile_count: number;
+  cache_empty: boolean;
+  cache_stale: boolean;
+  cache_ttl_hours: number;
+  last_synced_at: string | null;
+  latest_run: MwfAlumniSyncRun | null;
+  sync_in_progress: boolean;
+};
+
 export type AdminAuditEvent = {
   event_type?: string;
   user_email?: string | null;
@@ -632,6 +655,14 @@ export function fetchSessionUser(): Promise<AuthUser> {
 
 export function fetchAdminOverview(): Promise<AdminOverview> {
   return fetchJson<AdminOverview>("/api/backend/api/v1/auth/admin/overview");
+}
+
+export function fetchMwfSyncStatus(): Promise<MwfAlumniSyncStatus> {
+  return fetchJson<MwfAlumniSyncStatus>("/api/backend/api/v1/alumni/admin/mwf-sync");
+}
+
+export function refreshMwfSync(): Promise<MwfAlumniSyncStatus> {
+  return mutateJson<MwfAlumniSyncStatus>("/api/backend/api/v1/alumni/admin/mwf-sync", "POST");
 }
 
 export function fetchAdminAuditEvents(limit = 6): Promise<AdminAuditEventListResponse> {

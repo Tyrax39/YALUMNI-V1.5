@@ -24,6 +24,8 @@
 
 - `alumni_profiles` - implemented with current-user profile fields, profile photo metadata, skills JSON, visibility JSON, and completion timestamp.
 - `program_affiliations` - implemented for YALI program/cohort attachment.
+- `mwf_alumni_profiles` - implemented as a separate local cache of public Mandela Washington Fellowship alumni directory records. These are not YALUMNI login users.
+- `mwf_alumni_sync_runs` - implemented for source URL, status, timestamps, fetched/imported/updated/deactivated counts, and refresh errors.
 - `profile_visibility_settings` - folded into `alumni_profiles.visibility` for the MVP, likely split later if rules become per-field/per-community.
 - `skills`
 - `alumni_skills`

@@ -3,6 +3,7 @@ from typing import Annotated
 
 from fastapi import (
     APIRouter,
+    BackgroundTasks,
     Depends,
     File,
     Form,
@@ -22,9 +23,16 @@ from app.core.security import utcnow
 from app.core.storage import UploadCategory, delete_upload, upload_response
 from app.modules.alumni.models import (
     AlumniProfile,
+    MwfAlumniProfile,
     ProgramAffiliation,
     VerificationEvidence,
     VerificationRequest,
+)
+from app.modules.alumni.mwf_directory import (
+    build_mwf_search_query,
+    mwf_cache_status,
+    run_mwf_sync_background,
+    sync_mwf_alumni_directory,
 )
 from app.modules.alumni.schemas import (
     AlumniDirectoryProfileResponse,
@@ -32,6 +40,9 @@ from app.modules.alumni.schemas import (
     AlumniDirectorySearchResponse,
     AlumniProfileResponse,
     AlumniProfileUpdate,
+    MwfAlumniProfileResponse,
+    MwfAlumniSearchResponse,
+    MwfAlumniSyncStatusResponse,
     ProgramAffiliationCreate,
     VerificationEvidenceResponse,
     VerificationRequestCreate,
@@ -49,6 +60,11 @@ verification_admin_dependency = require_roles(
     GlobalRole.PLATFORM_ADMIN.value,
     GlobalRole.VERIFICATION_ADMIN.value,
 )
+mwf_member_dependency = require_roles(
+    GlobalRole.ALUMNI_MEMBER.value,
+    GlobalRole.SUPER_ADMIN.value,
+)
+mwf_super_admin_dependency = require_roles(GlobalRole.SUPER_ADMIN.value)
 
 DEFAULT_VISIBILITY = {
     "email": False,
@@ -200,6 +216,38 @@ def _serialize_directory_profile(profile: AlumniProfile) -> AlumniDirectoryProfi
         if visibility["program"]
         else [],
         profile_completed_at=profile.profile_completed_at,
+    )
+
+
+def _serialize_mwf_profile(profile: MwfAlumniProfile) -> MwfAlumniProfileResponse:
+    return MwfAlumniProfileResponse(
+        source_id=profile.source_id,
+        display_name=profile.display_name,
+        first_name=profile.first_name,
+        last_name=profile.last_name,
+        country_slug=profile.country_slug,
+        country_label=profile.country_label,
+        bio=profile.bio,
+        field_of_study=profile.field_of_study,
+        expertise_labels=profile.expertise_labels or [],
+        leadership_institute=profile.leadership_institute,
+        us_state=profile.us_state,
+        program_years=profile.program_years or [],
+        image_url=profile.image_url,
+        source_detail_url=profile.source_detail_url,
+        last_seen_at=profile.last_seen_at,
+    )
+
+
+def _serialize_mwf_sync_status(status_payload: dict) -> MwfAlumniSyncStatusResponse:
+    return MwfAlumniSyncStatusResponse(
+        active_profile_count=status_payload["active_profile_count"],
+        cache_stale=status_payload["cache_stale"],
+        cache_empty=status_payload["cache_empty"],
+        sync_in_progress=status_payload["sync_in_progress"],
+        cache_ttl_hours=status_payload["cache_ttl_hours"],
+        last_synced_at=status_payload["last_synced_at"],
+        latest_run=status_payload["latest_run"],
     )
 
 
@@ -600,6 +648,105 @@ def search_alumni_directory(
         offset=offset,
         has_more=offset + len(profiles) < total,
     )
+
+
+@router.get("/mwf/search", response_model=MwfAlumniSearchResponse)
+def search_mwf_alumni_directory(
+    background_tasks: BackgroundTasks,
+    current_user: Annotated[User, Depends(mwf_member_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+    q: Annotated[str | None, Query(max_length=120)] = None,
+    country: Annotated[str | None, Query(max_length=120)] = None,
+    year: Annotated[str | None, Query(max_length=10)] = None,
+    field_of_study: Annotated[str | None, Query(max_length=180)] = None,
+    expertise: Annotated[str | None, Query(max_length=120)] = None,
+    leadership_institute: Annotated[str | None, Query(max_length=220)] = None,
+    limit: Annotated[int, Query(ge=1, le=50)] = 20,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    sort: Annotated[str, Query(pattern="^(name|country|year|recent)$")] = "name",
+) -> MwfAlumniSearchResponse:
+    _ = current_user
+    sync_payload = mwf_cache_status(db)
+    if sync_payload["cache_stale"] and not sync_payload["sync_in_progress"]:
+        background_tasks.add_task(run_mwf_sync_background)
+        sync_payload["sync_in_progress"] = True
+
+    if sync_payload["cache_empty"]:
+        return MwfAlumniSearchResponse(
+            profiles=[],
+            total=0,
+            limit=limit,
+            offset=offset,
+            has_more=False,
+            sync=_serialize_mwf_sync_status(sync_payload),
+        )
+
+    query = build_mwf_search_query(
+        q=q,
+        country=country,
+        year=year,
+        field_of_study=field_of_study,
+        expertise=expertise,
+        leadership_institute=leadership_institute,
+    )
+    total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+    sort_columns = {
+        "country": (MwfAlumniProfile.country_label.asc(), MwfAlumniProfile.display_name.asc()),
+        "name": (MwfAlumniProfile.display_name.asc(),),
+        "recent": (MwfAlumniProfile.last_seen_at.desc(), MwfAlumniProfile.display_name.asc()),
+        "year": (cast(MwfAlumniProfile.program_years, String).desc(),),
+    }
+    profiles = db.scalars(query.order_by(*sort_columns[sort]).offset(offset).limit(limit)).all()
+    return MwfAlumniSearchResponse(
+        profiles=[_serialize_mwf_profile(profile) for profile in profiles],
+        total=total,
+        limit=limit,
+        offset=offset,
+        has_more=offset + len(profiles) < total,
+        sync=_serialize_mwf_sync_status(sync_payload),
+    )
+
+
+@router.get("/mwf/{source_id}", response_model=MwfAlumniProfileResponse)
+def get_mwf_alumni_profile(
+    source_id: int,
+    current_user: Annotated[User, Depends(mwf_member_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> MwfAlumniProfileResponse:
+    _ = current_user
+    profile = db.scalar(
+        select(MwfAlumniProfile).where(
+            MwfAlumniProfile.source_id == source_id,
+            MwfAlumniProfile.active.is_(True),
+        )
+    )
+    if profile is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="MWF alumni profile not found",
+        )
+    return _serialize_mwf_profile(profile)
+
+
+@router.get("/admin/mwf-sync", response_model=MwfAlumniSyncStatusResponse)
+def get_mwf_sync_status(
+    current_user: Annotated[User, Depends(mwf_super_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> MwfAlumniSyncStatusResponse:
+    _ = current_user
+    return _serialize_mwf_sync_status(mwf_cache_status(db))
+
+
+@router.post("/admin/mwf-sync", response_model=MwfAlumniSyncStatusResponse)
+def refresh_mwf_sync(
+    request: Request,
+    current_user: Annotated[User, Depends(mwf_super_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> MwfAlumniSyncStatusResponse:
+    sync_mwf_alumni_directory(db)
+    _create_security_event(db, request, current_user, "alumni.mwf_sync_refreshed")
+    db.commit()
+    return _serialize_mwf_sync_status(mwf_cache_status(db))
 
 
 @router.get("/{user_id}/photo")

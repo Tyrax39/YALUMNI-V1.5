@@ -20,8 +20,8 @@ Audit date: 2026-05-08
 | `admin_election_console` | `/admin/elections/[electionId]` | route-complete prototype | fixture | not implemented | Admin election operations shell with fixture controls. |
 | `admin_verification_queue` | `/admin/verification` | live route | live API | implemented | Wraps the live verification queue. |
 | `agenda_speaker_planner` | `/events/[eventId]/agenda` | live route | live API | implemented | Agenda and speaker planner route backed by event agenda records. |
-| `alumni_directory` | `/directory` | live route | live API | implemented | Uses current directory search API. |
-| `alumni_directory_mobile` | `/directory` | responsive reference | live API | implemented | Mobile behavior folded into canonical directory. |
+| `alumni_directory` | `/directory` | live route | live API | implemented | Uses current member directory API plus the member-only MWF Alumni cache tab. |
+| `alumni_directory_mobile` | `/directory` | responsive reference | live API | implemented | Mobile behavior folded into canonical directory including YALUMNI/MWF tabs. |
 | `alumni_verification` | `/verification` | live route | live API | implemented | Uses current member verification APIs. |
 | `annual_gathering_hub` | `/events/[eventId]` | live route | live API | implemented | Event detail and gathering hub backed by live event records. |
 | `ballot_privacy_integrity_controls` | `/admin/elections/[electionId]/privacy` | route-complete prototype | fixture | not implemented | Ballot privacy and integrity controls. |
@@ -89,6 +89,6 @@ These routes were necessary to map every export cleanly:
 
 ## Current Backend Gap Summary
 
-- Implemented live modules: auth, profile, program affiliation, verification, directory, communities, direct messages, notifications, admin overview, admin verification, admin moderation, audit log, notification digests, opportunities, resources, success stories, events, initiatives.
+- Implemented live modules: auth, profile, program affiliation, verification, directory, MWF alumni directory cache, communities, direct messages, notifications, admin overview, admin verification, admin moderation, audit log, notification digests, opportunities, resources, success stories, events, initiatives.
 - Missing backend modules: mentorship, contributions/payments/receipts, elections/voter rolls/ballots/audits, chapter analytics, treasury.
 - Current route parity status: frontend routes exist for all exported screens; data is live only where the backend already exists.

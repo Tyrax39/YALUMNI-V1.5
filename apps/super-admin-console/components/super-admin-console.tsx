@@ -11,9 +11,12 @@ import {
   type AdminAuditEvent,
   type AdminOverview,
   type AuthUser,
+  type MwfAlumniSyncStatus,
   fetchAdminAuditEvents,
   fetchAdminOverview,
+  fetchMwfSyncStatus,
   fetchSessionUser,
+  refreshMwfSync,
   isSuperAdmin
 } from "@yalumni/frontend-shared";
 import {
@@ -22,6 +25,7 @@ import {
   ClipboardList,
   DatabaseZap,
   LogOut,
+  RefreshCw,
   ShieldAlert,
   ShieldCheck,
   UsersRound
@@ -168,7 +172,12 @@ export function SuperAdminConsole({ pageId }: SuperAdminConsoleProps) {
         {pageId === "roles" ? <RoleMatrix /> : null}
         {pageId === "diagnostics" ? <Diagnostics overview={state.overview} user={state.user} /> : null}
         {pageId === "audit" ? <AuditPanel events={state.auditEvents} overview={state.overview} /> : null}
-        {pageId === "system" ? <SystemChecks overview={state.overview} /> : null}
+        {pageId === "system" ? (
+          <div className="grid gap-5">
+            <SystemChecks overview={state.overview} />
+            <MwfCachePanel />
+          </div>
+        ) : null}
         {pageId === "home" ? (
           <>
             <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -410,6 +419,123 @@ function SystemChecks({ overview }: { overview: AdminOverview | null }) {
       <SystemCard icon={<ShieldCheck className="h-5 w-5" />} label="Super admin" value="3012" />
       <SystemCard icon={<BadgeCheck className="h-5 w-5" />} label="Backend API" value={overview ? "reachable" : "check 8002"} />
     </section>
+  );
+}
+
+function MwfCachePanel() {
+  const [status, setStatus] = useState<MwfAlumniSyncStatus | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    fetchMwfSyncStatus()
+      .then((response) => {
+        if (isMounted) {
+          setStatus(response);
+          setMessage(null);
+        }
+      })
+      .catch((caught) => {
+        if (isMounted) {
+          setMessage(
+            caught instanceof ApiClientError ? caught.message : "MWF cache status unavailable."
+          );
+        }
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    setMessage(null);
+    try {
+      const response = await refreshMwfSync();
+      setStatus(response);
+    } catch (caught) {
+      setMessage(caught instanceof ApiClientError ? caught.message : "MWF cache refresh failed.");
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
+  const headline = status
+    ? `${status.active_profile_count.toLocaleString()} profiles cached`
+    : "Status loading";
+  const stateLabel = status?.sync_in_progress
+    ? "Refresh running"
+    : status?.cache_empty
+      ? "Empty cache"
+      : status?.cache_stale
+        ? "Stale cache"
+        : "Current cache";
+
+  return (
+    <section className="rounded-lg border border-border bg-white p-5 shadow-soft">
+      <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-start">
+        <div>
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-primary text-white">
+              <DatabaseZap aria-hidden="true" className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-sm font-bold uppercase tracking-[0.12em] text-muted">
+                MWF alumni cache
+              </p>
+              <h3 className="mt-1 font-display text-2xl font-bold text-ink">{headline}</h3>
+            </div>
+          </div>
+          <p className="mt-4 max-w-3xl text-sm leading-6 text-muted">
+            Super-admin-only controls for the Mandela Washington Fellowship public alumni cache.
+            Member searches use this local cache instead of calling the official source live.
+          </p>
+        </div>
+        <button
+          className="focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-primary px-5 text-sm font-semibold text-white transition hover:bg-[#003d7d] disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={refreshing}
+          onClick={handleRefresh}
+          type="button"
+        >
+          <RefreshCw aria-hidden="true" className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+          {refreshing ? "Refreshing" : "Refresh cache"}
+        </button>
+      </div>
+
+      {message ? (
+        <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+          {message}
+        </p>
+      ) : null}
+
+      {status ? (
+        <div className="mt-5 grid gap-3 md:grid-cols-4">
+          <SystemMetric label="State" value={stateLabel} />
+          <SystemMetric label="TTL" value={`${status.cache_ttl_hours}h`} />
+          <SystemMetric
+            label="Last synced"
+            value={status.last_synced_at ? formatDate(status.last_synced_at) : "pending"}
+          />
+          <SystemMetric label="Last run" value={status.latest_run?.status ?? "none"} />
+        </div>
+      ) : null}
+
+      {status?.latest_run?.error_message ? (
+        <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+          {status.latest_run.error_message}
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+function SystemMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-border bg-surface p-4">
+      <p className="text-xs font-bold uppercase tracking-[0.12em] text-muted">{label}</p>
+      <p className="mt-2 text-sm font-bold text-ink">{value}</p>
+    </div>
   );
 }
 

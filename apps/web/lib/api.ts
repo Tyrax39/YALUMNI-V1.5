@@ -469,6 +469,56 @@ export type AlumniDirectorySearchResponse = {
   total: number;
 };
 
+export type MwfAlumniProfile = {
+  source_id: number;
+  display_name: string;
+  first_name: string | null;
+  last_name: string | null;
+  country_slug: string | null;
+  country_label: string | null;
+  bio: string | null;
+  field_of_study: string | null;
+  expertise_labels: string[];
+  leadership_institute: string | null;
+  us_state: string | null;
+  program_years: string[];
+  image_url: string | null;
+  source_detail_url: string | null;
+  last_seen_at: string;
+};
+
+export type MwfAlumniSyncRun = {
+  id: string;
+  source_url: string;
+  status: string;
+  started_at: string;
+  finished_at: string | null;
+  fetched_count: number;
+  imported_count: number;
+  updated_count: number;
+  deactivated_count: number;
+  error_message: string | null;
+};
+
+export type MwfAlumniSyncStatus = {
+  active_profile_count: number;
+  cache_stale: boolean;
+  cache_empty: boolean;
+  sync_in_progress: boolean;
+  cache_ttl_hours: number;
+  last_synced_at: string | null;
+  latest_run: MwfAlumniSyncRun | null;
+};
+
+export type MwfAlumniSearchResponse = {
+  has_more: boolean;
+  limit: number;
+  offset: number;
+  profiles: MwfAlumniProfile[];
+  sync: MwfAlumniSyncStatus;
+  total: number;
+};
+
 export type Community = {
   id: string;
   name: string;
@@ -1678,6 +1728,58 @@ export function getAlumniDirectoryProfile(
 ): Promise<AlumniDirectoryProfile> {
   return protectedApiFetch<AlumniDirectoryProfile>(
     `/api/v1/alumni/${encodeURIComponent(userId)}`,
+    {
+      headers: authHeaders(accessToken)
+    }
+  );
+}
+
+export function searchMwfAlumniDirectory(
+  accessToken: string,
+  params: {
+    country?: string;
+    expertise?: string;
+    fieldOfStudy?: string;
+    leadershipInstitute?: string;
+    limit?: number;
+    offset?: number;
+    q?: string;
+    sort?: string;
+    year?: string;
+  } = {}
+): Promise<MwfAlumniSearchResponse> {
+  const searchParams = new URLSearchParams();
+  if (params.q) {
+    searchParams.set("q", params.q);
+  }
+  if (params.country) {
+    searchParams.set("country", params.country);
+  }
+  if (params.year) {
+    searchParams.set("year", params.year);
+  }
+  if (params.fieldOfStudy) {
+    searchParams.set("field_of_study", params.fieldOfStudy);
+  }
+  if (params.expertise) {
+    searchParams.set("expertise", params.expertise);
+  }
+  if (params.leadershipInstitute) {
+    searchParams.set("leadership_institute", params.leadershipInstitute);
+  }
+  if (params.limit) {
+    searchParams.set("limit", String(params.limit));
+  }
+  if (params.offset) {
+    searchParams.set("offset", String(params.offset));
+  }
+  if (params.sort) {
+    searchParams.set("sort", params.sort);
+  }
+
+  const query = searchParams.toString();
+  return protectedApiFetch<MwfAlumniSearchResponse>(
+    `/api/v1/alumni/mwf/search${query ? `?${query}` : ""}`,
     {
       headers: authHeaders(accessToken)
     }

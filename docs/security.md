@@ -18,6 +18,7 @@
 - Rate limits for login, password reset, search, messaging, and vote submission.
 - Verification evidence downloads require the submitting member or a privileged admin role.
 - Profile photo downloads require authentication and are limited to the owner, admins, or verified-member directory visibility.
+- MWF alumni cache search/detail requires `ALUMNI_MEMBER` or `SUPER_ADMIN`; cache status and manual refresh require `SUPER_ADMIN`.
 
 ## Privacy Requirements
 
@@ -41,6 +42,7 @@ Users must control visibility of:
 - Users cannot read conversations they are not part of.
 - Hidden phone/email fields are not returned by API serializers.
 - Admin routes require privileged roles.
+- Imported MWF alumni records are public-directory references only and never create YALUMNI login accounts or public navigation entries.
 
 ## Financial Controls
 

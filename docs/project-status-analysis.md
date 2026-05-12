@@ -8,6 +8,56 @@ The current Yalumni project is a useful Laravel 9 alumni management platform, bu
 
 The V1.5 implementation is active in `D:\YALUMNI-V1.5`. The new repository now contains a platform foundation with a FastAPI backend, Next.js web shell, Docker Compose, CI workflow, shared packages, copied YALUMNI logo assets, and documentation.
 
+## Current V1.5 Implementation Update: 2026-05-12 MWF Alumni Directory Hybrid Cache Slice
+
+Completed after the initiatives member workflow slice:
+
+- Added a separate MWF alumni cache model using `mwf_alumni_profiles` and `mwf_alumni_sync_runs`; imported MWF entries are not YALUMNI login users.
+- Added Alembic migration `20260512_0024_mwf_alumni_directory`.
+- Promoted `httpx` to a production API dependency and added a sync service for the official Mandela Washington Fellowship WordPress/Vue endpoints.
+- Added alumni-only filtering, country/expertise label normalization, idempotent refresh updates, deactivation of missing source records, sync status, and manual refresh.
+- Added member/SUPER_ADMIN APIs for cached MWF search/detail and SUPER_ADMIN APIs for cache status/manual refresh.
+- Added the member-only `MWF Alumni` tab to `/directory` with search, country, year, field, expertise, and leadership-institute filters.
+- Added super-admin `/system` cache status and refresh controls.
+- Added API tests for import filtering, label normalization, idempotent refresh/deactivation, search filters/pagination, member auth, and SUPER_ADMIN sync permissions.
+
+Current plan position:
+
+- Phase 1 remains functionally complete for local foundation.
+- Phase 2 remains roughly 91% complete.
+- Phase 3 remains roughly 52% complete.
+- Phase 4 is now roughly 36% complete because the verified-member directory now includes a separate MWF alumni hybrid cache and member-facing tab.
+- Phase 5 remains roughly 81% complete.
+- Phase 6 feed/moderation remains roughly 55% complete.
+- Phase 7 messaging/notifications remains roughly 51% complete.
+- Phase 8 events remains roughly 28% complete.
+- Post-MVP initiatives remain roughly 24% complete.
+- Overall 24-week MVP-plus implementation is roughly 63% complete.
+
+Implemented now:
+
+- Runtime split across public/member `3010`, admin RBAC `3011`, super-admin `3012`, and FastAPI `8002`.
+- Auth, protected platform owner seed, web sessions, CSRF, 2FA enforcement, rate limiting, verification, YALUMNI directory, MWF alumni cache directory, communities, notifications, direct messages, moderation, opportunities, resources, success stories, member events, and member initiatives.
+- Route parity exists for exported screens; live data is wired for the modules listed above, while later governance/finance modules remain prototype-backed.
+
+Main gaps now:
+
+- MWF cache is read-only and locally refreshed; it does not yet have scheduled worker cadence, admin diff review, source-field quality dashboards, or full-text/faceted search indexing.
+- Directory search remains database-backed MVP search rather than Meilisearch/OpenSearch.
+- Initiatives still need team/member roles, comments, updates, documents, milestone editing, governance approval, admin moderation, notifications, analytics, and impact metric tracking.
+- Events still need organizer/admin review, edit/draft/publish workflows, RSVP cancellation, waitlists, calendar exports, reminders, check-in, ticketing, event media, and notification hooks.
+- Elections, contributions/payments/receipts, mentorship, chapter analytics, and treasury still need backend modules.
+- Production hardening remains for Redis/WebSocket fanout, background worker supervision, email delivery logs/bounces/unsubscribe, malware scanning, CDN/signed URLs, and compliance exports.
+
+Next possible implementation slices:
+
+- Scheduled MWF cache worker plus admin diff/history view.
+- Mentorship backend for mentor profile/settings, discovery, and requests.
+- Contributions campaign/payment/receipt backend foundation.
+- Election backend foundation with voter roll, candidate review, ballot integrity, and audit logs.
+- Initiative collaboration workflow with team roles, updates, documents, milestone edits, and impact metrics.
+- Events admin/organizer workflow with edits, approvals, cancellation, RSVP cancellation, calendar export, and reminders.
+
 ## Current V1.5 Implementation Update: 2026-05-12 Initiatives Member Workflow Slice
 
 Completed after the events member workflow slice:
