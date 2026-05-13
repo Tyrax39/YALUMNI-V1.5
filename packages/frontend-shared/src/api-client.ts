@@ -461,6 +461,89 @@ export type InitiativeFilters = {
   stage?: string;
 };
 
+export type MentorProfile = {
+  active_request_count: number;
+  availability_status: string;
+  bio: string;
+  countries: string[];
+  created_at: string;
+  display_name: string;
+  expertise_areas: string[];
+  headline: string;
+  id: string;
+  is_accepting_requests: boolean;
+  is_active: boolean;
+  max_active_mentees: number;
+  preferred_meeting_format: string;
+  sectors: string[];
+  updated_at: string;
+  user_id: string;
+  years_experience?: number | null;
+};
+
+export type MentorProfilePayload = {
+  availability_status?: string;
+  bio: string;
+  countries?: string[];
+  expertise_areas?: string[];
+  headline: string;
+  is_accepting_requests?: boolean;
+  is_active?: boolean;
+  max_active_mentees?: number;
+  preferred_meeting_format?: string;
+  sectors?: string[];
+  years_experience?: number | null;
+};
+
+export type MentorProfileListResponse = {
+  has_more: boolean;
+  limit: number;
+  mentors: MentorProfile[];
+  offset: number;
+  total: number;
+};
+
+export type MentorshipRequest = {
+  created_at: string;
+  focus_area: string;
+  goals: string;
+  id: string;
+  mentor_display_name: string;
+  mentor_profile_id: string;
+  mentor_user_id: string;
+  message?: string | null;
+  requester_display_name: string;
+  requester_user_id: string;
+  reviewer_note?: string | null;
+  status: string;
+  updated_at: string;
+};
+
+export type MentorshipRequestPayload = {
+  focus_area: string;
+  goals: string;
+  mentor_profile_id: string;
+  message?: string | null;
+};
+
+export type MentorshipSummary = {
+  incoming_requests: MentorshipRequest[];
+  mentor_profile: MentorProfile | null;
+  outgoing_requests: MentorshipRequest[];
+  recommended_mentors: MentorProfile[];
+};
+
+export type MentorFilters = {
+  availabilityStatus?: string;
+  country?: string;
+  expertise?: string;
+  includeSelf?: boolean;
+  limit?: number;
+  offset?: number;
+  q?: string;
+  sector?: string;
+};
+
 export type ResourceItem = {
   country?: string | null;
   created_at: string;
@@ -641,7 +724,7 @@ export async function fetchCsrfToken(): Promise<string> {
 
 export async function mutateJson<T>(
   path: string,
-  method: "DELETE" | "PATCH" | "POST",
+  method: "DELETE" | "PATCH" | "POST" | "PUT",
   body?: unknown
 ): Promise<T> {
   const csrfToken = await fetchCsrfToken();
@@ -878,6 +961,78 @@ export function fetchInitiative(initiativeId: string): Promise<InitiativeItem> {
 
 export function createInitiative(payload: InitiativePayload): Promise<InitiativeItem> {
   return mutateJson<InitiativeItem>("/api/backend/api/v1/initiatives", "POST", payload);
+}
+
+function mentorQueryString(filters: MentorFilters = {}) {
+  const params = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(filters)) {
+    if (typeof value === "undefined" || value === null || value === "") {
+      continue;
+    }
+
+    const queryKey =
+      key === "availabilityStatus"
+        ? "availability_status"
+        : key === "includeSelf"
+          ? "include_self"
+          : key;
+    params.set(queryKey, String(value));
+  }
+
+  return params.toString();
+}
+
+export function fetchMentorshipSummary(): Promise<MentorshipSummary> {
+  return fetchJson<MentorshipSummary>("/api/backend/api/v1/mentorship/summary");
+}
+
+export function fetchMentors(filters: MentorFilters = {}): Promise<MentorProfileListResponse> {
+  const query = mentorQueryString({ limit: 12, offset: 0, ...filters });
+  return fetchJson<MentorProfileListResponse>(`/api/backend/api/v1/mentorship/mentors?${query}`);
+}
+
+export function fetchMyMentorProfile(): Promise<MentorProfile | null> {
+  return fetchJson<MentorProfile | null>("/api/backend/api/v1/mentorship/mentors/me");
+}
+
+export function upsertMyMentorProfile(payload: MentorProfilePayload): Promise<MentorProfile> {
+  return mutateJson<MentorProfile>("/api/backend/api/v1/mentorship/mentors/me", "PUT", payload);
+}
+
+export function createMentorshipRequest(
+  payload: MentorshipRequestPayload
+): Promise<MentorshipRequest> {
+  return mutateJson<MentorshipRequest>("/api/backend/api/v1/mentorship/requests", "POST", payload);
+}
+
+export function acceptMentorshipRequest(
+  requestId: string,
+  reviewerNote?: string
+): Promise<MentorshipRequest> {
+  return mutateJson<MentorshipRequest>(
+    `/api/backend/api/v1/mentorship/requests/${encodeURIComponent(requestId)}/accept`,
+    "POST",
+    { reviewer_note: reviewerNote ?? null }
+  );
+}
+
+export function declineMentorshipRequest(
+  requestId: string,
+  reviewerNote?: string
+): Promise<MentorshipRequest> {
+  return mutateJson<MentorshipRequest>(
+    `/api/backend/api/v1/mentorship/requests/${encodeURIComponent(requestId)}/decline`,
+    "POST",
+    { reviewer_note: reviewerNote ?? null }
+  );
+}
+
+export function cancelMentorshipRequest(requestId: string): Promise<MentorshipRequest> {
+  return mutateJson<MentorshipRequest>(
+    `/api/backend/api/v1/mentorship/requests/${encodeURIComponent(requestId)}/cancel`,
+    "POST"
+  );
 }
 
 function resourceQueryString(filters: ResourceFilters = {}) {

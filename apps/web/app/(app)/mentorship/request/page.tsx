@@ -1,6 +1,11 @@
-import { PrototypeFeaturePage } from "@/components/platform/prototype-feature-page";
+import { Suspense } from "react";
+
+import { MentorshipRequestCreate } from "@/components/mentorship/mentorship-surfaces";
 
 export default function RequestMentorshipPage() {
-  return <PrototypeFeaturePage screenKey="mentorshipRequest" />;
+  return (
+    <Suspense fallback={null}>
+      <MentorshipRequestCreate />
+    </Suspense>
+  );
 }
-

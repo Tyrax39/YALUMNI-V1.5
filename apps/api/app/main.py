@@ -14,6 +14,7 @@ from app.modules.auth.test_accounts import ensure_test_accounts, test_accounts_a
 from app.modules.communities.router import router as communities_router
 from app.modules.events.router import router as events_router
 from app.modules.initiatives.router import router as initiatives_router
+from app.modules.mentorship.router import router as mentorship_router
 from app.modules.messages.router import router as messages_router
 from app.modules.notifications.router import router as notifications_router
 from app.modules.opportunities.router import router as opportunities_router
@@ -74,6 +75,7 @@ app.include_router(communities_router, prefix="/api/v1/communities", tags=["comm
 app.include_router(events_router, prefix="/api/v1/events", tags=["events"])
 app.include_router(initiatives_router, prefix="/api/v1/initiatives", tags=["initiatives"])
 app.include_router(messages_router, prefix="/api/v1/messages", tags=["messages"])
+app.include_router(mentorship_router, prefix="/api/v1/mentorship", tags=["mentorship"])
 app.include_router(notifications_router, prefix="/api/v1/notifications", tags=["notifications"])
 app.include_router(
     opportunities_router,

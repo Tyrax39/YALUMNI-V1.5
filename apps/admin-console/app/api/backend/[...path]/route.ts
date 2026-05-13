@@ -49,6 +49,10 @@ export async function PATCH(request: NextRequest, context: BackendProxyContext) 
   return proxy(request, context);
 }
 
+export async function PUT(request: NextRequest, context: BackendProxyContext) {
+  return proxy(request, context);
+}
+
 export async function DELETE(request: NextRequest, context: BackendProxyContext) {
   return proxy(request, context);
 }

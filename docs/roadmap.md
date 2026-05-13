@@ -131,7 +131,7 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
 
 - Initiatives. Started with member proposal/list/detail APIs, milestone persistence, and member UI.
 - Opportunities.
-- Mentorship.
+- Mentorship. Started with mentor profiles/settings, mentor discovery, request creation, incoming/outgoing request management, and accept/decline/cancel workflow.
 - Contributions and ledger.
 - Elections and audit reports.
 - Chapter analytics.

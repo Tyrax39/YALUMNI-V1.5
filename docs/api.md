@@ -493,6 +493,23 @@ POST   /api/v1/initiatives/{initiative_id}/members    # planned team roles
 POST   /api/v1/initiatives/{initiative_id}/updates    # planned progress updates
 ```
 
+## Post-MVP: Mentorship
+
+```text
+GET    /api/v1/mentorship/summary                     # implemented
+GET    /api/v1/mentorship/mentors                     # implemented
+GET    /api/v1/mentorship/mentors/me                  # implemented
+PUT    /api/v1/mentorship/mentors/me                  # implemented
+GET    /api/v1/mentorship/requests                    # implemented
+POST   /api/v1/mentorship/requests                    # implemented
+POST   /api/v1/mentorship/requests/{request_id}/accept  # implemented
+POST   /api/v1/mentorship/requests/{request_id}/decline # implemented
+POST   /api/v1/mentorship/requests/{request_id}/cancel  # implemented
+POST   /api/v1/mentorship/sessions                    # planned scheduling/session notes
+POST   /api/v1/mentorship/requests/{request_id}/report # planned moderation
+GET    /api/v1/mentorship/admin/analytics             # planned admin analytics
+```
+
 ## Admin
 
 Started through role-protected auth admin overview, verification queue, and audit-event endpoints.

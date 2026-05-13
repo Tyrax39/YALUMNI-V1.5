@@ -1,6 +1,5 @@
-import { PrototypeFeaturePage } from "@/components/platform/prototype-feature-page";
+import { MentorSettings } from "@/components/mentorship/mentorship-surfaces";
 
 export default function MentorSettingsPage() {
-  return <PrototypeFeaturePage screenKey="mentorshipSettings" />;
+  return <MentorSettings />;
 }
-

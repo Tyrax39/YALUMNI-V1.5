@@ -93,6 +93,14 @@
 - `initiative_documents`
 - `initiative_impact_metrics`
 
+### Mentorship
+
+- `mentor_profiles` - implemented for member mentor availability, headline, bio, expertise areas, sectors, countries, meeting format, capacity, and active/request visibility.
+- `mentorship_requests` - implemented for requester, mentor profile, focus area, goals, message, pending/accepted/declined/cancelled status, and reviewer note.
+- `mentorship_sessions`
+- `mentorship_feedback`
+- `mentorship_reports`
+
 ### Contributions
 
 - `contribution_campaigns`
