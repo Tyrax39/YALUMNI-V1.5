@@ -11,9 +11,11 @@ import {
   type AdminAuditEvent,
   type AdminOverview,
   type AuthUser,
+  type MwfAlumniSyncRun,
   type MwfAlumniSyncStatus,
   fetchAdminAuditEvents,
   fetchAdminOverview,
+  fetchMwfSyncRuns,
   fetchMwfSyncStatus,
   fetchSessionUser,
   refreshMwfSync,
@@ -423,16 +425,18 @@ function SystemChecks({ overview }: { overview: AdminOverview | null }) {
 }
 
 function MwfCachePanel() {
+  const [runs, setRuns] = useState<MwfAlumniSyncRun[]>([]);
   const [status, setStatus] = useState<MwfAlumniSyncStatus | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
-    fetchMwfSyncStatus()
-      .then((response) => {
+    Promise.all([fetchMwfSyncStatus(), fetchMwfSyncRuns(6)])
+      .then(([statusResponse, runsResponse]) => {
         if (isMounted) {
-          setStatus(response);
+          setStatus(statusResponse);
+          setRuns(runsResponse.runs);
           setMessage(null);
         }
       })
@@ -453,7 +457,9 @@ function MwfCachePanel() {
     setMessage(null);
     try {
       const response = await refreshMwfSync();
+      const runHistory = await fetchMwfSyncRuns(6);
       setStatus(response);
+      setRuns(runHistory.runs);
     } catch (caught) {
       setMessage(caught instanceof ApiClientError ? caught.message : "MWF cache refresh failed.");
     } finally {
@@ -510,9 +516,10 @@ function MwfCachePanel() {
       ) : null}
 
       {status ? (
-        <div className="mt-5 grid gap-3 md:grid-cols-4">
+        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           <SystemMetric label="State" value={stateLabel} />
           <SystemMetric label="TTL" value={`${status.cache_ttl_hours}h`} />
+          <SystemMetric label="Worker cadence" value={formatDuration(status.worker_interval_seconds)} />
           <SystemMetric
             label="Last synced"
             value={status.last_synced_at ? formatDate(status.last_synced_at) : "pending"}
@@ -526,7 +533,42 @@ function MwfCachePanel() {
           {status.latest_run.error_message}
         </p>
       ) : null}
+
+      <div className="mt-5 overflow-hidden rounded-lg border border-border">
+        <div className="bg-surface px-4 py-3">
+          <p className="text-xs font-bold uppercase tracking-[0.12em] text-muted">Recent sync runs</p>
+        </div>
+        <div className="divide-y divide-border">
+          {runs.length ? (
+            runs.map((run) => <SyncRunRow key={run.id} run={run} />)
+          ) : (
+            <p className="px-4 py-5 text-sm font-semibold text-muted">
+              Sync history will appear after the first cache refresh.
+            </p>
+          )}
+        </div>
+      </div>
     </section>
+  );
+}
+
+function SyncRunRow({ run }: { run: MwfAlumniSyncRun }) {
+  const changedCount = run.imported_count + run.updated_count + run.deactivated_count;
+  return (
+    <div className="grid gap-3 px-4 py-4 text-sm md:grid-cols-[1fr_1fr_auto] md:items-center">
+      <div>
+        <p className="font-bold text-ink">{run.status}</p>
+        <p className="mt-1 text-xs font-semibold uppercase tracking-[0.1em] text-muted">
+          {formatDate(run.started_at)}
+        </p>
+      </div>
+      <p className="text-sm font-semibold text-muted">
+        {run.fetched_count.toLocaleString()} fetched · {changedCount.toLocaleString()} changed
+      </p>
+      <span className="rounded-md border border-border bg-white px-3 py-1 text-xs font-bold uppercase tracking-[0.1em] text-muted">
+        {run.finished_at ? "finished" : "running"}
+      </span>
+    </div>
   );
 }
 
@@ -625,6 +667,16 @@ function formatNumber(value: number | undefined) {
 function formatDate(value: string) {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+}
+
+function formatDuration(seconds: number) {
+  if (seconds % 3600 === 0) {
+    return `${seconds / 3600}h`;
+  }
+  if (seconds % 60 === 0) {
+    return `${seconds / 60}m`;
+  }
+  return `${seconds}s`;
 }
 
 function isActivePath(pathname: string, href: string) {

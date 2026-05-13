@@ -24,12 +24,14 @@ from app.core.storage import UploadCategory, delete_upload, upload_response
 from app.modules.alumni.models import (
     AlumniProfile,
     MwfAlumniProfile,
+    MwfAlumniSyncRun,
     ProgramAffiliation,
     VerificationEvidence,
     VerificationRequest,
 )
 from app.modules.alumni.mwf_directory import (
     build_mwf_search_query,
+    list_mwf_sync_runs,
     mwf_cache_status,
     run_mwf_sync_background,
     sync_mwf_alumni_directory,
@@ -42,6 +44,7 @@ from app.modules.alumni.schemas import (
     AlumniProfileUpdate,
     MwfAlumniProfileResponse,
     MwfAlumniSearchResponse,
+    MwfAlumniSyncRunListResponse,
     MwfAlumniSyncStatusResponse,
     ProgramAffiliationCreate,
     VerificationEvidenceResponse,
@@ -246,6 +249,7 @@ def _serialize_mwf_sync_status(status_payload: dict) -> MwfAlumniSyncStatusRespo
         cache_empty=status_payload["cache_empty"],
         sync_in_progress=status_payload["sync_in_progress"],
         cache_ttl_hours=status_payload["cache_ttl_hours"],
+        worker_interval_seconds=status_payload["worker_interval_seconds"],
         last_synced_at=status_payload["last_synced_at"],
         latest_run=status_payload["latest_run"],
     )
@@ -735,6 +739,21 @@ def get_mwf_sync_status(
 ) -> MwfAlumniSyncStatusResponse:
     _ = current_user
     return _serialize_mwf_sync_status(mwf_cache_status(db))
+
+
+@router.get("/admin/mwf-sync/runs", response_model=MwfAlumniSyncRunListResponse)
+def list_mwf_sync_history(
+    current_user: Annotated[User, Depends(mwf_super_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+    limit: Annotated[int, Query(ge=1, le=25)] = 10,
+) -> MwfAlumniSyncRunListResponse:
+    _ = current_user
+    total = db.scalar(select(func.count()).select_from(MwfAlumniSyncRun)) or 0
+    return MwfAlumniSyncRunListResponse(
+        runs=list_mwf_sync_runs(db, limit=limit),
+        total=total,
+        limit=limit,
+    )
 
 
 @router.post("/admin/mwf-sync", response_model=MwfAlumniSyncStatusResponse)

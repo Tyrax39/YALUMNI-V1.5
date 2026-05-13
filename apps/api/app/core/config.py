@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     )
     mwf_directory_user_agent: str = "YALUMNI-V1.5/1.0 (+https://yalumni.org)"
     mwf_directory_cache_ttl_hours: int = 24
+    mwf_directory_sync_worker_interval_seconds: int = 3600
     upload_storage_provider: str = "LOCAL"
     upload_storage_prefix: str = "yalumni"
     verification_upload_dir: str = ".local/uploads/verification"

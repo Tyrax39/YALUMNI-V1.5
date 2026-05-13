@@ -43,6 +43,13 @@ export type MwfAlumniSyncStatus = {
   last_synced_at: string | null;
   latest_run: MwfAlumniSyncRun | null;
   sync_in_progress: boolean;
+  worker_interval_seconds: number;
+};
+
+export type MwfAlumniSyncRunListResponse = {
+  limit: number;
+  runs: MwfAlumniSyncRun[];
+  total: number;
 };
 
 export type AdminAuditEvent = {
@@ -659,6 +666,12 @@ export function fetchAdminOverview(): Promise<AdminOverview> {
 
 export function fetchMwfSyncStatus(): Promise<MwfAlumniSyncStatus> {
   return fetchJson<MwfAlumniSyncStatus>("/api/backend/api/v1/alumni/admin/mwf-sync");
+}
+
+export function fetchMwfSyncRuns(limit = 6): Promise<MwfAlumniSyncRunListResponse> {
+  return fetchJson<MwfAlumniSyncRunListResponse>(
+    `/api/backend/api/v1/alumni/admin/mwf-sync/runs?limit=${limit}`
+  );
 }
 
 export function refreshMwfSync(): Promise<MwfAlumniSyncStatus> {

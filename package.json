@@ -31,6 +31,7 @@
     "lint:api": "cd apps/api && python -m ruff check .",
     "format:api": "cd apps/api && python -m ruff format .",
     "worker:api:notification-digests": "cd apps/api && python -m app.workers.notification_digests",
+    "worker:api:mwf-sync": "cd apps/api && python -m app.workers.mwf_alumni_sync",
     "verify": "npm run lint:web && npm run typecheck:web && npm run build:web && npm run lint:admin && npm run typecheck:admin && npm run build:admin && npm run lint:superadmin && npm run typecheck:superadmin && npm run build:superadmin && npm run lint:api && npm run test:api"
   },
   "engines": {

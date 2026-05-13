@@ -47,6 +47,23 @@ def client() -> Generator[TestClient]:
     clear_email_outbox()
 
 
+@pytest.fixture
+def db_session() -> Generator[Session]:
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    testing_session_local = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    Base.metadata.create_all(bind=engine)
+    db = testing_session_local()
+    try:
+        yield db
+    finally:
+        db.close()
+        Base.metadata.drop_all(bind=engine)
+
+
 def auth_headers(access_token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {access_token}"}
 
@@ -259,5 +276,71 @@ def test_mwf_sync_requires_super_admin(client: TestClient) -> None:
 
     assert client.get("/api/v1/alumni/admin/mwf-sync").status_code == 401
     assert client.post("/api/v1/alumni/admin/mwf-sync").status_code == 401
+    assert client.get("/api/v1/alumni/admin/mwf-sync/runs").status_code == 401
     assert client.get("/api/v1/alumni/admin/mwf-sync", headers=headers).status_code == 403
     assert client.post("/api/v1/alumni/admin/mwf-sync", headers=headers).status_code == 403
+    assert client.get("/api/v1/alumni/admin/mwf-sync/runs", headers=headers).status_code == 403
+
+
+def test_mwf_sync_history_lists_recent_runs(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    admin_headers = create_super_admin(client, "mwf-history-admin@example.com")
+    current_payload = {"payload": fellow_payload([alumni_record(401)])}
+    monkeypatch.setattr(
+        mwf_directory,
+        "fetch_mwf_directory_source",
+        lambda: (current_payload["payload"], mock_filters()),
+    )
+
+    first_response = client.post("/api/v1/alumni/admin/mwf-sync", headers=admin_headers)
+    assert first_response.status_code == 200
+    current_payload["payload"] = fellow_payload([alumni_record(401), alumni_record(402)])
+    second_response = client.post("/api/v1/alumni/admin/mwf-sync", headers=admin_headers)
+    assert second_response.status_code == 200
+
+    history_response = client.get(
+        "/api/v1/alumni/admin/mwf-sync/runs?limit=2",
+        headers=admin_headers,
+    )
+    assert history_response.status_code == 200
+    body = history_response.json()
+    assert body["limit"] == 2
+    assert body["total"] == 2
+    assert [run["status"] for run in body["runs"]] == ["SUCCEEDED", "SUCCEEDED"]
+    assert body["runs"][0]["imported_count"] == 1
+    assert body["runs"][1]["imported_count"] == 1
+
+
+def test_mwf_sync_if_needed_skips_fresh_cache_and_respects_force(
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    first_run = mwf_directory.sync_mwf_alumni_directory(
+        db_session,
+        fellows_payload=fellow_payload([alumni_record(501)]),
+        filters_payload=mock_filters(),
+    )
+    db_session.commit()
+    assert first_run.status == "SUCCEEDED"
+
+    monkeypatch.setattr(
+        mwf_directory,
+        "fetch_mwf_directory_source",
+        lambda: pytest.fail("fresh cache should not fetch the MWF source"),
+    )
+    skipped_run = mwf_directory.sync_mwf_cache_if_needed(db_session)
+    assert skipped_run is None
+
+    refreshed_payload = fellow_payload([alumni_record(501, first_name="Forced")])
+    monkeypatch.setattr(
+        mwf_directory,
+        "fetch_mwf_directory_source",
+        lambda: (refreshed_payload, mock_filters()),
+    )
+    forced_run = mwf_directory.sync_mwf_cache_if_needed(db_session, force=True)
+    db_session.commit()
+    assert forced_run is not None
+    assert forced_run.status == "SUCCEEDED"
+    assert forced_run.updated_count == 1

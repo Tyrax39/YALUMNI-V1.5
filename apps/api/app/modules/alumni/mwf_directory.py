@@ -139,7 +139,7 @@ def sync_mwf_alumni_directory(
 
 def run_mwf_sync_background() -> None:
     with SessionLocal() as db:
-        sync_mwf_alumni_directory(db)
+        sync_mwf_cache_if_needed(db)
         db.commit()
 
 
@@ -147,7 +147,9 @@ def mwf_cache_status(db: Session) -> dict[str, Any]:
     settings = get_settings()
     active_count = (
         db.scalar(
-            select(func.count()).select_from(MwfAlumniProfile).where(MwfAlumniProfile.active.is_(True))
+            select(func.count())
+            .select_from(MwfAlumniProfile)
+            .where(MwfAlumniProfile.active.is_(True))
         )
         or 0
     )
@@ -172,9 +174,32 @@ def mwf_cache_status(db: Session) -> dict[str, Any]:
         "cache_empty": active_count == 0,
         "sync_in_progress": sync_in_progress,
         "cache_ttl_hours": settings.mwf_directory_cache_ttl_hours,
+        "worker_interval_seconds": settings.mwf_directory_sync_worker_interval_seconds,
         "last_synced_at": last_synced_at,
         "latest_run": latest_run,
     }
+
+
+def list_mwf_sync_runs(db: Session, *, limit: int = 10) -> list[MwfAlumniSyncRun]:
+    return list(
+        db.scalars(
+            select(MwfAlumniSyncRun).order_by(MwfAlumniSyncRun.started_at.desc()).limit(limit)
+        ).all()
+    )
+
+
+def sync_mwf_cache_if_needed(
+    db: Session,
+    *,
+    force: bool = False,
+) -> MwfAlumniSyncRun | None:
+    status_payload = mwf_cache_status(db)
+    if not force and status_payload["sync_in_progress"]:
+        return None
+    if not force and not status_payload["cache_empty"] and not status_payload["cache_stale"]:
+        return None
+
+    return sync_mwf_alumni_directory(db)
 
 
 def build_mwf_search_query(

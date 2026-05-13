@@ -8,6 +8,54 @@ The current Yalumni project is a useful Laravel 9 alumni management platform, bu
 
 The V1.5 implementation is active in `D:\YALUMNI-V1.5`. The new repository now contains a platform foundation with a FastAPI backend, Next.js web shell, Docker Compose, CI workflow, shared packages, copied YALUMNI logo assets, and documentation.
 
+## Current V1.5 Implementation Update: 2026-05-13 MWF Cache Operations Slice
+
+Completed after the MWF alumni directory hybrid cache slice:
+
+- Added a scheduled MWF cache worker CLI at `python -m app.workers.mwf_alumni_sync`, also exposed through `npm run worker:api:mwf-sync`.
+- Added cache cadence configuration through `MWF_DIRECTORY_SYNC_WORKER_INTERVAL_SECONDS` with a default one-hour check interval.
+- Added a worker-safe sync-if-needed service that skips fresh caches, avoids duplicate in-progress refreshes, and supports forced refreshes for operator use.
+- Added `GET /api/v1/alumni/admin/mwf-sync/runs` for SUPER_ADMIN sync history with recent run counts/status.
+- Expanded SUPER_ADMIN `/system` MWF cache operations UI with worker cadence and recent sync-run history.
+- Added API/service tests for sync history permissions, recent run ordering, fresh-cache skip behavior, and forced refresh behavior.
+
+Current plan position:
+
+- Phase 1 remains functionally complete for local foundation.
+- Phase 2 remains roughly 91% complete.
+- Phase 3 remains roughly 52% complete.
+- Phase 4 is now roughly 38% complete because the MWF directory cache now has operational cadence, history visibility, and super-admin observability.
+- Phase 5 remains roughly 81% complete.
+- Phase 6 feed/moderation remains roughly 55% complete.
+- Phase 7 messaging/notifications remains roughly 51% complete.
+- Phase 8 events remains roughly 28% complete.
+- Post-MVP initiatives remain roughly 24% complete.
+- Overall 24-week MVP-plus implementation is roughly 64% complete.
+
+Implemented now:
+
+- Runtime split across public/member `3010`, admin RBAC `3011`, super-admin `3012`, and FastAPI `8002`.
+- Auth, protected platform owner seed, web sessions, CSRF, 2FA enforcement, rate limiting, verification, YALUMNI directory, MWF alumni cache directory plus worker/history operations, communities, notifications, direct messages, moderation, opportunities, resources, success stories, member events, and member initiatives.
+- Route parity exists for exported screens; live data is wired for the modules listed above, while later governance/finance modules remain prototype-backed.
+
+Main gaps now:
+
+- MWF cache still needs admin diff review, source-field quality dashboards, distributed worker locking, and full-text/faceted search indexing.
+- Directory search remains database-backed MVP search rather than Meilisearch/OpenSearch.
+- Initiatives still need team/member roles, comments, updates, documents, milestone editing, governance approval, admin moderation, notifications, analytics, and impact metric tracking.
+- Events still need organizer/admin review, edit/draft/publish workflows, RSVP cancellation, waitlists, calendar exports, reminders, check-in, ticketing, event media, and notification hooks.
+- Elections, contributions/payments/receipts, mentorship, chapter analytics, and treasury still need backend modules.
+- Production hardening remains for Redis/WebSocket fanout, supervised background workers, email delivery logs/bounces/unsubscribe, malware scanning, CDN/signed URLs, and compliance exports.
+
+Next possible implementation slices:
+
+- Mentorship backend for mentor profile/settings, discovery, and requests.
+- Contributions campaign/payment/receipt backend foundation.
+- Election backend foundation with voter roll, candidate review, ballot integrity, and audit logs.
+- MWF source diff/quality dashboard and search indexing.
+- Initiative collaboration workflow with team roles, updates, documents, milestone edits, and impact metrics.
+- Events admin/organizer workflow with edits, approvals, cancellation, RSVP cancellation, calendar export, and reminders.
+
 ## Current V1.5 Implementation Update: 2026-05-12 MWF Alumni Directory Hybrid Cache Slice
 
 Completed after the initiatives member workflow slice:

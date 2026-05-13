@@ -158,10 +158,16 @@ MWF alumni directory cache supports:
 - `GET /api/v1/alumni/mwf/{source_id}` for authenticated member/super-admin
   detail lookup.
 - `GET /api/v1/alumni/admin/mwf-sync` for `SUPER_ADMIN` cache status.
+- `GET /api/v1/alumni/admin/mwf-sync/runs` for `SUPER_ADMIN` recent sync
+  history.
 - `POST /api/v1/alumni/admin/mwf-sync` for `SUPER_ADMIN` manual refresh.
 - Member search always reads local cache. If the cache is stale, the response
   includes sync metadata and queues a background refresh when one is not already
   running.
+- The scheduled cache worker can be run from `apps/api` with
+  `python -m app.workers.mwf_alumni_sync --once`, or from the monorepo root
+  with `npm run worker:api:mwf-sync -- --once`. It skips fresh caches unless
+  `--force` is passed.
 
 Community listing supports:
 

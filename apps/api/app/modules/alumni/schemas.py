@@ -244,8 +244,15 @@ class MwfAlumniSyncStatusResponse(BaseModel):
     cache_empty: bool
     sync_in_progress: bool
     cache_ttl_hours: int
+    worker_interval_seconds: int
     last_synced_at: datetime | None
     latest_run: MwfAlumniSyncRunResponse | None
+
+
+class MwfAlumniSyncRunListResponse(BaseModel):
+    runs: list[MwfAlumniSyncRunResponse]
+    total: int
+    limit: int
 
 
 class MwfAlumniSearchResponse(BaseModel):
