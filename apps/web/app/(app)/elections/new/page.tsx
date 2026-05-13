@@ -1,6 +1,5 @@
-import { PrototypeFeaturePage } from "@/components/platform/prototype-feature-page";
+import { ElectionCreateSurface } from "@/components/elections/election-surfaces";
 
 export default function NewElectionPage() {
-  return <PrototypeFeaturePage screenKey="electionNew" />;
+  return <ElectionCreateSurface />;
 }
-

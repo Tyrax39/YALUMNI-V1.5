@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 
 import { LiveModerationQueues, LiveVerificationQueue } from "./live-admin-surfaces";
+import { LiveElectionAdmin } from "./live-election-admin";
 import { LiveOpportunityReviewQueue } from "./live-opportunity-review";
 import { LiveResourceReviewQueue } from "./live-resource-review";
 import { LiveSuccessStoryReviewQueue } from "./live-success-story-review";
@@ -90,7 +91,7 @@ const surfaceDetails = {
     title: "Contribution oversight"
   },
   elections: {
-    cta: "Election backend is not implemented yet; candidate, voter-roll, and audit surfaces remain prototypes.",
+    cta: "Election lifecycle APIs are live for drafts, candidates, voter rolls, voting, and results.",
     rows: [
       ["Chapter council 2026", "Voting", "monitor turnout"],
       ["Treasurer by-election", "Setup", "review voter roll"],
@@ -314,6 +315,8 @@ export function AdminConsole({ surfaceId }: AdminConsoleProps) {
             <LiveResourceReviewQueue />
           ) : surfaceId === "success-stories" ? (
             <LiveSuccessStoryReviewQueue />
+          ) : surfaceId === "elections" ? (
+            <LiveElectionAdmin />
           ) : (
             <OperationalScope detail={detail} surfaceId={surfaceId} />
           )}

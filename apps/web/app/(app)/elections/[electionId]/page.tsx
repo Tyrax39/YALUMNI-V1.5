@@ -1,4 +1,4 @@
-import { PrototypeFeaturePage } from "@/components/platform/prototype-feature-page";
+import { ElectionDetail } from "@/components/elections/election-surfaces";
 
 type ElectionPageProps = {
   params: Promise<{
@@ -9,6 +9,5 @@ type ElectionPageProps = {
 export default async function ElectionPage({ params }: ElectionPageProps) {
   const { electionId } = await params;
 
-  return <PrototypeFeaturePage recordId={electionId} screenKey="electionDetail" />;
+  return <ElectionDetail electionId={electionId} />;
 }
-

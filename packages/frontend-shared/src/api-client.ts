@@ -544,6 +544,135 @@ export type MentorFilters = {
   sector?: string;
 };
 
+export type ElectionItem = {
+  candidate_count: number;
+  can_vote: boolean;
+  closed_at?: string | null;
+  created_at: string;
+  created_by_display_name?: string | null;
+  created_by_user_id?: string | null;
+  description: string;
+  ends_at: string;
+  has_voted: boolean;
+  id: string;
+  opened_at?: string | null;
+  privacy_mode: string;
+  quorum_count: number;
+  results_visibility: string;
+  scope_label?: string | null;
+  scope_type: string;
+  starts_at: string;
+  status: string;
+  summary: string;
+  title: string;
+  updated_at: string;
+  voter_count: number;
+  vote_count: number;
+};
+
+export type ElectionCandidate = {
+  created_at: string;
+  display_name: string;
+  election_id: string;
+  headline?: string | null;
+  id: string;
+  sort_order: number;
+  statement: string;
+  status: string;
+  updated_at: string;
+  user_id?: string | null;
+  vote_count: number;
+};
+
+export type ElectionVoter = {
+  display_name: string;
+  email: string;
+  id: string;
+  invited_at: string;
+  status: string;
+  user_id: string;
+  voted_at?: string | null;
+};
+
+export type ElectionListResponse = {
+  elections: ElectionItem[];
+  has_more: boolean;
+  limit: number;
+  offset: number;
+  total: number;
+};
+
+export type ElectionPayload = {
+  description: string;
+  ends_at: string;
+  quorum_count?: number;
+  results_visibility?: string;
+  scope_label?: string | null;
+  scope_type?: string;
+  starts_at: string;
+  summary: string;
+  title: string;
+};
+
+export type ElectionCandidatePayload = {
+  display_name: string;
+  headline?: string | null;
+  sort_order?: number;
+  statement: string;
+  user_email?: string | null;
+};
+
+export type ElectionFilters = {
+  limit?: number;
+  offset?: number;
+  q?: string;
+  scopeType?: string;
+  status?: string;
+};
+
+export type ElectionVoterRollResponse = {
+  added_count: number;
+  already_present_count: number;
+  not_found: string[];
+  voters: ElectionVoter[];
+};
+
+export type ElectionResultCandidate = {
+  candidate_id: string;
+  display_name: string;
+  headline?: string | null;
+  percentage: number;
+  vote_count: number;
+};
+
+export type ElectionResultsResponse = {
+  candidates: ElectionResultCandidate[];
+  election: ElectionItem;
+  eligible_voters: number;
+  quorum_met: boolean;
+  results_visible: boolean;
+  total_votes: number;
+};
+
+export type ElectionAuditResponse = {
+  election: ElectionItem;
+  events: Array<{
+    created_at: string;
+    event_type: string;
+    id: string;
+    metadata?: Record<string, unknown> | null;
+    user_display_name?: string | null;
+    user_email?: string | null;
+  }>;
+};
+
+export type ElectionPrivacyResponse = {
+  audit_note: string;
+  election: ElectionItem;
+  privacy_mode: string;
+  vote_recording: string;
+};
+
 export type ResourceItem = {
   country?: string | null;
   created_at: string;
@@ -1032,6 +1161,117 @@ export function cancelMentorshipRequest(requestId: string): Promise<MentorshipRe
   return mutateJson<MentorshipRequest>(
     `/api/backend/api/v1/mentorship/requests/${encodeURIComponent(requestId)}/cancel`,
     "POST"
+  );
+}
+
+function electionQueryString(filters: ElectionFilters = {}) {
+  const params = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(filters)) {
+    if (typeof value === "undefined" || value === null || value === "") {
+      continue;
+    }
+
+    const queryKey = key === "scopeType" ? "scope_type" : key;
+    params.set(queryKey, String(value));
+  }
+
+  return params.toString();
+}
+
+export function fetchElections(filters: ElectionFilters = {}): Promise<ElectionListResponse> {
+  const query = electionQueryString({ limit: 12, offset: 0, ...filters });
+  return fetchJson<ElectionListResponse>(`/api/backend/api/v1/elections?${query}`);
+}
+
+export function fetchAdminElections(
+  filters: ElectionFilters = {}
+): Promise<ElectionListResponse> {
+  const query = electionQueryString({ limit: 12, offset: 0, status: "ALL", ...filters });
+  return fetchJson<ElectionListResponse>(`/api/backend/api/v1/elections/admin?${query}`);
+}
+
+export function fetchElection(electionId: string): Promise<ElectionItem> {
+  return fetchJson<ElectionItem>(`/api/backend/api/v1/elections/${encodeURIComponent(electionId)}`);
+}
+
+export function createElection(payload: ElectionPayload): Promise<ElectionItem> {
+  return mutateJson<ElectionItem>("/api/backend/api/v1/elections/admin", "POST", payload);
+}
+
+export function fetchElectionCandidates(electionId: string): Promise<ElectionCandidate[]> {
+  return fetchJson<ElectionCandidate[]>(
+    `/api/backend/api/v1/elections/${encodeURIComponent(electionId)}/candidates`
+  );
+}
+
+export function addElectionCandidate(
+  electionId: string,
+  payload: ElectionCandidatePayload
+): Promise<ElectionCandidate> {
+  return mutateJson<ElectionCandidate>(
+    `/api/backend/api/v1/elections/admin/${encodeURIComponent(electionId)}/candidates`,
+    "POST",
+    payload
+  );
+}
+
+export function fetchElectionVoterRoll(electionId: string): Promise<ElectionVoterRollResponse> {
+  return fetchJson<ElectionVoterRollResponse>(
+    `/api/backend/api/v1/elections/admin/${encodeURIComponent(electionId)}/voter-roll`
+  );
+}
+
+export function upsertElectionVoterRoll(
+  electionId: string,
+  emails: string[]
+): Promise<ElectionVoterRollResponse> {
+  return mutateJson<ElectionVoterRollResponse>(
+    `/api/backend/api/v1/elections/admin/${encodeURIComponent(electionId)}/voter-roll`,
+    "POST",
+    { emails }
+  );
+}
+
+export function openElection(electionId: string, note?: string): Promise<ElectionItem> {
+  return mutateJson<ElectionItem>(
+    `/api/backend/api/v1/elections/admin/${encodeURIComponent(electionId)}/open`,
+    "POST",
+    { note: note ?? null }
+  );
+}
+
+export function closeElection(electionId: string, note?: string): Promise<ElectionItem> {
+  return mutateJson<ElectionItem>(
+    `/api/backend/api/v1/elections/admin/${encodeURIComponent(electionId)}/close`,
+    "POST",
+    { note: note ?? null }
+  );
+}
+
+export function castElectionVote(electionId: string, candidateId: string): Promise<ElectionItem> {
+  return mutateJson<ElectionItem>(
+    `/api/backend/api/v1/elections/${encodeURIComponent(electionId)}/vote`,
+    "POST",
+    { candidate_id: candidateId }
+  );
+}
+
+export function fetchElectionResults(electionId: string): Promise<ElectionResultsResponse> {
+  return fetchJson<ElectionResultsResponse>(
+    `/api/backend/api/v1/elections/${encodeURIComponent(electionId)}/results`
+  );
+}
+
+export function fetchElectionAudit(electionId: string): Promise<ElectionAuditResponse> {
+  return fetchJson<ElectionAuditResponse>(
+    `/api/backend/api/v1/elections/admin/${encodeURIComponent(electionId)}/audit`
+  );
+}
+
+export function fetchElectionPrivacy(electionId: string): Promise<ElectionPrivacyResponse> {
+  return fetchJson<ElectionPrivacyResponse>(
+    `/api/backend/api/v1/elections/admin/${encodeURIComponent(electionId)}/privacy`
   );
 }
 

@@ -110,6 +110,20 @@ POST /api/v1/messages/admin/moderation/messages/{message_id}/restore
 GET  /api/v1/messages/blocks
 POST /api/v1/messages/blocks
 DELETE /api/v1/messages/blocks/{blocked_user_id}
+GET  /api/v1/elections
+GET  /api/v1/elections/{election_id}
+GET  /api/v1/elections/{election_id}/candidates
+POST /api/v1/elections/{election_id}/vote
+GET  /api/v1/elections/{election_id}/results
+GET  /api/v1/elections/admin
+POST /api/v1/elections/admin
+POST /api/v1/elections/admin/{election_id}/candidates
+GET  /api/v1/elections/admin/{election_id}/voter-roll
+POST /api/v1/elections/admin/{election_id}/voter-roll
+POST /api/v1/elections/admin/{election_id}/open
+POST /api/v1/elections/admin/{election_id}/close
+GET  /api/v1/elections/admin/{election_id}/audit
+GET  /api/v1/elections/admin/{election_id}/privacy
 ```
 
 Evidence uploads accept PDF, JPEG, PNG, and WebP files. Uploading evidence to a
@@ -508,6 +522,28 @@ POST   /api/v1/mentorship/requests/{request_id}/cancel  # implemented
 POST   /api/v1/mentorship/sessions                    # planned scheduling/session notes
 POST   /api/v1/mentorship/requests/{request_id}/report # planned moderation
 GET    /api/v1/mentorship/admin/analytics             # planned admin analytics
+```
+
+## Post-MVP: Elections
+
+```text
+GET    /api/v1/elections                              # implemented
+GET    /api/v1/elections/{election_id}                # implemented
+GET    /api/v1/elections/{election_id}/candidates     # implemented
+POST   /api/v1/elections/{election_id}/vote           # implemented
+GET    /api/v1/elections/{election_id}/results        # implemented
+GET    /api/v1/elections/admin                        # implemented
+POST   /api/v1/elections/admin                        # implemented
+POST   /api/v1/elections/admin/{election_id}/candidates # implemented
+GET    /api/v1/elections/admin/{election_id}/voter-roll # implemented
+POST   /api/v1/elections/admin/{election_id}/voter-roll # implemented
+POST   /api/v1/elections/admin/{election_id}/open     # implemented
+POST   /api/v1/elections/admin/{election_id}/close    # implemented
+GET    /api/v1/elections/admin/{election_id}/audit    # implemented
+GET    /api/v1/elections/admin/{election_id}/privacy  # implemented
+POST   /api/v1/elections/admin/{election_id}/nominations # planned
+POST   /api/v1/elections/admin/{election_id}/certify-results # planned
+POST   /api/v1/elections/{election_id}/disputes       # planned
 ```
 
 ## Admin

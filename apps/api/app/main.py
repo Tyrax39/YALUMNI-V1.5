@@ -12,6 +12,7 @@ from app.modules.auth.platform_owner import ensure_platform_owner
 from app.modules.auth.router import router as auth_router
 from app.modules.auth.test_accounts import ensure_test_accounts, test_accounts_allowed
 from app.modules.communities.router import router as communities_router
+from app.modules.elections.router import router as elections_router
 from app.modules.events.router import router as events_router
 from app.modules.initiatives.router import router as initiatives_router
 from app.modules.mentorship.router import router as mentorship_router
@@ -72,6 +73,7 @@ app.include_router(system_router, prefix="/api/v1/system", tags=["system"])
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["auth"])
 app.include_router(alumni_router, prefix="/api/v1/alumni", tags=["alumni"])
 app.include_router(communities_router, prefix="/api/v1/communities", tags=["communities"])
+app.include_router(elections_router, prefix="/api/v1/elections", tags=["elections"])
 app.include_router(events_router, prefix="/api/v1/events", tags=["events"])
 app.include_router(initiatives_router, prefix="/api/v1/initiatives", tags=["initiatives"])
 app.include_router(messages_router, prefix="/api/v1/messages", tags=["messages"])

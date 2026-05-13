@@ -1,6 +1,5 @@
-import { PrototypeFeaturePage } from "@/components/platform/prototype-feature-page";
+import { ElectionsHub } from "@/components/elections/election-surfaces";
 
 export default function ElectionsPage() {
-  return <PrototypeFeaturePage screenKey="electionsHub" />;
+  return <ElectionsHub />;
 }
-

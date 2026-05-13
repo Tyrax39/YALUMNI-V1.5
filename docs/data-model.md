@@ -115,15 +115,23 @@
 
 ### Elections
 
-- `elections`
+- `elections` - implemented for admin-created governance elections with title,
+  summary, description, scope, voting window, draft/open/closed status, results
+  visibility, privacy mode, quorum, creator, opened timestamp, and closed
+  timestamp.
+- `election_candidates` - implemented for election-scoped candidates with
+  optional linked user, display name, headline, statement, active status, and
+  sort order.
+- `election_voters` - implemented for explicit voter-roll eligibility with one
+  election/user row, status, invitation timestamp, and voted timestamp.
+- `election_votes` - implemented for one auditable vote per election/user with
+  selected candidate, cast timestamp, and ballot hash.
 - `election_positions`
-- `election_voter_rolls`
 - `candidate_nominations`
-- `candidates`
-- `ballots`
-- `votes`
-- `election_audit_logs`
-- `election_results`
+- `ballots` - future anonymous ballot envelope hardening.
+- `election_audit_logs` - currently represented through election-scoped
+  `security_events`; a dedicated immutable export table remains planned.
+- `election_results` - computed from `election_votes` for the foundation slice.
 - `election_disputes`
 
 ## Key Enum Values

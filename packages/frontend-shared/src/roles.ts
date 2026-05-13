@@ -100,7 +100,7 @@ export const ADMIN_SURFACES: readonly AdminSurface[] = [
     href: "/elections",
     id: "elections",
     label: "Elections",
-    status: "prototype"
+    status: "partial"
   },
   {
     allowedRoles: financeRoles,
