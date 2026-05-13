@@ -132,7 +132,9 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
 - Initiatives. Started with member proposal/list/detail APIs, milestone persistence, and member UI.
 - Opportunities.
 - Mentorship. Started with mentor profiles/settings, mentor discovery, request creation, incoming/outgoing request management, and accept/decline/cancel workflow.
-- Contributions and ledger.
+- Contributions and ledger. Started with finance-admin campaign draft/publish/close,
+  member contribution recording, receipt issuance, treasury summary, and ledger
+  credit entries.
 - Elections. Started with draft setup, candidate creation, voter-roll
   management, open/close lifecycle, one-vote-per-user ballot casting, result
   counts, quorum reporting, and admin audit/privacy summaries.

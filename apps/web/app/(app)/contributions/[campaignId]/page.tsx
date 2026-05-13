@@ -1,4 +1,4 @@
-import { PrototypeFeaturePage } from "@/components/platform/prototype-feature-page";
+import { ContributionCampaignDetail } from "@/components/contributions/contribution-surfaces";
 
 type ContributionCampaignPageProps = {
   params: Promise<{
@@ -9,6 +9,5 @@ type ContributionCampaignPageProps = {
 export default async function ContributionCampaignPage({ params }: ContributionCampaignPageProps) {
   const { campaignId } = await params;
 
-  return <PrototypeFeaturePage recordId={campaignId} screenKey="contributionCampaign" />;
+  return <ContributionCampaignDetail campaignId={campaignId} />;
 }
-

@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 
 import { LiveModerationQueues, LiveVerificationQueue } from "./live-admin-surfaces";
+import { LiveContributionAdmin } from "./live-contribution-admin";
 import { LiveElectionAdmin } from "./live-election-admin";
 import { LiveOpportunityReviewQueue } from "./live-opportunity-review";
 import { LiveResourceReviewQueue } from "./live-resource-review";
@@ -82,11 +83,11 @@ const surfaceDetails = {
     title: "Chapter operations"
   },
   contributions: {
-    cta: "Payments and receipts backend is pending; finance review flows stay read-only here.",
+    cta: "Contribution campaign, receipt, and treasury summary APIs are live for finance review.",
     rows: [
-      ["Innovation fund", "$18.4k", "receipts matched"],
-      ["Scholarship campaign", "$9.2k", "approval pending"],
-      ["Microgrant reserve", "$14.1k", "ledger ready"]
+      ["Campaign drafts", "live", "create/publish/close"],
+      ["Member receipts", "live", "issued after recorded payment"],
+      ["Ledger entries", "live", "credit entries for treasury"]
     ],
     title: "Contribution oversight"
   },
@@ -145,10 +146,10 @@ const surfaceDetails = {
     title: "Success story moderation"
   },
   treasury: {
-    cta: "Treasury data is fixture-shaped until payments, ledger, and receipt modules are implemented.",
+    cta: "Treasury summary now reads live contribution, receipt, and ledger records.",
     rows: [
-      ["Receipts", "312", "2 exceptions"],
-      ["Allocations", "$23.5k", "approval pending"],
+      ["Receipts", "live", "issued by contribution API"],
+      ["Ledger", "live", "credit entries recorded"],
       ["Audit exports", "planned", "backend pending"]
     ],
     title: "Treasury console"
@@ -317,6 +318,10 @@ export function AdminConsole({ surfaceId }: AdminConsoleProps) {
             <LiveSuccessStoryReviewQueue />
           ) : surfaceId === "elections" ? (
             <LiveElectionAdmin />
+          ) : surfaceId === "contributions" ? (
+            <LiveContributionAdmin mode="campaigns" />
+          ) : surfaceId === "treasury" ? (
+            <LiveContributionAdmin mode="treasury" />
           ) : (
             <OperationalScope detail={detail} surfaceId={surfaceId} />
           )}

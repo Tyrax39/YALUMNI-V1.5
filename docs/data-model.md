@@ -103,12 +103,18 @@
 
 ### Contributions
 
-- `contribution_campaigns`
-- `pledges`
-- `contributions`
-- `payment_attempts`
-- `ledger_entries`
-- `receipts`
+- `contribution_campaigns` - implemented for finance-admin-created campaigns
+  with goal amount, currency, country/chapter metadata, draft/published/closed
+  status, funding window, creator, and publish/close timestamps.
+- `contributions` - implemented for member contribution records with amount,
+  currency, payment method/reference, contributor, status, paid timestamp,
+  anonymous flag, and campaign link.
+- `contribution_receipts` - implemented for one issued receipt per contribution
+  with receipt number, issued-to details, amount, currency, status, and tax note.
+- `contribution_ledger_entries` - implemented for foundation credit entries tied
+  to recorded contributions.
+- `pledges` - future split from confirmed local contribution recording.
+- `payment_attempts` - planned for provider payment intents/webhooks.
 - `disbursement_requests`
 - `disbursement_approvals`
 - `expense_reports`

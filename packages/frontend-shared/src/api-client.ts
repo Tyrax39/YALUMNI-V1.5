@@ -673,6 +673,134 @@ export type ElectionPrivacyResponse = {
   vote_recording: string;
 };
 
+export type ContributionCampaign = {
+  chapter_name?: string | null;
+  closed_at?: string | null;
+  contribution_count: number;
+  country?: string | null;
+  cover_image_url?: string | null;
+  created_at: string;
+  created_by_display_name?: string | null;
+  created_by_user_id?: string | null;
+  currency: string;
+  description: string;
+  ends_at?: string | null;
+  goal_amount_cents: number;
+  id: string;
+  is_contributor: boolean;
+  pending_amount_cents: number;
+  published_at?: string | null;
+  received_amount_cents: number;
+  starts_at?: string | null;
+  status: string;
+  summary: string;
+  title: string;
+  updated_at: string;
+};
+
+export type ContributionCampaignListResponse = {
+  campaigns: ContributionCampaign[];
+  has_more: boolean;
+  limit: number;
+  offset: number;
+  total: number;
+};
+
+export type ContributionCampaignPayload = {
+  chapter_name?: string | null;
+  country?: string | null;
+  cover_image_url?: string | null;
+  currency?: string;
+  description: string;
+  ends_at?: string | null;
+  goal_amount_cents?: number;
+  starts_at?: string | null;
+  summary: string;
+  title: string;
+};
+
+export type ContributionPaymentPayload = {
+  amount_cents: number;
+  anonymous?: boolean;
+  currency?: string;
+  note?: string | null;
+  payment_method?: string;
+  payment_reference?: string | null;
+};
+
+export type ContributionRecord = {
+  amount_cents: number;
+  anonymous: boolean;
+  campaign_id: string;
+  campaign_title?: string | null;
+  contributor_display_name?: string | null;
+  contributor_user_id?: string | null;
+  created_at: string;
+  currency: string;
+  id: string;
+  note?: string | null;
+  paid_at?: string | null;
+  payment_method: string;
+  payment_reference?: string | null;
+  receipt_id?: string | null;
+  receipt_number?: string | null;
+  status: string;
+  updated_at: string;
+};
+
+export type ContributionListResponse = {
+  contributions: ContributionRecord[];
+  has_more: boolean;
+  limit: number;
+  offset: number;
+  total: number;
+};
+
+export type ContributionReceipt = {
+  amount_cents: number;
+  campaign_id: string;
+  campaign_title: string;
+  contribution_id: string;
+  contributor_display_name?: string | null;
+  currency: string;
+  id: string;
+  issued_at: string;
+  issued_to_email: string;
+  issued_to_name: string;
+  receipt_number: string;
+  status: string;
+  tax_note?: string | null;
+};
+
+export type ContributionLedgerEntry = {
+  amount_cents: number;
+  contribution_id: string;
+  created_at: string;
+  currency: string;
+  entry_type: string;
+  id: string;
+  memo?: string | null;
+};
+
+export type TreasurySummary = {
+  campaign_count: number;
+  campaigns: ContributionCampaign[];
+  ledger_entries: ContributionLedgerEntry[];
+  pending_amount_cents: number;
+  published_campaign_count: number;
+  receipt_count: number;
+  received_amount_cents: number;
+  recent_contributions: ContributionRecord[];
+};
+
+export type ContributionFilters = {
+  country?: string;
+  limit?: number;
+  offset?: number;
+  q?: string;
+  status?: string;
+};
+
 export type ResourceItem = {
   country?: string | null;
   created_at: string;
@@ -1273,6 +1401,98 @@ export function fetchElectionPrivacy(electionId: string): Promise<ElectionPrivac
   return fetchJson<ElectionPrivacyResponse>(
     `/api/backend/api/v1/elections/admin/${encodeURIComponent(electionId)}/privacy`
   );
+}
+
+function contributionQueryString(filters: ContributionFilters = {}) {
+  const params = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(filters)) {
+    if (typeof value === "undefined" || value === null || value === "") {
+      continue;
+    }
+
+    params.set(key, String(value));
+  }
+
+  return params.toString();
+}
+
+export function fetchContributionCampaigns(
+  filters: ContributionFilters = {}
+): Promise<ContributionCampaignListResponse> {
+  const query = contributionQueryString({ limit: 12, offset: 0, ...filters });
+  return fetchJson<ContributionCampaignListResponse>(`/api/backend/api/v1/contributions?${query}`);
+}
+
+export function fetchAdminContributionCampaigns(
+  filters: ContributionFilters = {}
+): Promise<ContributionCampaignListResponse> {
+  const query = contributionQueryString({ limit: 12, offset: 0, status: "ALL", ...filters });
+  return fetchJson<ContributionCampaignListResponse>(
+    `/api/backend/api/v1/contributions/admin/campaigns?${query}`
+  );
+}
+
+export function fetchContributionCampaign(campaignId: string): Promise<ContributionCampaign> {
+  return fetchJson<ContributionCampaign>(
+    `/api/backend/api/v1/contributions/${encodeURIComponent(campaignId)}`
+  );
+}
+
+export function createContributionCampaign(
+  payload: ContributionCampaignPayload
+): Promise<ContributionCampaign> {
+  return mutateJson<ContributionCampaign>(
+    "/api/backend/api/v1/contributions/admin/campaigns",
+    "POST",
+    payload
+  );
+}
+
+export function publishContributionCampaign(campaignId: string, note?: string): Promise<ContributionCampaign> {
+  return mutateJson<ContributionCampaign>(
+    `/api/backend/api/v1/contributions/admin/campaigns/${encodeURIComponent(campaignId)}/publish`,
+    "POST",
+    { note: note ?? null }
+  );
+}
+
+export function closeContributionCampaign(campaignId: string, note?: string): Promise<ContributionCampaign> {
+  return mutateJson<ContributionCampaign>(
+    `/api/backend/api/v1/contributions/admin/campaigns/${encodeURIComponent(campaignId)}/close`,
+    "POST",
+    { note: note ?? null }
+  );
+}
+
+export function recordContributionPayment(
+  campaignId: string,
+  payload: ContributionPaymentPayload
+): Promise<ContributionRecord> {
+  return mutateJson<ContributionRecord>(
+    `/api/backend/api/v1/contributions/${encodeURIComponent(campaignId)}/pay`,
+    "POST",
+    payload
+  );
+}
+
+export function fetchContributionReceipt(receiptId: string): Promise<ContributionReceipt> {
+  return fetchJson<ContributionReceipt>(
+    `/api/backend/api/v1/contributions/receipts/${encodeURIComponent(receiptId)}`
+  );
+}
+
+export function fetchAdminContributions(
+  filters: Pick<ContributionFilters, "limit" | "offset" | "status"> = {}
+): Promise<ContributionListResponse> {
+  const query = contributionQueryString({ limit: 12, offset: 0, ...filters });
+  return fetchJson<ContributionListResponse>(
+    `/api/backend/api/v1/contributions/admin/contributions?${query}`
+  );
+}
+
+export function fetchTreasurySummary(): Promise<TreasurySummary> {
+  return fetchJson<TreasurySummary>("/api/backend/api/v1/contributions/admin/treasury");
 }
 
 function resourceQueryString(filters: ResourceFilters = {}) {

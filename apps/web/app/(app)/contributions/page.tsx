@@ -1,6 +1,5 @@
-import { PrototypeFeaturePage } from "@/components/platform/prototype-feature-page";
+import { ContributionsHub } from "@/components/contributions/contribution-surfaces";
 
 export default function ContributionsPage() {
-  return <PrototypeFeaturePage screenKey="contributionsHub" />;
+  return <ContributionsHub />;
 }
-

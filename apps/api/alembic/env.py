@@ -8,6 +8,7 @@ from app.core.database import Base
 from app.modules.alumni import models as alumni_models
 from app.modules.auth import models as auth_models
 from app.modules.communities import models as community_models
+from app.modules.contributions import models as contribution_models
 from app.modules.elections import models as election_models
 from app.modules.events import models as event_models
 from app.modules.initiatives import models as initiative_models
@@ -22,6 +23,7 @@ _ = (
     auth_models,
     alumni_models,
     community_models,
+    contribution_models,
     election_models,
     event_models,
     initiative_models,

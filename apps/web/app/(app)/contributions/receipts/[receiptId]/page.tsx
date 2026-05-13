@@ -1,4 +1,4 @@
-import { PrototypeFeaturePage } from "@/components/platform/prototype-feature-page";
+import { ContributionReceiptSurface } from "@/components/contributions/contribution-surfaces";
 
 type ContributionReceiptPageProps = {
   params: Promise<{
@@ -9,6 +9,5 @@ type ContributionReceiptPageProps = {
 export default async function ContributionReceiptPage({ params }: ContributionReceiptPageProps) {
   const { receiptId } = await params;
 
-  return <PrototypeFeaturePage recordId={receiptId} screenKey="contributionReceipt" />;
+  return <ContributionReceiptSurface receiptId={receiptId} />;
 }
-

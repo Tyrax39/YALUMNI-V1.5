@@ -108,7 +108,7 @@ export const ADMIN_SURFACES: readonly AdminSurface[] = [
     href: "/treasury",
     id: "treasury",
     label: "Treasury",
-    status: "prototype"
+    status: "partial"
   },
   {
     allowedRoles: financeRoles,
@@ -116,7 +116,7 @@ export const ADMIN_SURFACES: readonly AdminSurface[] = [
     href: "/contributions",
     id: "contributions",
     label: "Contributions",
-    status: "prototype"
+    status: "partial"
   },
   {
     allowedRoles: broadOperationalRoles,
