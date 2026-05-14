@@ -1503,6 +1503,18 @@ export function createContributionPaymentIntent(
   );
 }
 
+export function confirmContributionPaymentIntent(
+  campaignId: string,
+  paymentIntentId: string
+): Promise<ContributionRecord> {
+  return mutateJson<ContributionRecord>(
+    `/api/backend/api/v1/contributions/${encodeURIComponent(
+      campaignId
+    )}/payment-intents/${encodeURIComponent(paymentIntentId)}/confirm`,
+    "POST"
+  );
+}
+
 export function refundContribution(contributionId: string, note?: string): Promise<ContributionRecord> {
   return mutateJson<ContributionRecord>(
     `/api/backend/api/v1/contributions/admin/contributions/${encodeURIComponent(contributionId)}/refund`,

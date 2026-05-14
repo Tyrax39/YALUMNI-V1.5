@@ -111,8 +111,9 @@
   anonymous flag, and campaign link.
 - `contribution_payment_intents` - implemented as a local payment-provider
   intent foundation with campaign, contributor, amount, method, provider intent
-  reference, status, anonymous flag, and note metadata. These do not issue
-  receipts or ledger entries until a confirmed contribution is recorded.
+  reference, status, anonymous flag, and note metadata. Local confirmation moves
+  an eligible intent to `CONFIRMED` and records the matching contribution,
+  receipt, and ledger credit entry.
 - `contribution_receipts` - implemented for one issued receipt per contribution
   with receipt number, issued-to details, amount, currency, status, and tax note.
 - `contribution_ledger_entries` - implemented for foundation credit entries,

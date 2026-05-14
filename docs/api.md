@@ -113,6 +113,7 @@ DELETE /api/v1/messages/blocks/{blocked_user_id}
 GET  /api/v1/contributions
 GET  /api/v1/contributions/{campaign_id}
 POST /api/v1/contributions/{campaign_id}/payment-intents
+POST /api/v1/contributions/{campaign_id}/payment-intents/{payment_intent_id}/confirm
 POST /api/v1/contributions/{campaign_id}/pay
 GET  /api/v1/contributions/receipts/{receipt_id}
 GET  /api/v1/contributions/receipts/{receipt_id}/download
@@ -571,6 +572,7 @@ POST   /api/v1/elections/{election_id}/disputes       # planned
 GET    /api/v1/contributions                         # implemented
 GET    /api/v1/contributions/{campaign_id}           # implemented
 POST   /api/v1/contributions/{campaign_id}/payment-intents # implemented local intent foundation
+POST   /api/v1/contributions/{campaign_id}/payment-intents/{payment_intent_id}/confirm # implemented local intent confirmation
 POST   /api/v1/contributions/{campaign_id}/pay       # implemented local confirmed payment
 GET    /api/v1/contributions/receipts/{receipt_id}   # implemented
 GET    /api/v1/contributions/receipts/{receipt_id}/download # implemented text receipt download

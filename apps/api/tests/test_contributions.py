@@ -455,6 +455,42 @@ def test_contribution_finance_role_and_receipt_privacy_are_enforced(client: Test
     )
     assert invalid_intent_method.status_code == 400
 
+    intent_response = client.post(
+        f"/api/v1/contributions/{campaign_id}/payment-intents",
+        headers=member_headers,
+        json={
+            "amount_cents": 7200,
+            "currency": "USD",
+            "note": "Confirm this local intent.",
+            "payment_method": "CARD_TEST",
+        },
+    )
+    assert intent_response.status_code == 201
+    intent = intent_response.json()
+
+    denied_confirm = client.post(
+        f"/api/v1/contributions/{campaign_id}/payment-intents/{intent['id']}/confirm",
+        headers=other_headers,
+    )
+    assert denied_confirm.status_code == 404
+
+    confirmed_intent = client.post(
+        f"/api/v1/contributions/{campaign_id}/payment-intents/{intent['id']}/confirm",
+        headers=member_headers,
+    )
+    assert confirmed_intent.status_code == 201
+    confirmed = confirmed_intent.json()
+    assert confirmed["amount_cents"] == 7200
+    assert confirmed["payment_reference"] == intent["provider_intent_id"]
+    assert confirmed["receipt_id"]
+    assert confirmed["status"] == "RECEIVED"
+
+    duplicate_confirm = client.post(
+        f"/api/v1/contributions/{campaign_id}/payment-intents/{intent['id']}/confirm",
+        headers=member_headers,
+    )
+    assert duplicate_confirm.status_code == 409
+
     payment_response = client.post(
         f"/api/v1/contributions/{campaign_id}/pay",
         headers=member_headers,
