@@ -120,6 +120,8 @@ POST /api/v1/contributions/admin/campaigns
 POST /api/v1/contributions/admin/campaigns/{campaign_id}/publish
 POST /api/v1/contributions/admin/campaigns/{campaign_id}/close
 GET  /api/v1/contributions/admin/contributions
+POST /api/v1/contributions/admin/contributions/{contribution_id}/refund
+POST /api/v1/contributions/admin/contributions/{contribution_id}/void
 GET  /api/v1/contributions/admin/contributions/export
 GET  /api/v1/contributions/admin/treasury
 GET  /api/v1/contributions/admin/treasury/export
@@ -573,13 +575,15 @@ POST   /api/v1/contributions/admin/campaigns         # implemented
 POST   /api/v1/contributions/admin/campaigns/{campaign_id}/publish # implemented
 POST   /api/v1/contributions/admin/campaigns/{campaign_id}/close   # implemented
 GET    /api/v1/contributions/admin/contributions     # implemented
+POST   /api/v1/contributions/admin/contributions/{contribution_id}/refund # implemented local ledger reversal
+POST   /api/v1/contributions/admin/contributions/{contribution_id}/void # implemented pending contribution cancellation
 GET    /api/v1/contributions/admin/contributions/export # implemented CSV export
 GET    /api/v1/contributions/admin/treasury          # implemented
 GET    /api/v1/contributions/admin/treasury/export   # implemented ledger CSV export
 GET    /api/v1/contributions/admin/treasury/audit-package # implemented signed JSON snapshot
 POST   /api/v1/contributions/{campaign_id}/payment-intents # planned provider integration
 POST   /api/v1/contributions/webhooks/{provider}     # planned reconciliation
-POST   /api/v1/contributions/admin/{contribution_id}/refund # planned
+POST   /api/v1/contributions/admin/{contribution_id}/provider-refund # planned provider-side refund orchestration
 GET    /api/v1/contributions/admin/treasury/audit-report # planned certified PDF/report package
 ```
 

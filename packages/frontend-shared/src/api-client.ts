@@ -1476,6 +1476,22 @@ export function recordContributionPayment(
   );
 }
 
+export function refundContribution(contributionId: string, note?: string): Promise<ContributionRecord> {
+  return mutateJson<ContributionRecord>(
+    `/api/backend/api/v1/contributions/admin/contributions/${encodeURIComponent(contributionId)}/refund`,
+    "POST",
+    { note: note ?? null }
+  );
+}
+
+export function voidContribution(contributionId: string, note?: string): Promise<ContributionRecord> {
+  return mutateJson<ContributionRecord>(
+    `/api/backend/api/v1/contributions/admin/contributions/${encodeURIComponent(contributionId)}/void`,
+    "POST",
+    { note: note ?? null }
+  );
+}
+
 export function fetchContributionReceipt(receiptId: string): Promise<ContributionReceipt> {
   return fetchJson<ContributionReceipt>(
     `/api/backend/api/v1/contributions/receipts/${encodeURIComponent(receiptId)}`

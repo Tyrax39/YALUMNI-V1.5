@@ -48,7 +48,11 @@ VISIBLE_CAMPAIGN_STATUSES = {"CLOSED", "PUBLISHED"}
 PAYMENT_METHODS = {"BANK_TRANSFER", "CARD_TEST", "MOBILE_MONEY", "OFFLINE_CASH"}
 RECEIVED_STATUS = "RECEIVED"
 PENDING_STATUS = "PENDING"
+REFUNDED_STATUS = "REFUNDED"
+VOIDED_STATUS = "VOIDED"
 LEDGER_CREDIT = "CONTRIBUTION_CREDIT"
+LEDGER_REFUND = "CONTRIBUTION_REFUND"
+LEDGER_VOID = "CONTRIBUTION_VOID"
 
 
 def _request_context(request: Request) -> tuple[str | None, str | None]:
@@ -489,6 +493,63 @@ def _receipt_download_response(receipt: ContributionReceipt) -> Response:
     )
 
 
+def _adjustment_memo(action: str, contribution: Contribution, note: str | None) -> str:
+    receipt_number = contribution.receipt.receipt_number if contribution.receipt else "no receipt"
+    memo = f"{action} for {receipt_number} on {contribution.campaign.title}"
+    if note:
+        memo = f"{memo}. Note: {note}"
+    return memo[:500]
+
+
+def _apply_contribution_adjustment(
+    *,
+    action: str,
+    contribution: Contribution,
+    current_user: User,
+    db: Session,
+    event_type: str,
+    ledger_amount_cents: int,
+    ledger_type: str,
+    next_status: str,
+    note: str | None,
+    receipt_status: str | None,
+    request: Request,
+) -> ContributionResponse:
+    contribution.status = next_status
+    if contribution.receipt and receipt_status:
+        contribution.receipt.status = receipt_status
+    db.add(
+        ContributionLedgerEntry(
+            amount_cents=ledger_amount_cents,
+            contribution_id=contribution.id,
+            created_by_user_id=current_user.id,
+            currency=contribution.currency,
+            entry_type=ledger_type,
+            memo=_adjustment_memo(action, contribution, note),
+        )
+    )
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        event_type,
+        {
+            "amount_cents": contribution.amount_cents,
+            "campaign_id": str(contribution.campaign_id),
+            "contribution_id": str(contribution.id),
+            "ledger_amount_cents": ledger_amount_cents,
+            "note": note,
+            "receipt_number": contribution.receipt.receipt_number
+            if contribution.receipt
+            else None,
+            "status": next_status,
+        },
+    )
+    db.commit()
+    contribution = _get_contribution_or_404(db, contribution.id)
+    return _serialize_contribution(contribution)
+
+
 def _build_treasury_audit_package(
     *,
     campaign_id: uuid.UUID | None,
@@ -739,6 +800,66 @@ def export_admin_contributions(
     )
     db.commit()
     return _csv_response(f"yalumni-contributions-{utcnow().date().isoformat()}.csv", rows)
+
+
+@router.post("/admin/{contribution_id}/refund", response_model=ContributionResponse)
+@router.post("/admin/contributions/{contribution_id}/refund", response_model=ContributionResponse)
+def refund_contribution(
+    contribution_id: uuid.UUID,
+    payload: ContributionCampaignStatusAction,
+    request: Request,
+    current_user: Annotated[User, Depends(finance_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> ContributionResponse:
+    contribution = _get_contribution_or_404(db, contribution_id)
+    if contribution.status != RECEIVED_STATUS:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only received contributions can be refunded",
+        )
+    return _apply_contribution_adjustment(
+        action="Refund",
+        contribution=contribution,
+        current_user=current_user,
+        db=db,
+        event_type="contributions.refunded",
+        ledger_amount_cents=-contribution.amount_cents,
+        ledger_type=LEDGER_REFUND,
+        next_status=REFUNDED_STATUS,
+        note=payload.note,
+        receipt_status=REFUNDED_STATUS,
+        request=request,
+    )
+
+
+@router.post("/admin/{contribution_id}/void", response_model=ContributionResponse)
+@router.post("/admin/contributions/{contribution_id}/void", response_model=ContributionResponse)
+def void_contribution(
+    contribution_id: uuid.UUID,
+    payload: ContributionCampaignStatusAction,
+    request: Request,
+    current_user: Annotated[User, Depends(finance_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> ContributionResponse:
+    contribution = _get_contribution_or_404(db, contribution_id)
+    if contribution.status != PENDING_STATUS:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only pending contributions can be voided",
+        )
+    return _apply_contribution_adjustment(
+        action="Void",
+        contribution=contribution,
+        current_user=current_user,
+        db=db,
+        event_type="contributions.voided",
+        ledger_amount_cents=0,
+        ledger_type=LEDGER_VOID,
+        next_status=VOIDED_STATUS,
+        note=payload.note,
+        receipt_status=VOIDED_STATUS,
+        request=request,
+    )
 
 
 @router.get("/admin/treasury", response_model=TreasurySummaryResponse)

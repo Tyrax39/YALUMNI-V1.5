@@ -21,8 +21,10 @@ import {
   fetchAdminContributions,
   fetchTreasurySummary,
   publishContributionCampaign,
+  refundContribution,
   treasuryAuditPackageUrl,
-  treasuryLedgerExportUrl
+  treasuryLedgerExportUrl,
+  voidContribution
 } from "@yalumni/frontend-shared";
 
 type LiveContributionAdminProps = {
@@ -154,6 +156,24 @@ export function LiveContributionAdmin({ mode }: LiveContributionAdminProps) {
       setReloadKey((current) => current + 1);
     } catch (caught) {
       setMessage(caught instanceof Error ? caught.message : "Campaign status could not update.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function adjustContribution(action: "refund" | "void", contribution: ContributionRecord) {
+    setBusy(`${action}:${contribution.id}`);
+    setMessage(null);
+    try {
+      if (action === "refund") {
+        await refundContribution(contribution.id, "Refunded from finance console.");
+      } else {
+        await voidContribution(contribution.id, "Voided from finance console.");
+      }
+      setMessage(`Contribution ${action === "refund" ? "refunded" : "voided"}.`);
+      setReloadKey((current) => current + 1);
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : "Contribution adjustment could not be recorded.");
     } finally {
       setBusy(null);
     }
@@ -301,7 +321,11 @@ export function LiveContributionAdmin({ mode }: LiveContributionAdminProps) {
       ) : (
         state.status === "ready" ? (
           <section className="grid gap-5 2xl:grid-cols-[1fr_1fr]">
-            <RecentContributions contributions={state.contributions} />
+            <RecentContributions
+              busy={busy}
+              contributions={state.contributions}
+              onAdjust={adjustContribution}
+            />
             <LedgerEntries entries={state.treasury.ledger_entries} />
           </section>
         ) : null
@@ -416,7 +440,15 @@ function CampaignTable({ campaigns }: { campaigns: ContributionCampaign[] }) {
   );
 }
 
-function RecentContributions({ contributions }: { contributions: ContributionRecord[] }) {
+function RecentContributions({
+  busy,
+  contributions,
+  onAdjust
+}: {
+  busy: string | null;
+  contributions: ContributionRecord[];
+  onAdjust: (action: "refund" | "void", contribution: ContributionRecord) => void;
+}) {
   return (
     <section className="rounded-lg border border-border bg-white p-5 shadow-soft">
       <h3 className="font-display text-xl font-semibold text-ink">Recent contributions</h3>
@@ -428,13 +460,47 @@ function RecentContributions({ contributions }: { contributions: ContributionRec
                 <div>
                   <p className="text-sm font-bold text-ink">{contribution.campaign_title}</p>
                   <p className="mt-1 text-xs font-bold uppercase tracking-[0.1em] text-muted">
-                    {contribution.receipt_number ?? "Receipt pending"}
+                    {contribution.receipt_number ?? "Receipt pending"} · {formatStatus(contribution.status)}
                   </p>
                 </div>
                 <p className="font-display text-xl font-bold text-primary">
                   {formatMoney(contribution.amount_cents, contribution.currency)}
                 </p>
               </div>
+              {contribution.status === "RECEIVED" || contribution.status === "PENDING" ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {contribution.status === "RECEIVED" ? (
+                    <button
+                      className="focus-ring inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-border bg-white px-3 text-xs font-bold text-ink disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={busy === `refund:${contribution.id}`}
+                      onClick={() => onAdjust("refund", contribution)}
+                      type="button"
+                    >
+                      {busy === `refund:${contribution.id}` ? (
+                        <Loader2 aria-hidden="true" className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <RefreshCcw aria-hidden="true" className="h-3.5 w-3.5" />
+                      )}
+                      Refund
+                    </button>
+                  ) : null}
+                  {contribution.status === "PENDING" ? (
+                    <button
+                      className="focus-ring inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-border bg-white px-3 text-xs font-bold text-ink disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={busy === `void:${contribution.id}`}
+                      onClick={() => onAdjust("void", contribution)}
+                      type="button"
+                    >
+                      {busy === `void:${contribution.id}` ? (
+                        <Loader2 aria-hidden="true" className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <ReceiptText aria-hidden="true" className="h-3.5 w-3.5" />
+                      )}
+                      Void
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           ))
         ) : (

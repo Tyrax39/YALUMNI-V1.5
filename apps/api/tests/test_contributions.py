@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import json
+import uuid
 from collections.abc import Generator
 
 import pytest
@@ -18,6 +19,7 @@ from app.modules.alumni import models as alumni_models
 from app.modules.auth import models as auth_models
 from app.modules.communities import models as community_models
 from app.modules.contributions import models as contribution_models
+from app.modules.contributions.models import Contribution
 from app.modules.elections import models as election_models
 from app.modules.events import models as event_models
 from app.modules.initiatives import models as initiative_models
@@ -117,6 +119,33 @@ def campaign_payload(title: str = "Alumni scholarship fund") -> dict:
         "summary": "Fund scholarships for alumni community impact projects across chapters.",
         "title": title,
     }
+
+
+def create_pending_contribution_for_test(
+    *,
+    amount_cents: int,
+    campaign_id: str,
+    contributor_user_id: str,
+) -> str:
+    db_override = app.dependency_overrides[get_db_session]
+    db_iterator = db_override()
+    db = next(db_iterator)
+    try:
+        contribution = Contribution(
+            amount_cents=amount_cents,
+            campaign_id=uuid.UUID(campaign_id),
+            contributor_user_id=uuid.UUID(contributor_user_id),
+            currency="USD",
+            payment_method="BANK_TRANSFER",
+            payment_reference="PENDING-QA",
+            status="PENDING",
+        )
+        db.add(contribution)
+        db.commit()
+        db.refresh(contribution)
+        return str(contribution.id)
+    finally:
+        db_iterator.close()
 
 
 def test_contribution_campaign_payment_receipt_and_treasury(client: TestClient) -> None:
@@ -248,6 +277,40 @@ def test_contribution_campaign_payment_receipt_and_treasury(client: TestClient) 
         "receipt_number"
     ]
 
+    refund_response = client.post(
+        f"/api/v1/contributions/admin/contributions/{contribution['id']}/refund",
+        headers=admin_headers,
+        json={"note": "Refunded during QA reconciliation."},
+    )
+    assert refund_response.status_code == 200
+    refunded = refund_response.json()
+    assert refunded["status"] == "REFUNDED"
+    assert refunded["receipt_number"] == contribution["receipt_number"]
+
+    duplicate_refund = client.post(
+        f"/api/v1/contributions/admin/contributions/{contribution['id']}/refund",
+        headers=admin_headers,
+        json={"note": "Second refund should be blocked."},
+    )
+    assert duplicate_refund.status_code == 409
+
+    refunded_receipt_response = client.get(
+        f"/api/v1/contributions/receipts/{contribution['receipt_id']}",
+        headers=donor_headers,
+    )
+    assert refunded_receipt_response.status_code == 200
+    assert refunded_receipt_response.json()["status"] == "REFUNDED"
+
+    refunded_treasury_response = client.get(
+        "/api/v1/contributions/admin/treasury",
+        headers=admin_headers,
+    )
+    assert refunded_treasury_response.status_code == 200
+    refunded_treasury = refunded_treasury_response.json()
+    assert refunded_treasury["received_amount_cents"] == 0
+    assert refunded_treasury["ledger_entries"][0]["entry_type"] == "CONTRIBUTION_REFUND"
+    assert refunded_treasury["ledger_entries"][0]["amount_cents"] == -12500
+
     close_response = client.post(
         f"/api/v1/contributions/admin/campaigns/{campaign['id']}/close",
         headers=admin_headers,
@@ -297,6 +360,35 @@ def test_contribution_finance_role_and_receipt_privacy_are_enforced(client: Test
     )
     assert publish_response.status_code == 200
 
+    pending_contribution_id = create_pending_contribution_for_test(
+        amount_cents=7000,
+        campaign_id=campaign_id,
+        contributor_user_id=member["user"]["id"],
+    )
+    void_response = client.post(
+        f"/api/v1/contributions/admin/contributions/{pending_contribution_id}/void",
+        headers=admin_headers,
+        json={"note": "Pending transfer canceled."},
+    )
+    assert void_response.status_code == 200
+    assert void_response.json()["status"] == "VOIDED"
+
+    duplicate_void = client.post(
+        f"/api/v1/contributions/admin/contributions/{pending_contribution_id}/void",
+        headers=admin_headers,
+        json={"note": "Second void should be blocked."},
+    )
+    assert duplicate_void.status_code == 409
+
+    voided_treasury_response = client.get(
+        "/api/v1/contributions/admin/treasury",
+        headers=admin_headers,
+    )
+    assert voided_treasury_response.status_code == 200
+    voided_treasury = voided_treasury_response.json()
+    assert voided_treasury["ledger_entries"][0]["entry_type"] == "CONTRIBUTION_VOID"
+    assert voided_treasury["ledger_entries"][0]["amount_cents"] == 0
+
     invalid_method = client.post(
         f"/api/v1/contributions/{campaign_id}/pay",
         headers=member_headers,
@@ -310,7 +402,15 @@ def test_contribution_finance_role_and_receipt_privacy_are_enforced(client: Test
         json={"amount_cents": 5000, "currency": "USD", "payment_method": "MOBILE_MONEY"},
     )
     assert payment_response.status_code == 201
-    receipt_id = payment_response.json()["receipt_id"]
+    payment = payment_response.json()
+    receipt_id = payment["receipt_id"]
+
+    denied_refund = client.post(
+        f"/api/v1/contributions/admin/contributions/{payment['id']}/refund",
+        headers=member_headers,
+        json={"note": "Member cannot refund."},
+    )
+    assert denied_refund.status_code == 403
 
     other_receipt = client.get(
         f"/api/v1/contributions/receipts/{receipt_id}",

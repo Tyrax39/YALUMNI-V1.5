@@ -135,8 +135,9 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
 - Contributions and ledger. Started with finance-admin campaign draft/publish/close,
   member contribution recording, receipt issuance, treasury summary, and ledger
   credit entries. Added member receipt text downloads, print actions, finance
-  contribution CSV exports, treasury ledger CSV exports, and signed treasury
-  audit JSON packages.
+  contribution CSV exports, treasury ledger CSV exports, signed treasury audit
+  JSON packages, and local finance-admin refund/void adjustment controls with
+  ledger reversals/markers.
 - Elections. Started with draft setup, candidate creation, voter-roll
   management, open/close lifecycle, one-vote-per-user ballot casting, result
   counts, quorum reporting, and admin audit/privacy summaries.
