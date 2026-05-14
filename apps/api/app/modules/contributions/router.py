@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import io
 import json
+import textwrap
 import uuid
 from datetime import UTC, datetime
 from typing import Annotated
@@ -467,9 +468,9 @@ def _canonical_json_bytes(payload: dict) -> bytes:
     return json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
 
 
-def _receipt_download_response(receipt: ContributionReceipt) -> Response:
+def _receipt_download_lines(receipt: ContributionReceipt) -> list[str]:
     contribution = receipt.contribution
-    lines = [
+    return [
         "YALUMNI Contribution Receipt",
         f"Receipt number: {receipt.receipt_number}",
         f"Status: {receipt.status}",
@@ -486,10 +487,86 @@ def _receipt_download_response(receipt: ContributionReceipt) -> Response:
         "",
         receipt.tax_note or "",
     ]
+
+
+def _receipt_download_response(receipt: ContributionReceipt) -> Response:
+    lines = _receipt_download_lines(receipt)
     return Response(
         content="\n".join(lines),
         headers={"Content-Disposition": f'attachment; filename="{receipt.receipt_number}.txt"'},
         media_type="text/plain; charset=utf-8",
+    )
+
+
+def _pdf_escape(value: str) -> str:
+    return (
+        value.encode("latin-1", "replace")
+        .decode("latin-1")
+        .replace("\\", "\\\\")
+        .replace("(", "\\(")
+        .replace(")", "\\)")
+    )
+
+
+def _simple_pdf_bytes(lines: list[str]) -> bytes:
+    wrapped_lines: list[str] = []
+    for line in lines:
+        if not line:
+            wrapped_lines.append("")
+            continue
+        wrapped_lines.extend(textwrap.wrap(line, width=88) or [""])
+
+    content_lines = [
+        "BT",
+        "/F1 18 Tf",
+        "72 752 Td",
+        f"({_pdf_escape(wrapped_lines[0])}) Tj",
+        "/F1 11 Tf",
+    ]
+    for line in wrapped_lines[1:]:
+        content_lines.append("0 -18 Td")
+        content_lines.append(f"({_pdf_escape(line)}) Tj")
+    content_lines.append("ET")
+    content = "\n".join(content_lines).encode("latin-1", "replace")
+
+    objects = [
+        b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n",
+        b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n",
+        (
+            b"3 0 obj\n"
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+            b"/Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>\n"
+            b"endobj\n"
+        ),
+        b"4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n",
+        (
+            f"5 0 obj\n<< /Length {len(content)} >>\nstream\n".encode("ascii")
+            + content
+            + b"\nendstream\nendobj\n"
+        ),
+    ]
+
+    pdf = b"%PDF-1.4\n"
+    offsets = [0]
+    for obj in objects:
+        offsets.append(len(pdf))
+        pdf += obj
+    xref_offset = len(pdf)
+    pdf += f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n".encode("ascii")
+    for offset in offsets[1:]:
+        pdf += f"{offset:010d} 00000 n \n".encode("ascii")
+    pdf += (
+        f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\n"
+        f"startxref\n{xref_offset}\n%%EOF\n"
+    ).encode("ascii")
+    return pdf
+
+
+def _receipt_pdf_download_response(receipt: ContributionReceipt) -> Response:
+    return Response(
+        content=_simple_pdf_bytes(_receipt_download_lines(receipt)),
+        headers={"Content-Disposition": f'attachment; filename="{receipt.receipt_number}.pdf"'},
+        media_type="application/pdf",
     )
 
 
@@ -1125,6 +1202,17 @@ def download_receipt(
     receipt = _get_receipt_or_404(db, receipt_id)
     _ensure_receipt_access(receipt, current_user)
     return _receipt_download_response(receipt)
+
+
+@router.get("/receipts/{receipt_id}/download.pdf")
+def download_receipt_pdf(
+    receipt_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> Response:
+    receipt = _get_receipt_or_404(db, receipt_id)
+    _ensure_receipt_access(receipt, current_user)
+    return _receipt_pdf_download_response(receipt)
 
 
 @router.get("/{campaign_id}", response_model=ContributionCampaignResponse)

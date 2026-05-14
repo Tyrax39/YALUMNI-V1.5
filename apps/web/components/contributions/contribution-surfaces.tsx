@@ -23,6 +23,7 @@ import {
   type ContributionReceipt,
   type ContributionRecord,
   contributionReceiptDownloadUrl,
+  contributionReceiptPdfDownloadUrl,
   fetchContributionCampaign,
   fetchContributionCampaigns,
   fetchContributionReceipt,
@@ -548,7 +549,15 @@ function ReceiptCard({ receipt }: { receipt: ContributionReceipt }) {
             href={contributionReceiptDownloadUrl(receipt.id)}
           >
             <Download aria-hidden="true" className="h-4 w-4" />
-            Download receipt
+            Download text receipt
+          </a>
+          <a
+            className="focus-ring mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-border bg-white px-4 text-sm font-bold text-ink"
+            download
+            href={contributionReceiptPdfDownloadUrl(receipt.id)}
+          >
+            <Download aria-hidden="true" className="h-4 w-4" />
+            Download PDF receipt
           </a>
           <button
             className="focus-ring mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-border bg-white px-4 text-sm font-bold text-ink"

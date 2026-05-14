@@ -134,7 +134,7 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
 - Mentorship. Started with mentor profiles/settings, mentor discovery, request creation, incoming/outgoing request management, and accept/decline/cancel workflow.
 - Contributions and ledger. Started with finance-admin campaign draft/publish/close,
   member contribution recording, receipt issuance, treasury summary, and ledger
-  credit entries. Added member receipt text downloads, print actions, finance
+  credit entries. Added member receipt text/PDF downloads, print actions, finance
   contribution CSV exports, treasury ledger CSV exports, signed treasury audit
   JSON packages, and local finance-admin refund/void adjustment controls with
   ledger reversals/markers.

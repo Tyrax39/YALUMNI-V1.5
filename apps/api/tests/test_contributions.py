@@ -224,6 +224,15 @@ def test_contribution_campaign_payment_receipt_and_treasury(client: TestClient) 
     assert "YALUMNI Contribution Receipt" in receipt_download.text
     assert "TEST-125" in receipt_download.text
 
+    receipt_pdf_download = client.get(
+        f"/api/v1/contributions/receipts/{contribution['receipt_id']}/download.pdf",
+        headers=donor_headers,
+    )
+    assert receipt_pdf_download.status_code == 200
+    assert receipt_pdf_download.headers["content-type"] == "application/pdf"
+    assert contribution["receipt_number"] in receipt_pdf_download.headers["content-disposition"]
+    assert receipt_pdf_download.content.startswith(b"%PDF-1.4")
+
     treasury_response = client.get("/api/v1/contributions/admin/treasury", headers=admin_headers)
     assert treasury_response.status_code == 200
     treasury = treasury_response.json()
@@ -423,6 +432,11 @@ def test_contribution_finance_role_and_receipt_privacy_are_enforced(client: Test
         headers=other_headers,
     )
     assert other_receipt_download.status_code == 404
+    other_receipt_pdf_download = client.get(
+        f"/api/v1/contributions/receipts/{receipt_id}/download.pdf",
+        headers=other_headers,
+    )
+    assert other_receipt_pdf_download.status_code == 404
 
     admin_receipt = client.get(
         f"/api/v1/contributions/receipts/{receipt_id}",
@@ -435,3 +449,8 @@ def test_contribution_finance_role_and_receipt_privacy_are_enforced(client: Test
         headers=admin_headers,
     )
     assert admin_receipt_download.status_code == 200
+    admin_receipt_pdf_download = client.get(
+        f"/api/v1/contributions/receipts/{receipt_id}/download.pdf",
+        headers=admin_headers,
+    )
+    assert admin_receipt_pdf_download.status_code == 200

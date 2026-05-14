@@ -115,6 +115,7 @@ GET  /api/v1/contributions/{campaign_id}
 POST /api/v1/contributions/{campaign_id}/pay
 GET  /api/v1/contributions/receipts/{receipt_id}
 GET  /api/v1/contributions/receipts/{receipt_id}/download
+GET  /api/v1/contributions/receipts/{receipt_id}/download.pdf
 GET  /api/v1/contributions/admin/campaigns
 POST /api/v1/contributions/admin/campaigns
 POST /api/v1/contributions/admin/campaigns/{campaign_id}/publish
@@ -570,6 +571,7 @@ GET    /api/v1/contributions/{campaign_id}           # implemented
 POST   /api/v1/contributions/{campaign_id}/pay       # implemented local confirmed payment
 GET    /api/v1/contributions/receipts/{receipt_id}   # implemented
 GET    /api/v1/contributions/receipts/{receipt_id}/download # implemented text receipt download
+GET    /api/v1/contributions/receipts/{receipt_id}/download.pdf # implemented PDF receipt download
 GET    /api/v1/contributions/admin/campaigns         # implemented
 POST   /api/v1/contributions/admin/campaigns         # implemented
 POST   /api/v1/contributions/admin/campaigns/{campaign_id}/publish # implemented

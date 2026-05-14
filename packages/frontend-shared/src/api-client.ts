@@ -1502,6 +1502,10 @@ export function contributionReceiptDownloadUrl(receiptId: string): string {
   return `/api/backend/api/v1/contributions/receipts/${encodeURIComponent(receiptId)}/download`;
 }
 
+export function contributionReceiptPdfDownloadUrl(receiptId: string): string {
+  return `/api/backend/api/v1/contributions/receipts/${encodeURIComponent(receiptId)}/download.pdf`;
+}
+
 export function fetchAdminContributions(
   filters: Pick<ContributionFilters, "limit" | "offset" | "status"> & { campaign_id?: string } = {}
 ): Promise<ContributionListResponse> {
