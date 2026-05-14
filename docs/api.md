@@ -123,6 +123,7 @@ GET  /api/v1/contributions/admin/contributions
 GET  /api/v1/contributions/admin/contributions/export
 GET  /api/v1/contributions/admin/treasury
 GET  /api/v1/contributions/admin/treasury/export
+GET  /api/v1/contributions/admin/treasury/audit-package
 GET  /api/v1/elections
 GET  /api/v1/elections/{election_id}
 GET  /api/v1/elections/{election_id}/candidates
@@ -575,10 +576,11 @@ GET    /api/v1/contributions/admin/contributions     # implemented
 GET    /api/v1/contributions/admin/contributions/export # implemented CSV export
 GET    /api/v1/contributions/admin/treasury          # implemented
 GET    /api/v1/contributions/admin/treasury/export   # implemented ledger CSV export
+GET    /api/v1/contributions/admin/treasury/audit-package # implemented signed JSON snapshot
 POST   /api/v1/contributions/{campaign_id}/payment-intents # planned provider integration
 POST   /api/v1/contributions/webhooks/{provider}     # planned reconciliation
 POST   /api/v1/contributions/admin/{contribution_id}/refund # planned
-GET    /api/v1/contributions/admin/treasury/audit-report # planned certified audit package
+GET    /api/v1/contributions/admin/treasury/audit-report # planned certified PDF/report package
 ```
 
 ## Admin

@@ -1,3 +1,6 @@
+import hashlib
+import hmac
+import json
 from collections.abc import Generator
 
 import pytest
@@ -6,6 +9,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.core.config import get_settings
 from app.core.database import Base, get_db_session
 from app.core.email import clear_email_outbox
 from app.core.rate_limit import clear_rate_limits
@@ -218,6 +222,32 @@ def test_contribution_campaign_payment_receipt_and_treasury(client: TestClient) 
     assert "CONTRIBUTION_CREDIT" in treasury_export.text
     assert contribution["receipt_number"] in treasury_export.text
 
+    audit_package_response = client.get(
+        "/api/v1/contributions/admin/treasury/audit-package",
+        headers=admin_headers,
+    )
+    assert audit_package_response.status_code == 200
+    assert audit_package_response.headers["content-type"].startswith("application/json")
+    assert "yalumni-treasury-audit" in audit_package_response.headers["content-disposition"]
+    audit_package = audit_package_response.json()
+    canonical_package = json.dumps(
+        audit_package["package"],
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    assert audit_package["integrity"]["canonical_sha256"] == hashlib.sha256(
+        canonical_package
+    ).hexdigest()
+    assert audit_package["integrity"]["signature"] == hmac.new(
+        get_settings().jwt_secret_key.encode("utf-8"),
+        canonical_package,
+        hashlib.sha256,
+    ).hexdigest()
+    assert audit_package["package"]["summary"]["received_amount_cents"] == 12500
+    assert audit_package["package"]["contributions"][0]["receipt_number"] == contribution[
+        "receipt_number"
+    ]
+
     close_response = client.post(
         f"/api/v1/contributions/admin/campaigns/{campaign['id']}/close",
         headers=admin_headers,
@@ -247,6 +277,11 @@ def test_contribution_finance_role_and_receipt_privacy_are_enforced(client: Test
         json=campaign_payload("Denied campaign"),
     )
     assert denied_create.status_code == 403
+    denied_audit_package = client.get(
+        "/api/v1/contributions/admin/treasury/audit-package",
+        headers=member_headers,
+    )
+    assert denied_audit_package.status_code == 403
 
     create_response = client.post(
         "/api/v1/contributions/admin/campaigns",

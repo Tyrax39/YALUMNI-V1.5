@@ -21,6 +21,7 @@ import {
   fetchAdminContributions,
   fetchTreasurySummary,
   publishContributionCampaign,
+  treasuryAuditPackageUrl,
   treasuryLedgerExportUrl
 } from "@yalumni/frontend-shared";
 
@@ -185,6 +186,16 @@ export function LiveContributionAdmin({ mode }: LiveContributionAdminProps) {
               <Download aria-hidden="true" className="h-4 w-4" />
               Export CSV
             </a>
+            {mode === "treasury" ? (
+              <a
+                className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-border bg-white px-3 text-sm font-bold text-ink"
+                download
+                href={treasuryAuditPackageUrl()}
+              >
+                <ShieldCheck aria-hidden="true" className="h-4 w-4" />
+                Audit package
+              </a>
+            ) : null}
             <button
               className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-border bg-white px-3 text-sm font-bold text-ink"
               onClick={() => {
