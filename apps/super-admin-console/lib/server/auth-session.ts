@@ -217,10 +217,14 @@ export function proxyBackendResponse(
 ): NextResponse {
   const headers = new Headers();
   const contentType = backendResponse.headers.get("content-type");
+  const contentDisposition = backendResponse.headers.get("content-disposition");
   const cacheControl = backendResponse.headers.get("cache-control");
 
   if (contentType) {
     headers.set("content-type", contentType);
+  }
+  if (contentDisposition) {
+    headers.set("content-disposition", contentDisposition);
   }
   headers.set("cache-control", cacheControl ?? "no-store");
 

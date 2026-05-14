@@ -181,12 +181,42 @@ def test_contribution_campaign_payment_receipt_and_treasury(client: TestClient) 
     assert receipt["receipt_number"] == contribution["receipt_number"]
     assert receipt["issued_to_email"] == "donor@example.com"
 
+    receipt_download = client.get(
+        f"/api/v1/contributions/receipts/{contribution['receipt_id']}/download",
+        headers=donor_headers,
+    )
+    assert receipt_download.status_code == 200
+    assert receipt_download.headers["content-type"].startswith("text/plain")
+    assert contribution["receipt_number"] in receipt_download.headers["content-disposition"]
+    assert "YALUMNI Contribution Receipt" in receipt_download.text
+    assert "TEST-125" in receipt_download.text
+
     treasury_response = client.get("/api/v1/contributions/admin/treasury", headers=admin_headers)
     assert treasury_response.status_code == 200
     treasury = treasury_response.json()
     assert treasury["received_amount_cents"] == 12500
     assert treasury["receipt_count"] == 1
     assert treasury["ledger_entries"][0]["entry_type"] == "CONTRIBUTION_CREDIT"
+
+    contributions_export = client.get(
+        "/api/v1/contributions/admin/contributions/export",
+        headers=admin_headers,
+    )
+    assert contributions_export.status_code == 200
+    assert contributions_export.headers["content-type"].startswith("text/csv")
+    assert "yalumni-contributions" in contributions_export.headers["content-disposition"]
+    assert contribution["receipt_number"] in contributions_export.text
+    assert "donor@example.com" in contributions_export.text
+
+    treasury_export = client.get(
+        "/api/v1/contributions/admin/treasury/export",
+        headers=admin_headers,
+    )
+    assert treasury_export.status_code == 200
+    assert treasury_export.headers["content-type"].startswith("text/csv")
+    assert "yalumni-treasury-ledger" in treasury_export.headers["content-disposition"]
+    assert "CONTRIBUTION_CREDIT" in treasury_export.text
+    assert contribution["receipt_number"] in treasury_export.text
 
     close_response = client.post(
         f"/api/v1/contributions/admin/campaigns/{campaign['id']}/close",
@@ -253,8 +283,20 @@ def test_contribution_finance_role_and_receipt_privacy_are_enforced(client: Test
     )
     assert other_receipt.status_code == 404
 
+    other_receipt_download = client.get(
+        f"/api/v1/contributions/receipts/{receipt_id}/download",
+        headers=other_headers,
+    )
+    assert other_receipt_download.status_code == 404
+
     admin_receipt = client.get(
         f"/api/v1/contributions/receipts/{receipt_id}",
         headers=admin_headers,
     )
     assert admin_receipt.status_code == 200
+
+    admin_receipt_download = client.get(
+        f"/api/v1/contributions/receipts/{receipt_id}/download",
+        headers=admin_headers,
+    )
+    assert admin_receipt_download.status_code == 200

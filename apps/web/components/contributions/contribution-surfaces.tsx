@@ -6,9 +6,11 @@ import Link from "next/link";
 
 import {
   CircleDollarSign,
+  Download,
   ExternalLink,
   Filter,
   Loader2,
+  Printer,
   ReceiptText,
   RefreshCcw,
   Send,
@@ -20,6 +22,7 @@ import {
   type ContributionFilters,
   type ContributionReceipt,
   type ContributionRecord,
+  contributionReceiptDownloadUrl,
   fetchContributionCampaign,
   fetchContributionCampaigns,
   fetchContributionReceipt,
@@ -539,8 +542,24 @@ function ReceiptCard({ receipt }: { receipt: ContributionReceipt }) {
           <p className="mt-3 font-display text-4xl font-bold text-primary">
             {formatMoney(receipt.amount_cents, receipt.currency)}
           </p>
+          <a
+            className="focus-ring mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-bold text-white"
+            download
+            href={contributionReceiptDownloadUrl(receipt.id)}
+          >
+            <Download aria-hidden="true" className="h-4 w-4" />
+            Download receipt
+          </a>
+          <button
+            className="focus-ring mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-border bg-white px-4 text-sm font-bold text-ink"
+            onClick={() => window.print()}
+            type="button"
+          >
+            <Printer aria-hidden="true" className="h-4 w-4" />
+            Print receipt
+          </button>
           <Link
-            className="focus-ring mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-border bg-white px-4 text-sm font-bold text-ink"
+            className="focus-ring mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-border bg-white px-4 text-sm font-bold text-ink"
             href={`/contributions/${receipt.campaign_id}`}
           >
             <ShieldCheck aria-hidden="true" className="h-4 w-4" />

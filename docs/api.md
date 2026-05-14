@@ -114,12 +114,15 @@ GET  /api/v1/contributions
 GET  /api/v1/contributions/{campaign_id}
 POST /api/v1/contributions/{campaign_id}/pay
 GET  /api/v1/contributions/receipts/{receipt_id}
+GET  /api/v1/contributions/receipts/{receipt_id}/download
 GET  /api/v1/contributions/admin/campaigns
 POST /api/v1/contributions/admin/campaigns
 POST /api/v1/contributions/admin/campaigns/{campaign_id}/publish
 POST /api/v1/contributions/admin/campaigns/{campaign_id}/close
 GET  /api/v1/contributions/admin/contributions
+GET  /api/v1/contributions/admin/contributions/export
 GET  /api/v1/contributions/admin/treasury
+GET  /api/v1/contributions/admin/treasury/export
 GET  /api/v1/elections
 GET  /api/v1/elections/{election_id}
 GET  /api/v1/elections/{election_id}/candidates
@@ -563,16 +566,19 @@ GET    /api/v1/contributions                         # implemented
 GET    /api/v1/contributions/{campaign_id}           # implemented
 POST   /api/v1/contributions/{campaign_id}/pay       # implemented local confirmed payment
 GET    /api/v1/contributions/receipts/{receipt_id}   # implemented
+GET    /api/v1/contributions/receipts/{receipt_id}/download # implemented text receipt download
 GET    /api/v1/contributions/admin/campaigns         # implemented
 POST   /api/v1/contributions/admin/campaigns         # implemented
 POST   /api/v1/contributions/admin/campaigns/{campaign_id}/publish # implemented
 POST   /api/v1/contributions/admin/campaigns/{campaign_id}/close   # implemented
 GET    /api/v1/contributions/admin/contributions     # implemented
+GET    /api/v1/contributions/admin/contributions/export # implemented CSV export
 GET    /api/v1/contributions/admin/treasury          # implemented
+GET    /api/v1/contributions/admin/treasury/export   # implemented ledger CSV export
 POST   /api/v1/contributions/{campaign_id}/payment-intents # planned provider integration
 POST   /api/v1/contributions/webhooks/{provider}     # planned reconciliation
 POST   /api/v1/contributions/admin/{contribution_id}/refund # planned
-GET    /api/v1/contributions/admin/treasury/export   # planned audit export
+GET    /api/v1/contributions/admin/treasury/audit-report # planned certified audit package
 ```
 
 ## Admin

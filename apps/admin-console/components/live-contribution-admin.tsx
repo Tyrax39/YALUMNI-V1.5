@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import {
+  Download,
   Loader2,
   Plus,
   ReceiptText,
@@ -13,12 +14,14 @@ import {
   type ContributionCampaign,
   type ContributionRecord,
   type TreasurySummary,
+  adminContributionsExportUrl,
   closeContributionCampaign,
   createContributionCampaign,
   fetchAdminContributionCampaigns,
   fetchAdminContributions,
   fetchTreasurySummary,
-  publishContributionCampaign
+  publishContributionCampaign,
+  treasuryLedgerExportUrl
 } from "@yalumni/frontend-shared";
 
 type LiveContributionAdminProps = {
@@ -167,17 +170,33 @@ export function LiveContributionAdmin({ mode }: LiveContributionAdminProps) {
               Campaign setup, member contribution receipts, and ledger totals are backed by FastAPI.
             </p>
           </div>
-          <button
-            className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-border bg-white px-3 text-sm font-bold text-ink"
-            onClick={() => {
-              setState({ status: "loading" });
-              setReloadKey((current) => current + 1);
-            }}
-            type="button"
-          >
-            <RefreshCcw aria-hidden="true" className="h-4 w-4" />
-            Refresh
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <a
+              className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-border bg-white px-3 text-sm font-bold text-ink"
+              download
+              href={
+                mode === "treasury"
+                  ? treasuryLedgerExportUrl()
+                  : adminContributionsExportUrl({
+                      campaign_id: selectedCampaignId || undefined
+                    })
+              }
+            >
+              <Download aria-hidden="true" className="h-4 w-4" />
+              Export CSV
+            </a>
+            <button
+              className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-border bg-white px-3 text-sm font-bold text-ink"
+              onClick={() => {
+                setState({ status: "loading" });
+                setReloadKey((current) => current + 1);
+              }}
+              type="button"
+            >
+              <RefreshCcw aria-hidden="true" className="h-4 w-4" />
+              Refresh
+            </button>
+          </div>
         </div>
 
         {state.status === "loading" ? <PanelMessage label="Loading contribution finance data." /> : null}

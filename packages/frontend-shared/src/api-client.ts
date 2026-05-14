@@ -1482,8 +1482,12 @@ export function fetchContributionReceipt(receiptId: string): Promise<Contributio
   );
 }
 
+export function contributionReceiptDownloadUrl(receiptId: string): string {
+  return `/api/backend/api/v1/contributions/receipts/${encodeURIComponent(receiptId)}/download`;
+}
+
 export function fetchAdminContributions(
-  filters: Pick<ContributionFilters, "limit" | "offset" | "status"> = {}
+  filters: Pick<ContributionFilters, "limit" | "offset" | "status"> & { campaign_id?: string } = {}
 ): Promise<ContributionListResponse> {
   const query = contributionQueryString({ limit: 12, offset: 0, ...filters });
   return fetchJson<ContributionListResponse>(
@@ -1491,8 +1495,21 @@ export function fetchAdminContributions(
   );
 }
 
+export function adminContributionsExportUrl(
+  filters: Pick<ContributionFilters, "status"> & { campaign_id?: string; limit?: number } = {}
+): string {
+  const query = contributionQueryString({ limit: 1000, ...filters });
+  return `/api/backend/api/v1/contributions/admin/contributions/export?${query}`;
+}
+
 export function fetchTreasurySummary(): Promise<TreasurySummary> {
   return fetchJson<TreasurySummary>("/api/backend/api/v1/contributions/admin/treasury");
+}
+
+export function treasuryLedgerExportUrl(limit = 1000): string {
+  return `/api/backend/api/v1/contributions/admin/treasury/export?limit=${encodeURIComponent(
+    String(limit)
+  )}`;
 }
 
 function resourceQueryString(filters: ResourceFilters = {}) {

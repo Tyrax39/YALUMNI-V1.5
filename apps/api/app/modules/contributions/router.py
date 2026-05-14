@@ -1,8 +1,10 @@
+import csv
+import io
 import uuid
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
@@ -283,6 +285,14 @@ def _serialize_receipt(receipt: ContributionReceipt) -> ContributionReceiptRespo
     )
 
 
+def _ensure_receipt_access(receipt: ContributionReceipt, current_user: User) -> None:
+    if (
+        receipt.contribution.contributor_user_id != current_user.id
+        and not _is_finance_admin(current_user)
+    ):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Receipt not found")
+
+
 def _serialize_ledger_entry(entry: ContributionLedgerEntry) -> ContributionLedgerEntryResponse:
     return ContributionLedgerEntryResponse(
         amount_cents=entry.amount_cents,
@@ -334,6 +344,24 @@ def _list_contribution_response(
         offset=offset,
         has_more=offset + len(contributions) < total,
     )
+
+
+def _admin_contributions_query(
+    *,
+    campaign_id: uuid.UUID | None = None,
+    status_filter: str | None = None,
+):
+    query = select(Contribution).options(
+        joinedload(Contribution.campaign),
+        joinedload(Contribution.contributor),
+        joinedload(Contribution.receipt),
+    )
+    normalized_status = _normalize_enum(status_filter)
+    if normalized_status:
+        query = query.where(Contribution.status == normalized_status)
+    if campaign_id:
+        query = query.where(Contribution.campaign_id == campaign_id)
+    return query
 
 
 def _apply_campaign_filters(
@@ -405,6 +433,44 @@ def _next_receipt_number(db: Session) -> str:
     year = utcnow().year
     count = db.scalar(select(func.count(ContributionReceipt.id))) or 0
     return f"YAL-REC-{year}-{count + 1:06d}"
+
+
+def _csv_response(filename: str, rows: list[list[object | None]]) -> Response:
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    for row in rows:
+        writer.writerow(["" if value is None else value for value in row])
+    return Response(
+        content=buffer.getvalue(),
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        media_type="text/csv; charset=utf-8",
+    )
+
+
+def _receipt_download_response(receipt: ContributionReceipt) -> Response:
+    contribution = receipt.contribution
+    lines = [
+        "YALUMNI Contribution Receipt",
+        f"Receipt number: {receipt.receipt_number}",
+        f"Status: {receipt.status}",
+        f"Issued: {receipt.issued_at.isoformat()}",
+        "",
+        f"Campaign: {contribution.campaign.title}",
+        f"Contribution ID: {receipt.contribution_id}",
+        f"Amount: {receipt.amount_cents / 100:.2f} {receipt.currency}",
+        f"Payment method: {contribution.payment_method}",
+        f"Payment reference: {contribution.payment_reference or 'n/a'}",
+        "",
+        f"Issued to: {receipt.issued_to_name}",
+        f"Email: {receipt.issued_to_email}",
+        "",
+        receipt.tax_note or "",
+    ]
+    return Response(
+        content="\n".join(lines),
+        headers={"Content-Disposition": f'attachment; filename="{receipt.receipt_number}.txt"'},
+        media_type="text/plain; charset=utf-8",
+    )
 
 
 @router.get("", response_model=ContributionCampaignListResponse)
@@ -489,20 +555,78 @@ def create_campaign(
 def list_admin_contributions(
     current_user: Annotated[User, Depends(finance_admin_dependency)],
     db: Annotated[Session, Depends(get_db_session)],
+    campaign_id: Annotated[uuid.UUID | None, Query()] = None,
     status_filter: Annotated[str | None, Query(alias="status", max_length=40)] = None,
     limit: Annotated[int, Query(ge=1, le=50)] = 12,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> ContributionListResponse:
     _ = current_user
-    query = select(Contribution).options(
-        joinedload(Contribution.campaign),
-        joinedload(Contribution.contributor),
-        joinedload(Contribution.receipt),
-    )
-    normalized_status = _normalize_enum(status_filter)
-    if normalized_status:
-        query = query.where(Contribution.status == normalized_status)
+    query = _admin_contributions_query(campaign_id=campaign_id, status_filter=status_filter)
     return _list_contribution_response(db, query, limit=limit, offset=offset)
+
+
+@router.get("/admin/contributions/export")
+@router.get("/admin/contributions/export/")
+def export_admin_contributions(
+    request: Request,
+    current_user: Annotated[User, Depends(finance_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+    campaign_id: Annotated[uuid.UUID | None, Query()] = None,
+    status_filter: Annotated[str | None, Query(alias="status", max_length=40)] = None,
+    limit: Annotated[int, Query(ge=1, le=5000)] = 1000,
+) -> Response:
+    query = _admin_contributions_query(campaign_id=campaign_id, status_filter=status_filter)
+    contributions = db.scalars(query.order_by(Contribution.created_at.desc()).limit(limit)).all()
+    rows: list[list[object | None]] = [
+        [
+            "contribution_id",
+            "campaign_id",
+            "campaign_title",
+            "receipt_number",
+            "status",
+            "amount_cents",
+            "currency",
+            "payment_method",
+            "payment_reference",
+            "contributor_name",
+            "contributor_email",
+            "anonymous_publicly",
+            "paid_at",
+            "created_at",
+            "note",
+        ]
+    ]
+    rows.extend(
+        [
+            [
+                contribution.id,
+                contribution.campaign_id,
+                contribution.campaign.title if contribution.campaign else None,
+                contribution.receipt.receipt_number if contribution.receipt else None,
+                contribution.status,
+                contribution.amount_cents,
+                contribution.currency,
+                contribution.payment_method,
+                contribution.payment_reference,
+                contribution.contributor.display_name if contribution.contributor else None,
+                contribution.contributor.email if contribution.contributor else None,
+                contribution.anonymous,
+                contribution.paid_at.isoformat() if contribution.paid_at else None,
+                contribution.created_at.isoformat(),
+                contribution.note,
+            ]
+            for contribution in contributions
+        ]
+    )
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "contributions.exported",
+        {"campaign_id": str(campaign_id) if campaign_id else None, "count": len(contributions)},
+    )
+    db.commit()
+    return _csv_response(f"yalumni-contributions-{utcnow().date().isoformat()}.csv", rows)
 
 
 @router.get("/admin/treasury", response_model=TreasurySummaryResponse)
@@ -565,6 +689,68 @@ def get_treasury_summary(
         received_amount_cents=int(received),
         recent_contributions=[_serialize_contribution(item) for item in recent_contributions],
     )
+
+
+@router.get("/admin/treasury/export")
+@router.get("/admin/treasury/export/")
+def export_treasury_ledger(
+    request: Request,
+    current_user: Annotated[User, Depends(finance_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+    limit: Annotated[int, Query(ge=1, le=5000)] = 1000,
+) -> Response:
+    entries = db.scalars(
+        select(ContributionLedgerEntry)
+        .options(
+            joinedload(ContributionLedgerEntry.contribution).joinedload(Contribution.campaign),
+            joinedload(ContributionLedgerEntry.contribution).joinedload(Contribution.contributor),
+            joinedload(ContributionLedgerEntry.contribution).joinedload(Contribution.receipt),
+        )
+        .order_by(ContributionLedgerEntry.created_at.desc())
+        .limit(limit)
+    ).all()
+    rows: list[list[object | None]] = [
+        [
+            "ledger_entry_id",
+            "created_at",
+            "entry_type",
+            "amount_cents",
+            "currency",
+            "memo",
+            "contribution_id",
+            "campaign_id",
+            "campaign_title",
+            "receipt_number",
+            "contributor_email",
+        ]
+    ]
+    rows.extend(
+        [
+            [
+                entry.id,
+                entry.created_at.isoformat(),
+                entry.entry_type,
+                entry.amount_cents,
+                entry.currency,
+                entry.memo,
+                entry.contribution_id,
+                entry.contribution.campaign_id,
+                entry.contribution.campaign.title if entry.contribution.campaign else None,
+                entry.contribution.receipt.receipt_number if entry.contribution.receipt else None,
+                entry.contribution.contributor.email if entry.contribution.contributor else None,
+            ]
+            for entry in entries
+        ]
+    )
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "contributions.treasury_exported",
+        {"count": len(entries)},
+    )
+    db.commit()
+    return _csv_response(f"yalumni-treasury-ledger-{utcnow().date().isoformat()}.csv", rows)
 
 
 @router.post("/admin/campaigns/{campaign_id}/publish", response_model=ContributionCampaignResponse)
@@ -631,12 +817,19 @@ def get_receipt(
     db: Annotated[Session, Depends(get_db_session)],
 ) -> ContributionReceiptResponse:
     receipt = _get_receipt_or_404(db, receipt_id)
-    if (
-        receipt.contribution.contributor_user_id != current_user.id
-        and not _is_finance_admin(current_user)
-    ):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Receipt not found")
+    _ensure_receipt_access(receipt, current_user)
     return _serialize_receipt(receipt)
+
+
+@router.get("/receipts/{receipt_id}/download")
+def download_receipt(
+    receipt_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> Response:
+    receipt = _get_receipt_or_404(db, receipt_id)
+    _ensure_receipt_access(receipt, current_user)
+    return _receipt_download_response(receipt)
 
 
 @router.get("/{campaign_id}", response_model=ContributionCampaignResponse)

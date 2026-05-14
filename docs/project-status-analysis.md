@@ -8,6 +8,93 @@ The current Yalumni project is a useful Laravel 9 alumni management platform, bu
 
 The V1.5 implementation is active in `D:\YALUMNI-V1.5`. The new repository now contains a platform foundation with a FastAPI backend, Next.js web shell, Docker Compose, CI workflow, shared packages, copied YALUMNI logo assets, and documentation.
 
+## Current V1.5 Implementation Update: 2026-05-14 Contribution Exports Slice
+
+Completed after the contributions foundation slice:
+
+- Added member/admin receipt text download support at
+  `/api/v1/contributions/receipts/{receipt_id}/download` with the same
+  owner-or-finance-admin access rules as receipt detail.
+- Added finance-admin contribution CSV export at
+  `/api/v1/contributions/admin/contributions/export`, including campaign,
+  receipt, donor, payment reference, status, and note fields.
+- Added finance-admin treasury ledger CSV export at
+  `/api/v1/contributions/admin/treasury/export`, including ledger, campaign,
+  receipt, and contributor context.
+- Updated member receipt UI with download and print actions.
+- Updated the admin RBAC contribution/treasury panels with CSV export actions.
+- Updated all Next backend proxy helpers to preserve `Content-Disposition`
+  headers so downloaded receipt/CSV filenames survive through the app ports.
+- Expanded contribution API tests for receipt download permissions and CSV
+  export output.
+
+Current plan position:
+
+- Phase 1 remains functionally complete for local foundation.
+- Phase 2 remains roughly 91% complete.
+- Phase 3 remains roughly 52% complete.
+- Phase 4 remains roughly 38% complete.
+- Phase 5 remains roughly 81% complete.
+- Phase 6 feed/moderation remains roughly 55% complete.
+- Phase 7 messaging/notifications remains roughly 51% complete.
+- Phase 8 events remains roughly 28% complete.
+- Post-MVP initiatives remain roughly 24% complete.
+- Post-MVP mentorship remains roughly 18% complete.
+- Post-MVP elections remain roughly 24% complete.
+- Post-MVP contributions/treasury are now roughly 27% complete because
+  campaign lifecycle, local contribution recording, receipts, ledger summary,
+  receipt downloads, and finance CSV exports now exist.
+- Overall 24-week MVP-plus implementation is roughly 70% complete.
+
+Implemented now:
+
+- Runtime split across public/member `3010`, admin RBAC `3011`, super-admin
+  `3012`, and FastAPI `8002`.
+- Auth, protected platform owner seed, web sessions, CSRF, 2FA enforcement, rate
+  limiting, verification, YALUMNI directory, MWF alumni cache directory plus
+  worker/history operations, communities, notifications, direct messages,
+  moderation, opportunities, resources, success stories, member events, member
+  initiatives, mentorship foundation, elections foundation, contributions
+  foundation, and contribution finance exports.
+- Route parity exists for exported screens; live data is wired for the modules
+  listed above, while chapter analytics and deeper finance/election governance
+  workflows remain prototype or foundation-level.
+
+Main gaps now:
+
+- Contributions still need real payment provider integration, payment intent
+  lifecycle, webhook reconciliation, refunds/voids, generated PDF receipts,
+  campaign approvals, disbursement requests, expense reports, multi-currency
+  accounting rules, and signed/formal treasury audit packages.
+- Elections still need nomination workflows, candidate approval/rejection,
+  position-based multi-seat ballots, stronger anonymous ballot envelopes,
+  dispute handling, exportable certified audit reports, notification hooks,
+  voter-roll imports from chapters/cohorts, and admin detail subroutes beyond
+  the consolidated console panel.
+- Chapter analytics still needs a backend module.
+- Mentorship still needs matching recommendations, scheduling, mentor capacity
+  enforcement beyond counts, session notes, feedback, reporting/moderation,
+  notifications, and admin analytics.
+- MWF cache still needs admin diff review, source-field quality dashboards,
+  distributed worker locking, and full-text/faceted search indexing.
+- Directory search remains database-backed MVP search rather than
+  Meilisearch/OpenSearch.
+- Initiatives and events still need richer admin/organizer workflows,
+  notifications, analytics, and operational lifecycle depth.
+- Production hardening remains for Redis/WebSocket fanout, supervised
+  background workers, email delivery logs/bounces/unsubscribe, malware
+  scanning, CDN/signed URLs, and compliance exports.
+
+Next possible implementation slices:
+
+- Contribution payment-provider/webhook reconciliation and refund/void flows.
+- Generated PDF receipts and signed treasury audit packages.
+- Chapter analytics backend foundation.
+- Elections hardening with nominations, anonymous ballot envelopes, certified
+  audit exports, disputes, and notification hooks.
+- Mentorship notifications, scheduling, session notes, and admin analytics.
+- MWF source diff/quality dashboard and search indexing.
+
 ## Current V1.5 Implementation Update: 2026-05-13 Contributions Foundation Slice
 
 Completed after the elections foundation slice:

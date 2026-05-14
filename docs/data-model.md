@@ -112,12 +112,16 @@
 - `contribution_receipts` - implemented for one issued receipt per contribution
   with receipt number, issued-to details, amount, currency, status, and tax note.
 - `contribution_ledger_entries` - implemented for foundation credit entries tied
-  to recorded contributions.
+  to recorded contributions. Member receipt downloads and finance CSV exports
+  currently read these live tables directly rather than using separate export
+  snapshot tables.
 - `pledges` - future split from confirmed local contribution recording.
 - `payment_attempts` - planned for provider payment intents/webhooks.
 - `disbursement_requests`
 - `disbursement_approvals`
 - `expense_reports`
+- `treasury_export_runs` - planned if exports need persistent approvals,
+  immutable snapshots, or signed audit packages.
 
 ### Elections
 
