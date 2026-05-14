@@ -23,6 +23,7 @@ import {
   publishContributionCampaign,
   refundContribution,
   treasuryAuditPackageUrl,
+  treasuryAuditReportUrl,
   treasuryLedgerExportUrl,
   voidContribution
 } from "@yalumni/frontend-shared";
@@ -214,6 +215,16 @@ export function LiveContributionAdmin({ mode }: LiveContributionAdminProps) {
               >
                 <ShieldCheck aria-hidden="true" className="h-4 w-4" />
                 Audit package
+              </a>
+            ) : null}
+            {mode === "treasury" ? (
+              <a
+                className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-border bg-white px-3 text-sm font-bold text-ink"
+                download
+                href={treasuryAuditReportUrl()}
+              >
+                <ShieldCheck aria-hidden="true" className="h-4 w-4" />
+                Audit PDF
               </a>
             ) : null}
             <button

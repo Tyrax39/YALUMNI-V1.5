@@ -114,9 +114,9 @@
 - `contribution_ledger_entries` - implemented for foundation credit entries,
   negative refund reversals, and zero-value void markers tied to recorded
   contributions. Member text/PDF receipt downloads, finance CSV exports,
-  signed JSON treasury audit packages, and admin adjustment controls currently
-  read these live tables directly rather than using separate export snapshot
-  tables.
+  signed JSON treasury audit packages, certified PDF audit reports, and admin
+  adjustment controls currently read these live tables directly rather than
+  using separate export snapshot tables.
 - `pledges` - future split from confirmed local contribution recording.
 - `payment_attempts` - planned for provider payment intents/webhooks.
 - `disbursement_requests`

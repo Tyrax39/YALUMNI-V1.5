@@ -286,6 +286,16 @@ def test_contribution_campaign_payment_receipt_and_treasury(client: TestClient) 
         "receipt_number"
     ]
 
+    audit_report_response = client.get(
+        "/api/v1/contributions/admin/treasury/audit-report",
+        headers=admin_headers,
+    )
+    assert audit_report_response.status_code == 200
+    assert audit_report_response.headers["content-type"] == "application/pdf"
+    assert "yalumni-treasury-audit" in audit_report_response.headers["content-disposition"]
+    assert audit_report_response.content.startswith(b"%PDF-1.4")
+    assert b"YALUMNI Treasury Audit Report" in audit_report_response.content
+
     refund_response = client.post(
         f"/api/v1/contributions/admin/contributions/{contribution['id']}/refund",
         headers=admin_headers,
@@ -354,6 +364,11 @@ def test_contribution_finance_role_and_receipt_privacy_are_enforced(client: Test
         headers=member_headers,
     )
     assert denied_audit_package.status_code == 403
+    denied_audit_report = client.get(
+        "/api/v1/contributions/admin/treasury/audit-report",
+        headers=member_headers,
+    )
+    assert denied_audit_report.status_code == 403
 
     create_response = client.post(
         "/api/v1/contributions/admin/campaigns",

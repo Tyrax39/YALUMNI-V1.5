@@ -1538,6 +1538,12 @@ export function treasuryAuditPackageUrl(limit = 1000): string {
   )}`;
 }
 
+export function treasuryAuditReportUrl(limit = 1000): string {
+  return `/api/backend/api/v1/contributions/admin/treasury/audit-report?limit=${encodeURIComponent(
+    String(limit)
+  )}`;
+}
+
 function resourceQueryString(filters: ResourceFilters = {}) {
   const params = new URLSearchParams();
 
