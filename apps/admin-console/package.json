@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "node -e \"const fs=require('fs');for(const p of ['.next/dev','tsconfig.tsbuildinfo'])fs.rmSync(p,{recursive:true,force:true})\"",
     "dev": "next dev --hostname 0.0.0.0 --port 3011",
     "build": "next build",
     "start": "next start --hostname 0.0.0.0 --port 3011",
