@@ -49,6 +49,42 @@ class ContributionCampaign(Base, TimestampMixin):
         back_populates="campaign",
         cascade="all, delete-orphan",
     )
+    payment_intents: Mapped[list["ContributionPaymentIntent"]] = relationship(
+        back_populates="campaign",
+        cascade="all, delete-orphan",
+    )
+
+
+class ContributionPaymentIntent(Base, TimestampMixin):
+    __tablename__ = "contribution_payment_intents"
+    __table_args__ = (
+        Index("ix_contribution_payment_intents_campaign_status", "campaign_id", "status"),
+        Index("ix_contribution_payment_intents_user_created", "contributor_user_id", "created_at"),
+        UniqueConstraint("provider_intent_id", name="uq_contribution_payment_intents_provider_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    campaign_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("contribution_campaigns.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    contributor_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+    )
+    amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), default="USD", nullable=False)
+    payment_method: Mapped[str] = mapped_column(String(60), nullable=False)
+    provider: Mapped[str] = mapped_column(String(60), default="LOCAL_TEST", nullable=False)
+    provider_intent_id: Mapped[str] = mapped_column(String(120), nullable=False)
+    status: Mapped[str] = mapped_column(String(40), default="REQUIRES_CONFIRMATION", nullable=False)
+    note: Mapped[str | None] = mapped_column(Text)
+    anonymous: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    campaign: Mapped[ContributionCampaign] = relationship(
+        back_populates="payment_intents",
+        foreign_keys=[campaign_id],
+    )
+    contributor: Mapped[User | None] = relationship(foreign_keys=[contributor_user_id])
 
 
 class Contribution(Base, TimestampMixin):

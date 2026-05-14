@@ -22,6 +22,7 @@ from app.modules.contributions.models import (
     Contribution,
     ContributionCampaign,
     ContributionLedgerEntry,
+    ContributionPaymentIntent,
     ContributionReceipt,
 )
 from app.modules.contributions.schemas import (
@@ -32,6 +33,8 @@ from app.modules.contributions.schemas import (
     ContributionLedgerEntryResponse,
     ContributionListResponse,
     ContributionPaymentCreate,
+    ContributionPaymentIntentCreate,
+    ContributionPaymentIntentResponse,
     ContributionReceiptResponse,
     ContributionResponse,
     TreasurySummaryResponse,
@@ -267,6 +270,26 @@ def _serialize_contribution(contribution: Contribution) -> ContributionResponse:
         receipt_number=receipt.receipt_number if receipt else None,
         status=contribution.status,
         updated_at=contribution.updated_at,
+    )
+
+
+def _serialize_payment_intent(
+    payment_intent: ContributionPaymentIntent,
+) -> ContributionPaymentIntentResponse:
+    return ContributionPaymentIntentResponse(
+        amount_cents=payment_intent.amount_cents,
+        anonymous=payment_intent.anonymous,
+        campaign_id=payment_intent.campaign_id,
+        contributor_user_id=payment_intent.contributor_user_id,
+        created_at=payment_intent.created_at,
+        currency=payment_intent.currency,
+        id=payment_intent.id,
+        note=payment_intent.note,
+        payment_method=payment_intent.payment_method,
+        provider=payment_intent.provider,
+        provider_intent_id=payment_intent.provider_intent_id,
+        status=payment_intent.status,
+        updated_at=payment_intent.updated_at,
     )
 
 
@@ -1326,6 +1349,57 @@ def download_receipt_pdf(
     receipt = _get_receipt_or_404(db, receipt_id)
     _ensure_receipt_access(receipt, current_user)
     return _receipt_pdf_download_response(receipt)
+
+
+@router.post(
+    "/{campaign_id}/payment-intents",
+    response_model=ContributionPaymentIntentResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_payment_intent(
+    campaign_id: uuid.UUID,
+    payload: ContributionPaymentIntentCreate,
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> ContributionPaymentIntentResponse:
+    campaign = _get_campaign_or_404(db, campaign_id)
+    _ensure_campaign_visible(campaign, current_user)
+    _ensure_campaign_accepts_payment(campaign)
+    _validate_payment_payload(payload, campaign)
+    intent_id = uuid.uuid4()
+    payment_intent = ContributionPaymentIntent(
+        id=intent_id,
+        amount_cents=payload.amount_cents,
+        anonymous=payload.anonymous,
+        campaign_id=campaign.id,
+        contributor_user_id=current_user.id,
+        currency=payload.currency,
+        note=payload.note,
+        payment_method=payload.payment_method,
+        provider="LOCAL_TEST",
+        provider_intent_id=f"yalumni_pi_{intent_id.hex}",
+        status="REQUIRES_CONFIRMATION",
+    )
+    db.add(payment_intent)
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "contributions.payment_intent_created",
+        {
+            "amount_cents": payment_intent.amount_cents,
+            "campaign_id": str(campaign.id),
+            "currency": payment_intent.currency,
+            "payment_intent_id": str(payment_intent.id),
+            "payment_method": payment_intent.payment_method,
+            "provider": payment_intent.provider,
+            "status": payment_intent.status,
+        },
+    )
+    db.commit()
+    db.refresh(payment_intent)
+    return _serialize_payment_intent(payment_intent)
 
 
 @router.get("/{campaign_id}", response_model=ContributionCampaignResponse)

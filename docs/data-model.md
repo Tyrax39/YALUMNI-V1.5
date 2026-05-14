@@ -109,6 +109,10 @@
 - `contributions` - implemented for member contribution records with amount,
   currency, payment method/reference, contributor, status, paid timestamp,
   anonymous flag, and campaign link.
+- `contribution_payment_intents` - implemented as a local payment-provider
+  intent foundation with campaign, contributor, amount, method, provider intent
+  reference, status, anonymous flag, and note metadata. These do not issue
+  receipts or ledger entries until a confirmed contribution is recorded.
 - `contribution_receipts` - implemented for one issued receipt per contribution
   with receipt number, issued-to details, amount, currency, status, and tax note.
 - `contribution_ledger_entries` - implemented for foundation credit entries,
@@ -118,7 +122,8 @@
   adjustment controls currently read these live tables directly rather than
   using separate export snapshot tables.
 - `pledges` - future split from confirmed local contribution recording.
-- `payment_attempts` - planned for provider payment intents/webhooks.
+- `payment_attempts` - future expansion for provider webhook attempts,
+  retries, failures, and reconciliation events.
 - `disbursement_requests`
 - `disbursement_approvals`
 - `expense_reports`

@@ -728,6 +728,22 @@ export type ContributionPaymentPayload = {
   payment_reference?: string | null;
 };
 
+export type ContributionPaymentIntent = {
+  amount_cents: number;
+  anonymous: boolean;
+  campaign_id: string;
+  contributor_user_id?: string | null;
+  created_at: string;
+  currency: string;
+  id: string;
+  note?: string | null;
+  payment_method: string;
+  provider: string;
+  provider_intent_id: string;
+  status: string;
+  updated_at: string;
+};
+
 export type ContributionRecord = {
   amount_cents: number;
   anonymous: boolean;
@@ -1471,6 +1487,17 @@ export function recordContributionPayment(
 ): Promise<ContributionRecord> {
   return mutateJson<ContributionRecord>(
     `/api/backend/api/v1/contributions/${encodeURIComponent(campaignId)}/pay`,
+    "POST",
+    payload
+  );
+}
+
+export function createContributionPaymentIntent(
+  campaignId: string,
+  payload: ContributionPaymentPayload
+): Promise<ContributionPaymentIntent> {
+  return mutateJson<ContributionPaymentIntent>(
+    `/api/backend/api/v1/contributions/${encodeURIComponent(campaignId)}/payment-intents`,
     "POST",
     payload
   );

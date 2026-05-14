@@ -112,6 +112,7 @@ POST /api/v1/messages/blocks
 DELETE /api/v1/messages/blocks/{blocked_user_id}
 GET  /api/v1/contributions
 GET  /api/v1/contributions/{campaign_id}
+POST /api/v1/contributions/{campaign_id}/payment-intents
 POST /api/v1/contributions/{campaign_id}/pay
 GET  /api/v1/contributions/receipts/{receipt_id}
 GET  /api/v1/contributions/receipts/{receipt_id}/download
@@ -569,6 +570,7 @@ POST   /api/v1/elections/{election_id}/disputes       # planned
 ```text
 GET    /api/v1/contributions                         # implemented
 GET    /api/v1/contributions/{campaign_id}           # implemented
+POST   /api/v1/contributions/{campaign_id}/payment-intents # implemented local intent foundation
 POST   /api/v1/contributions/{campaign_id}/pay       # implemented local confirmed payment
 GET    /api/v1/contributions/receipts/{receipt_id}   # implemented
 GET    /api/v1/contributions/receipts/{receipt_id}/download # implemented text receipt download
@@ -585,7 +587,6 @@ GET    /api/v1/contributions/admin/treasury          # implemented
 GET    /api/v1/contributions/admin/treasury/export   # implemented ledger CSV export
 GET    /api/v1/contributions/admin/treasury/audit-package # implemented signed JSON snapshot
 GET    /api/v1/contributions/admin/treasury/audit-report # implemented certified PDF report
-POST   /api/v1/contributions/{campaign_id}/payment-intents # planned provider integration
 POST   /api/v1/contributions/webhooks/{provider}     # planned reconciliation
 POST   /api/v1/contributions/admin/{contribution_id}/provider-refund # planned provider-side refund orchestration
 ```

@@ -8,6 +8,97 @@ The current Yalumni project is a useful Laravel 9 alumni management platform, bu
 
 The V1.5 implementation is active in `D:\YALUMNI-V1.5`. The new repository now contains a platform foundation with a FastAPI backend, Next.js web shell, Docker Compose, CI workflow, shared packages, copied YALUMNI logo assets, and documentation.
 
+## Current V1.5 Implementation Update: 2026-05-14 Payment Intent Foundation Slice
+
+Completed after the treasury audit report PDF slice:
+
+- Added `contribution_payment_intents` persistence with campaign, contributor,
+  amount, currency, payment method, local provider reference, status, note, and
+  anonymous metadata.
+- Added authenticated member endpoint
+  `/api/v1/contributions/{campaign_id}/payment-intents` for creating local
+  payment intents before a confirmed contribution is recorded.
+- Payment intents reuse existing campaign visibility, campaign acceptance, method
+  validation, and currency validation rules.
+- Payment intent creation does not issue receipts, create ledger entries, or
+  change existing `/pay` behavior.
+- Added migration `20260514_0028_contribution_payment_intents`.
+- Added shared frontend API helper `createContributionPaymentIntent`.
+- Expanded contribution tests for successful intent creation, no contribution
+  count side effect, invalid method rejection, and closed campaign blocking.
+- Updated API, data model, roadmap, and status documentation.
+
+Current plan position:
+
+- Phase 1 remains functionally complete for local foundation.
+- Phase 2 remains roughly 91% complete.
+- Phase 3 remains roughly 52% complete.
+- Phase 4 remains roughly 38% complete.
+- Phase 5 remains roughly 81% complete.
+- Phase 6 feed/moderation remains roughly 55% complete.
+- Phase 7 messaging/notifications remains roughly 51% complete.
+- Phase 8 events remains roughly 28% complete.
+- Post-MVP initiatives remain roughly 24% complete.
+- Post-MVP mentorship remains roughly 18% complete.
+- Post-MVP elections remain roughly 24% complete.
+- Post-MVP contributions/treasury are now roughly 36% complete because the
+  payment-provider lifecycle now has a local payment intent persistence point
+  before future provider webhooks/reconciliation are added.
+- Overall 24-week MVP-plus implementation remains roughly 72% complete.
+
+Implemented now:
+
+- Runtime split across public/member `3010`, admin RBAC `3011`, super-admin
+  `3012`, and FastAPI `8002`.
+- Auth, protected platform owner seed, web sessions, CSRF, 2FA enforcement, rate
+  limiting, verification, YALUMNI directory, MWF alumni cache directory plus
+  worker/history operations, communities, notifications, direct messages,
+  moderation, opportunities, resources, success stories, member events, member
+  initiatives, mentorship foundation, elections foundation, contributions
+  foundation, local payment intents, contribution finance exports, signed
+  treasury audit packages, certified treasury audit PDF reports, local
+  refund/void finance adjustments, and generated receipt PDFs.
+- Route parity exists for exported screens; live data is wired for the modules
+  listed above, while chapter analytics and deeper finance/election governance
+  workflows remain prototype or foundation-level.
+
+Main gaps now:
+
+- Contributions still need real provider checkout/client secret integration,
+  provider webhooks, reconciliation state transitions, provider-side refunds,
+  campaign approvals, disbursement requests, expense reports, multi-currency
+  accounting rules, and immutable stored audit package approval/certification
+  workflows.
+- Elections still need nomination workflows, candidate approval/rejection,
+  position-based multi-seat ballots, stronger anonymous ballot envelopes,
+  dispute handling, exportable certified audit reports, notification hooks,
+  voter-roll imports from chapters/cohorts, and admin detail subroutes beyond
+  the consolidated console panel.
+- Chapter analytics still needs a backend module.
+- Mentorship still needs matching recommendations, scheduling, mentor capacity
+  enforcement beyond counts, session notes, feedback, reporting/moderation,
+  notifications, and admin analytics.
+- MWF cache still needs admin diff review, source-field quality dashboards,
+  distributed worker locking, and full-text/faceted search indexing.
+- Directory search remains database-backed MVP search rather than
+  Meilisearch/OpenSearch.
+- Initiatives and events still need richer admin/organizer workflows,
+  notifications, analytics, and operational lifecycle depth.
+- Production hardening remains for Redis/WebSocket fanout, supervised
+  background workers, email delivery logs/bounces/unsubscribe, malware
+  scanning, CDN/signed URLs, and compliance exports.
+
+Next possible implementation slices:
+
+- Payment-intent confirmation/reconciliation endpoint and provider webhook
+  foundation.
+- Provider-side refund orchestration.
+- Immutable treasury audit approval/certification workflow.
+- Chapter analytics backend foundation.
+- Elections hardening with nominations, anonymous ballot envelopes, certified
+  audit exports, disputes, and notification hooks.
+- Mentorship notifications, scheduling, session notes, and admin analytics.
+
 ## Current V1.5 Implementation Update: 2026-05-14 Treasury Audit Report PDF Slice
 
 Completed after the PDF receipt slice:

@@ -78,6 +78,26 @@ class ContributionPaymentCreate(BaseModel):
         return normalized or None
 
 
+class ContributionPaymentIntentCreate(ContributionPaymentCreate):
+    pass
+
+
+class ContributionPaymentIntentResponse(BaseModel):
+    amount_cents: int
+    anonymous: bool
+    campaign_id: uuid.UUID
+    contributor_user_id: uuid.UUID | None
+    created_at: datetime
+    currency: str
+    id: uuid.UUID
+    note: str | None
+    payment_method: str
+    provider: str
+    provider_intent_id: str
+    status: str
+    updated_at: datetime
+
+
 class ContributionCampaignResponse(BaseModel):
     chapter_name: str | None
     closed_at: datetime | None

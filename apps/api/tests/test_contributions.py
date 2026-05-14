@@ -179,6 +179,28 @@ def test_contribution_campaign_payment_receipt_and_treasury(client: TestClient) 
     assert visible_list.status_code == 200
     assert visible_list.json()["total"] == 1
 
+    intent_response = client.post(
+        f"/api/v1/contributions/{campaign['id']}/payment-intents",
+        headers=donor_headers,
+        json={
+            "amount_cents": 12500,
+            "anonymous": False,
+            "currency": "USD",
+            "note": "Intent before local test contribution.",
+            "payment_method": "card_test",
+        },
+    )
+    assert intent_response.status_code == 201
+    payment_intent = intent_response.json()
+    assert payment_intent["amount_cents"] == 12500
+    assert payment_intent["provider"] == "LOCAL_TEST"
+    assert payment_intent["provider_intent_id"].startswith("yalumni_pi_")
+    assert payment_intent["status"] == "REQUIRES_CONFIRMATION"
+
+    intent_detail = client.get(f"/api/v1/contributions/{campaign['id']}", headers=donor_headers)
+    assert intent_detail.status_code == 200
+    assert intent_detail.json()["contribution_count"] == 0
+
     payment_response = client.post(
         f"/api/v1/contributions/{campaign['id']}/pay",
         headers=donor_headers,
@@ -345,6 +367,13 @@ def test_contribution_campaign_payment_receipt_and_treasury(client: TestClient) 
     )
     assert closed_payment.status_code == 409
 
+    closed_intent = client.post(
+        f"/api/v1/contributions/{campaign['id']}/payment-intents",
+        headers=donor_headers,
+        json={"amount_cents": 5000, "currency": "USD", "payment_method": "CARD_TEST"},
+    )
+    assert closed_intent.status_code == 409
+
 
 def test_contribution_finance_role_and_receipt_privacy_are_enforced(client: TestClient) -> None:
     admin_headers = create_admin(client, "finance.owner@example.com")
@@ -419,6 +448,12 @@ def test_contribution_finance_role_and_receipt_privacy_are_enforced(client: Test
         json={"amount_cents": 5000, "currency": "USD", "payment_method": "crypto"},
     )
     assert invalid_method.status_code == 400
+    invalid_intent_method = client.post(
+        f"/api/v1/contributions/{campaign_id}/payment-intents",
+        headers=member_headers,
+        json={"amount_cents": 5000, "currency": "USD", "payment_method": "crypto"},
+    )
+    assert invalid_intent_method.status_code == 400
 
     payment_response = client.post(
         f"/api/v1/contributions/{campaign_id}/pay",
