@@ -42,6 +42,7 @@ The API app requires:
 - `REDIS_URL` for Azure Cache for Redis using TLS
 - `JWT_SECRET_KEY`
 - `PLATFORM_OWNER_PASSWORD`
+- `CONTRIBUTION_WEBHOOK_SECRET`
 - `CORS_ORIGINS` for the three frontend App Service origins
 - `UPLOAD_STORAGE_PROVIDER=LOCAL`
 - Upload directories under `/home/uploads/...`

@@ -98,6 +98,56 @@ class ContributionPaymentIntentResponse(BaseModel):
     updated_at: datetime
 
 
+class ContributionWebhookPayload(BaseModel):
+    event_type: str = Field(min_length=1, max_length=80)
+    provider_event_id: str | None = Field(default=None, max_length=160)
+    provider_intent_id: str = Field(min_length=3, max_length=120)
+    amount_cents: int | None = Field(default=None, ge=1, le=100_000_000_000)
+    currency: str | None = Field(default=None, min_length=3, max_length=3)
+    failure_reason: str | None = Field(default=None, max_length=500)
+
+    @field_validator("event_type")
+    @classmethod
+    def normalize_event_type(cls, value: str) -> str:
+        return value.strip().upper().replace(" ", "_").replace("-", "_").replace(".", "_")
+
+    @field_validator("currency")
+    @classmethod
+    def normalize_optional_currency(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return value.strip().upper()
+
+    @field_validator("provider_intent_id")
+    @classmethod
+    def normalize_provider_intent_id(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("provider_intent_id is required")
+        return normalized
+
+    @field_validator("provider_event_id", "failure_reason")
+    @classmethod
+    def normalize_optional_webhook_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+
+class ContributionWebhookResponse(BaseModel):
+    contribution_id: uuid.UUID | None
+    event_type: str
+    message: str
+    payment_intent_id: uuid.UUID
+    payment_intent_status: str
+    provider: str
+    provider_event_id: str | None
+    provider_intent_id: str
+    receipt_id: uuid.UUID | None
+    reconciled: bool
+
+
 class ContributionCampaignResponse(BaseModel):
     chapter_name: str | None
     closed_at: datetime | None

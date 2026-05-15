@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from pydantic import ValidationError
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
@@ -37,6 +38,8 @@ from app.modules.contributions.schemas import (
     ContributionPaymentIntentResponse,
     ContributionReceiptResponse,
     ContributionResponse,
+    ContributionWebhookPayload,
+    ContributionWebhookResponse,
     TreasurySummaryResponse,
 )
 
@@ -57,6 +60,23 @@ VOIDED_STATUS = "VOIDED"
 LEDGER_CREDIT = "CONTRIBUTION_CREDIT"
 LEDGER_REFUND = "CONTRIBUTION_REFUND"
 LEDGER_VOID = "CONTRIBUTION_VOID"
+PAYMENT_INTENT_REQUIRES_CONFIRMATION = "REQUIRES_CONFIRMATION"
+PAYMENT_INTENT_CONFIRMED = "CONFIRMED"
+PAYMENT_INTENT_FAILED = "FAILED"
+PAYMENT_INTENT_CANCELED = "CANCELED"
+WEBHOOK_SUCCESS_EVENTS = {
+    "CHECKOUT_SESSION_COMPLETED",
+    "CHARGE_SUCCEEDED",
+    "PAYMENT_INTENT_CONFIRMED",
+    "PAYMENT_INTENT_SUCCEEDED",
+    "PAYMENT_SUCCEEDED",
+}
+WEBHOOK_FAILED_EVENTS = {"CHARGE_FAILED", "PAYMENT_FAILED", "PAYMENT_INTENT_FAILED"}
+WEBHOOK_CANCELED_EVENTS = {
+    "CHECKOUT_SESSION_EXPIRED",
+    "PAYMENT_CANCELED",
+    "PAYMENT_INTENT_CANCELED",
+}
 
 
 def _request_context(request: Request) -> tuple[str | None, str | None]:
@@ -77,6 +97,24 @@ def _create_security_event(
     db.add(
         SecurityEvent(
             user_id=user.id,
+            event_type=event_type,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            metadata_json=metadata,
+        )
+    )
+
+
+def _create_system_security_event(
+    db: Session,
+    request: Request,
+    event_type: str,
+    metadata: dict | None = None,
+) -> None:
+    ip_address, user_agent = _request_context(request)
+    db.add(
+        SecurityEvent(
+            user_id=None,
             event_type=event_type,
             ip_address=ip_address,
             user_agent=user_agent,
@@ -170,6 +208,25 @@ def _get_payment_intent_or_404(
             detail="Payment intent not found",
         )
     return payment_intent
+
+
+def _get_payment_intent_by_provider_reference(
+    db: Session,
+    *,
+    provider: str,
+    provider_intent_id: str,
+) -> ContributionPaymentIntent | None:
+    return db.scalar(
+        select(ContributionPaymentIntent)
+        .options(
+            joinedload(ContributionPaymentIntent.campaign),
+            joinedload(ContributionPaymentIntent.contributor),
+        )
+        .where(
+            ContributionPaymentIntent.provider == provider,
+            ContributionPaymentIntent.provider_intent_id == provider_intent_id,
+        )
+    )
 
 
 def _get_receipt_or_404(db: Session, receipt_id: uuid.UUID) -> ContributionReceipt:
@@ -315,6 +372,29 @@ def _serialize_payment_intent(
         provider_intent_id=payment_intent.provider_intent_id,
         status=payment_intent.status,
         updated_at=payment_intent.updated_at,
+    )
+
+
+def _serialize_webhook_response(
+    *,
+    contribution: Contribution | None,
+    event_type: str,
+    message: str,
+    payment_intent: ContributionPaymentIntent,
+    provider_event_id: str | None,
+    reconciled: bool,
+) -> ContributionWebhookResponse:
+    return ContributionWebhookResponse(
+        contribution_id=contribution.id if contribution else None,
+        event_type=event_type,
+        message=message,
+        payment_intent_id=payment_intent.id,
+        payment_intent_status=payment_intent.status,
+        provider=payment_intent.provider,
+        provider_event_id=provider_event_id,
+        provider_intent_id=payment_intent.provider_intent_id,
+        receipt_id=contribution.receipt.id if contribution and contribution.receipt else None,
+        reconciled=reconciled,
     )
 
 
@@ -529,6 +609,44 @@ def _canonical_json_bytes(payload: dict) -> bytes:
     return json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
 
 
+def _expected_webhook_signature(raw_body: bytes, secret: str) -> str:
+    return hmac.new(secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
+
+
+def _verify_contribution_webhook_signature(request: Request, raw_body: bytes) -> None:
+    secret = get_settings().contribution_webhook_secret
+    if not secret:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Contribution webhook secret is not configured",
+        )
+    supplied_signature = request.headers.get("x-yalumni-webhook-signature")
+    if not supplied_signature:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing webhook signature",
+        )
+    normalized_signature = supplied_signature.strip()
+    if normalized_signature.startswith("sha256="):
+        normalized_signature = normalized_signature.removeprefix("sha256=")
+    expected_signature = _expected_webhook_signature(raw_body, secret)
+    if not hmac.compare_digest(normalized_signature, expected_signature):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid webhook signature",
+        )
+
+
+def _parse_contribution_webhook_payload(raw_body: bytes) -> ContributionWebhookPayload:
+    try:
+        return ContributionWebhookPayload.model_validate_json(raw_body)
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Invalid webhook payload",
+        ) from exc
+
+
 def _receipt_download_lines(receipt: ContributionReceipt) -> list[str]:
     contribution = receipt.contribution
     return [
@@ -740,6 +858,112 @@ def _apply_contribution_adjustment(
     db.commit()
     contribution = _get_contribution_or_404(db, contribution.id)
     return _serialize_contribution(contribution)
+
+
+def _find_contribution_for_payment_intent(
+    db: Session,
+    payment_intent: ContributionPaymentIntent,
+) -> Contribution | None:
+    return db.scalar(
+        select(Contribution)
+        .options(
+            joinedload(Contribution.campaign),
+            joinedload(Contribution.contributor),
+            joinedload(Contribution.receipt),
+        )
+        .where(
+            Contribution.campaign_id == payment_intent.campaign_id,
+            Contribution.payment_reference == payment_intent.provider_intent_id,
+        )
+    )
+
+
+def _record_payment_intent_contribution(
+    *,
+    actor_user: User | None,
+    db: Session,
+    event_metadata: dict | None,
+    event_type: str,
+    ledger_memo: str,
+    payment_intent: ContributionPaymentIntent,
+    request: Request,
+) -> Contribution:
+    receipt_user = payment_intent.contributor or actor_user
+    if receipt_user is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Payment intent contributor is missing",
+        )
+    now = utcnow()
+    contribution = Contribution(
+        amount_cents=payment_intent.amount_cents,
+        anonymous=payment_intent.anonymous,
+        campaign_id=payment_intent.campaign_id,
+        contributor_user_id=payment_intent.contributor_user_id,
+        currency=payment_intent.currency,
+        note=payment_intent.note,
+        paid_at=now,
+        payment_method=payment_intent.payment_method,
+        payment_reference=payment_intent.provider_intent_id,
+        status=RECEIVED_STATUS,
+    )
+    payment_intent.status = PAYMENT_INTENT_CONFIRMED
+    db.add(contribution)
+    db.flush()
+    receipt = ContributionReceipt(
+        amount_cents=contribution.amount_cents,
+        contribution_id=contribution.id,
+        currency=contribution.currency,
+        issued_at=now,
+        issued_to_email=receipt_user.email,
+        issued_to_name=receipt_user.display_name,
+        receipt_number=_next_receipt_number(db),
+        status="ISSUED",
+        tax_note="This is a contribution receipt generated by YALUMNI.",
+    )
+    db.add(receipt)
+    db.add(
+        ContributionLedgerEntry(
+            amount_cents=contribution.amount_cents,
+            contribution_id=contribution.id,
+            created_by_user_id=actor_user.id if actor_user else None,
+            currency=contribution.currency,
+            entry_type=LEDGER_CREDIT,
+            memo=ledger_memo,
+        )
+    )
+    metadata = {
+        "amount_cents": contribution.amount_cents,
+        "campaign_id": str(payment_intent.campaign_id),
+        "contribution_id": str(contribution.id),
+        "currency": contribution.currency,
+        "payment_intent_id": str(payment_intent.id),
+        "provider_intent_id": payment_intent.provider_intent_id,
+    }
+    if event_metadata:
+        metadata.update(event_metadata)
+    if actor_user:
+        _create_security_event(db, request, actor_user, event_type, metadata)
+    else:
+        _create_system_security_event(db, request, event_type, metadata)
+    db.commit()
+    return _get_contribution_or_404(db, contribution.id)
+
+
+def _validate_webhook_amount(
+    payload: ContributionWebhookPayload,
+    payment_intent: ContributionPaymentIntent,
+) -> None:
+    if payload.amount_cents is not None and payload.amount_cents != payment_intent.amount_cents:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Webhook amount does not match payment intent",
+        )
+    if payload.currency is not None and payload.currency != payment_intent.currency:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Webhook currency does not match payment intent",
+        )
 
 
 def _build_treasury_audit_package(
@@ -1417,7 +1641,7 @@ def create_payment_intent(
         payment_method=payload.payment_method,
         provider="LOCAL_TEST",
         provider_intent_id=f"yalumni_pi_{intent_id.hex}",
-        status="REQUIRES_CONFIRMATION",
+        status=PAYMENT_INTENT_REQUIRES_CONFIRMATION,
     )
     db.add(payment_intent)
     _create_security_event(
@@ -1459,70 +1683,162 @@ def confirm_payment_intent(
     )
     _ensure_payment_intent_access(payment_intent, current_user)
     _ensure_campaign_visible(payment_intent.campaign, current_user)
-    if payment_intent.status != "REQUIRES_CONFIRMATION":
+    if payment_intent.status != PAYMENT_INTENT_REQUIRES_CONFIRMATION:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Payment intent has already been reconciled",
         )
     _ensure_campaign_accepts_payment(payment_intent.campaign)
-
-    now = utcnow()
-    contribution = Contribution(
-        amount_cents=payment_intent.amount_cents,
-        anonymous=payment_intent.anonymous,
-        campaign_id=payment_intent.campaign_id,
-        contributor_user_id=payment_intent.contributor_user_id,
-        currency=payment_intent.currency,
-        note=payment_intent.note,
-        paid_at=now,
-        payment_method=payment_intent.payment_method,
-        payment_reference=payment_intent.provider_intent_id,
-        status=RECEIVED_STATUS,
+    contribution = _record_payment_intent_contribution(
+        actor_user=current_user,
+        db=db,
+        event_metadata=None,
+        event_type="contributions.payment_intent_confirmed",
+        ledger_memo=f"Payment intent confirmed for {payment_intent.campaign.title}",
+        payment_intent=payment_intent,
+        request=request,
     )
-    payment_intent.status = "CONFIRMED"
-    db.add(contribution)
-    db.flush()
+    return _serialize_contribution(contribution)
 
-    receipt_user = payment_intent.contributor or current_user
-    receipt = ContributionReceipt(
-        amount_cents=contribution.amount_cents,
-        contribution_id=contribution.id,
-        currency=contribution.currency,
-        issued_at=now,
-        issued_to_email=receipt_user.email,
-        issued_to_name=receipt_user.display_name,
-        receipt_number=_next_receipt_number(db),
-        status="ISSUED",
-        tax_note="This is a contribution receipt generated by YALUMNI.",
-    )
-    db.add(receipt)
-    db.add(
-        ContributionLedgerEntry(
-            amount_cents=contribution.amount_cents,
-            contribution_id=contribution.id,
-            created_by_user_id=current_user.id,
-            currency=contribution.currency,
-            entry_type=LEDGER_CREDIT,
-            memo=f"Payment intent confirmed for {payment_intent.campaign.title}",
+
+@router.post("/webhooks/{provider}", response_model=ContributionWebhookResponse)
+async def receive_provider_webhook(
+    provider: str,
+    request: Request,
+    db: Annotated[Session, Depends(get_db_session)],
+) -> ContributionWebhookResponse:
+    raw_body = await request.body()
+    _verify_contribution_webhook_signature(request, raw_body)
+    payload = _parse_contribution_webhook_payload(raw_body)
+    normalized_provider = _normalize_enum(provider)
+    if not normalized_provider:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Provider is required",
         )
+    supported_events = WEBHOOK_SUCCESS_EVENTS | WEBHOOK_FAILED_EVENTS | WEBHOOK_CANCELED_EVENTS
+    if payload.event_type not in supported_events:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unsupported contribution webhook event",
+        )
+
+    payment_intent = _get_payment_intent_by_provider_reference(
+        db,
+        provider=normalized_provider,
+        provider_intent_id=payload.provider_intent_id,
     )
-    _create_security_event(
+    if payment_intent is None:
+        _create_system_security_event(
+            db,
+            request,
+            "contributions.provider_webhook_unmatched",
+            {
+                "event_type": payload.event_type,
+                "provider": normalized_provider,
+                "provider_event_id": payload.provider_event_id,
+                "provider_intent_id": payload.provider_intent_id,
+            },
+        )
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Payment intent not found",
+        )
+
+    _validate_webhook_amount(payload, payment_intent)
+    event_metadata = {
+        "event_type": payload.event_type,
+        "provider": normalized_provider,
+        "provider_event_id": payload.provider_event_id,
+    }
+
+    if payload.event_type in WEBHOOK_SUCCESS_EVENTS:
+        existing_contribution = _find_contribution_for_payment_intent(db, payment_intent)
+        if existing_contribution is not None:
+            if payment_intent.status != PAYMENT_INTENT_CONFIRMED:
+                payment_intent.status = PAYMENT_INTENT_CONFIRMED
+            _create_system_security_event(
+                db,
+                request,
+                "contributions.provider_webhook_duplicate",
+                {
+                    **event_metadata,
+                    "contribution_id": str(existing_contribution.id),
+                    "payment_intent_id": str(payment_intent.id),
+                    "provider_intent_id": payment_intent.provider_intent_id,
+                },
+            )
+            db.commit()
+            return _serialize_webhook_response(
+                contribution=existing_contribution,
+                event_type=payload.event_type,
+                message="Payment intent already reconciled",
+                payment_intent=payment_intent,
+                provider_event_id=payload.provider_event_id,
+                reconciled=False,
+            )
+        if payment_intent.status != PAYMENT_INTENT_REQUIRES_CONFIRMATION:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Payment intent cannot be reconciled from its current status",
+            )
+        contribution = _record_payment_intent_contribution(
+            actor_user=None,
+            db=db,
+            event_metadata=event_metadata,
+            event_type="contributions.provider_webhook_reconciled",
+            ledger_memo=f"Provider webhook reconciled for {payment_intent.campaign.title}",
+            payment_intent=payment_intent,
+            request=request,
+        )
+        return _serialize_webhook_response(
+            contribution=contribution,
+            event_type=payload.event_type,
+            message="Payment intent reconciled",
+            payment_intent=payment_intent,
+            provider_event_id=payload.provider_event_id,
+            reconciled=True,
+        )
+
+    next_status = (
+        PAYMENT_INTENT_FAILED
+        if payload.event_type in WEBHOOK_FAILED_EVENTS
+        else PAYMENT_INTENT_CANCELED
+    )
+    if payment_intent.status == PAYMENT_INTENT_CONFIRMED:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Confirmed payment intent cannot be marked failed or canceled",
+        )
+    was_already_marked = payment_intent.status == next_status
+    payment_intent.status = next_status
+    _create_system_security_event(
         db,
         request,
-        current_user,
-        "contributions.payment_intent_confirmed",
+        "contributions.provider_webhook_marked_failed"
+        if next_status == PAYMENT_INTENT_FAILED
+        else "contributions.provider_webhook_marked_canceled",
         {
-            "amount_cents": contribution.amount_cents,
-            "campaign_id": str(payment_intent.campaign_id),
-            "contribution_id": str(contribution.id),
-            "currency": contribution.currency,
+            **event_metadata,
+            "failure_reason": payload.failure_reason,
             "payment_intent_id": str(payment_intent.id),
             "provider_intent_id": payment_intent.provider_intent_id,
         },
     )
     db.commit()
-    contribution = _get_contribution_or_404(db, contribution.id)
-    return _serialize_contribution(contribution)
+    return _serialize_webhook_response(
+        contribution=None,
+        event_type=payload.event_type,
+        message=(
+            f"Payment intent already {next_status.lower()}"
+            if was_already_marked
+            else f"Payment intent marked {next_status.lower()}"
+        ),
+        payment_intent=payment_intent,
+        provider_event_id=payload.provider_event_id,
+        reconciled=not was_already_marked,
+    )
 
 
 @router.get("/{campaign_id}", response_model=ContributionCampaignResponse)

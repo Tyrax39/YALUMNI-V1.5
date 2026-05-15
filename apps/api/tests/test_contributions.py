@@ -81,6 +81,18 @@ def auth_headers(access_token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {access_token}"}
 
 
+def webhook_body(payload: dict) -> bytes:
+    return json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+
+
+def signed_webhook_headers(raw_body: bytes, secret: str = "test-webhook-secret") -> dict[str, str]:
+    signature = hmac.new(secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
+    return {
+        "content-type": "application/json",
+        "x-yalumni-webhook-signature": f"sha256={signature}",
+    }
+
+
 def register_user(client: TestClient, email: str, display_name: str) -> dict:
     response = client.post(
         "/api/v1/auth/register",
@@ -119,6 +131,27 @@ def campaign_payload(title: str = "Alumni scholarship fund") -> dict:
         "summary": "Fund scholarships for alumni community impact projects across chapters.",
         "title": title,
     }
+
+
+def create_published_campaign(
+    client: TestClient,
+    admin_headers: dict[str, str],
+    title: str = "Webhook scholarship fund",
+) -> dict:
+    create_response = client.post(
+        "/api/v1/contributions/admin/campaigns",
+        headers=admin_headers,
+        json=campaign_payload(title),
+    )
+    assert create_response.status_code == 201
+    campaign = create_response.json()
+    publish_response = client.post(
+        f"/api/v1/contributions/admin/campaigns/{campaign['id']}/publish",
+        headers=admin_headers,
+        json={"note": "Ready for member contributions."},
+    )
+    assert publish_response.status_code == 200
+    return publish_response.json()
 
 
 def create_pending_contribution_for_test(
@@ -540,3 +573,206 @@ def test_contribution_finance_role_and_receipt_privacy_are_enforced(client: Test
         headers=admin_headers,
     )
     assert admin_receipt_pdf_download.status_code == 200
+
+
+def test_provider_webhook_confirms_payment_intent_idempotently(
+    client: TestClient,
+) -> None:
+    settings = get_settings()
+    previous_secret = settings.contribution_webhook_secret
+    settings.contribution_webhook_secret = "test-webhook-secret"
+    try:
+        admin_headers = create_admin(client, "webhook.finance@example.com")
+        member = register_user(client, "webhook.donor@example.com", "Webhook Donor")
+        member_headers = auth_headers(member["access_token"])
+        campaign = create_published_campaign(
+            client,
+            admin_headers,
+            "Webhook scholarship fund",
+        )
+        intent_response = client.post(
+            f"/api/v1/contributions/{campaign['id']}/payment-intents",
+            headers=member_headers,
+            json={
+                "amount_cents": 7200,
+                "currency": "USD",
+                "note": "Webhook-confirmed intent.",
+                "payment_method": "CARD_TEST",
+            },
+        )
+        assert intent_response.status_code == 201
+        intent = intent_response.json()
+        payload = {
+            "amount_cents": 7200,
+            "currency": "usd",
+            "event_type": "payment_intent.succeeded",
+            "provider_event_id": "evt_webhook_success",
+            "provider_intent_id": intent["provider_intent_id"],
+        }
+        raw_body = webhook_body(payload)
+
+        webhook_response = client.post(
+            "/api/v1/contributions/webhooks/local-test",
+            content=raw_body,
+            headers=signed_webhook_headers(raw_body),
+        )
+        assert webhook_response.status_code == 200
+        webhook_result = webhook_response.json()
+        assert webhook_result["reconciled"] is True
+        assert webhook_result["event_type"] == "PAYMENT_INTENT_SUCCEEDED"
+        assert webhook_result["payment_intent_status"] == "CONFIRMED"
+        assert webhook_result["provider"] == "LOCAL_TEST"
+        assert webhook_result["contribution_id"]
+        assert webhook_result["receipt_id"]
+
+        duplicate_response = client.post(
+            "/api/v1/contributions/webhooks/local-test",
+            content=raw_body,
+            headers=signed_webhook_headers(raw_body),
+        )
+        assert duplicate_response.status_code == 200
+        duplicate_result = duplicate_response.json()
+        assert duplicate_result["reconciled"] is False
+        assert duplicate_result["contribution_id"] == webhook_result["contribution_id"]
+
+        contribution_list = client.get(
+            "/api/v1/contributions/admin/contributions",
+            headers=admin_headers,
+        )
+        assert contribution_list.status_code == 200
+        assert contribution_list.json()["total"] == 1
+
+        duplicate_manual_confirm = client.post(
+            f"/api/v1/contributions/{campaign['id']}/payment-intents/{intent['id']}/confirm",
+            headers=member_headers,
+        )
+        assert duplicate_manual_confirm.status_code == 409
+    finally:
+        settings.contribution_webhook_secret = previous_secret
+
+
+def test_provider_webhook_rejects_bad_signature_and_mismatched_amount(
+    client: TestClient,
+) -> None:
+    settings = get_settings()
+    previous_secret = settings.contribution_webhook_secret
+    settings.contribution_webhook_secret = "test-webhook-secret"
+    try:
+        admin_headers = create_admin(client, "webhook.reject.finance@example.com")
+        member = register_user(client, "webhook.reject.donor@example.com", "Webhook Reject Donor")
+        member_headers = auth_headers(member["access_token"])
+        campaign = create_published_campaign(
+            client,
+            admin_headers,
+            "Webhook rejection fund",
+        )
+        intent_response = client.post(
+            f"/api/v1/contributions/{campaign['id']}/payment-intents",
+            headers=member_headers,
+            json={
+                "amount_cents": 9100,
+                "currency": "USD",
+                "payment_method": "CARD_TEST",
+            },
+        )
+        assert intent_response.status_code == 201
+        intent = intent_response.json()
+        payload = {
+            "amount_cents": 9100,
+            "currency": "USD",
+            "event_type": "payment_intent.succeeded",
+            "provider_event_id": "evt_bad_signature",
+            "provider_intent_id": intent["provider_intent_id"],
+        }
+        raw_body = webhook_body(payload)
+
+        bad_signature_response = client.post(
+            "/api/v1/contributions/webhooks/local-test",
+            content=raw_body,
+            headers={
+                "content-type": "application/json",
+                "x-yalumni-webhook-signature": "sha256=bad-signature",
+            },
+        )
+        assert bad_signature_response.status_code == 401
+
+        mismatched_payload = {**payload, "amount_cents": 9200}
+        mismatched_body = webhook_body(mismatched_payload)
+        mismatched_response = client.post(
+            "/api/v1/contributions/webhooks/local-test",
+            content=mismatched_body,
+            headers=signed_webhook_headers(mismatched_body),
+        )
+        assert mismatched_response.status_code == 409
+
+        manual_confirm = client.post(
+            f"/api/v1/contributions/{campaign['id']}/payment-intents/{intent['id']}/confirm",
+            headers=member_headers,
+        )
+        assert manual_confirm.status_code == 201
+    finally:
+        settings.contribution_webhook_secret = previous_secret
+
+
+def test_provider_webhook_marks_failed_payment_intent_idempotently(
+    client: TestClient,
+) -> None:
+    settings = get_settings()
+    previous_secret = settings.contribution_webhook_secret
+    settings.contribution_webhook_secret = "test-webhook-secret"
+    try:
+        admin_headers = create_admin(client, "webhook.failed.finance@example.com")
+        member = register_user(client, "webhook.failed.donor@example.com", "Webhook Failed Donor")
+        member_headers = auth_headers(member["access_token"])
+        campaign = create_published_campaign(
+            client,
+            admin_headers,
+            "Webhook failed intent fund",
+        )
+        intent_response = client.post(
+            f"/api/v1/contributions/{campaign['id']}/payment-intents",
+            headers=member_headers,
+            json={
+                "amount_cents": 6400,
+                "currency": "USD",
+                "payment_method": "CARD_TEST",
+            },
+        )
+        assert intent_response.status_code == 201
+        intent = intent_response.json()
+        payload = {
+            "amount_cents": 6400,
+            "currency": "USD",
+            "event_type": "payment_intent.failed",
+            "failure_reason": "Provider declined the payment.",
+            "provider_event_id": "evt_webhook_failed",
+            "provider_intent_id": intent["provider_intent_id"],
+        }
+        raw_body = webhook_body(payload)
+
+        failed_response = client.post(
+            "/api/v1/contributions/webhooks/local-test",
+            content=raw_body,
+            headers=signed_webhook_headers(raw_body),
+        )
+        assert failed_response.status_code == 200
+        failed_result = failed_response.json()
+        assert failed_result["reconciled"] is True
+        assert failed_result["contribution_id"] is None
+        assert failed_result["payment_intent_status"] == "FAILED"
+
+        duplicate_failed_response = client.post(
+            "/api/v1/contributions/webhooks/local-test",
+            content=raw_body,
+            headers=signed_webhook_headers(raw_body),
+        )
+        assert duplicate_failed_response.status_code == 200
+        assert duplicate_failed_response.json()["reconciled"] is False
+
+        manual_confirm = client.post(
+            f"/api/v1/contributions/{campaign['id']}/payment-intents/{intent['id']}/confirm",
+            headers=member_headers,
+        )
+        assert manual_confirm.status_code == 409
+    finally:
+        settings.contribution_webhook_secret = previous_secret

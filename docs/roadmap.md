@@ -138,7 +138,10 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
   text/PDF downloads, print actions, finance contribution CSV exports, treasury
   ledger CSV exports, signed treasury audit JSON packages, certified treasury
   audit PDF reports, and local finance-admin refund/void adjustment controls
-  with ledger reversals/markers.
+  with ledger reversals/markers. Signed provider webhook reconciliation now
+  confirms eligible payment intents idempotently and marks failed/canceled
+  provider events; real provider checkout/client secrets, provider-specific
+  adapters, provider-side refunds, and production reconciliation storage remain.
 - Elections. Started with draft setup, candidate creation, voter-roll
   management, open/close lifecycle, one-vote-per-user ballot casting, result
   counts, quorum reporting, and admin audit/privacy summaries.

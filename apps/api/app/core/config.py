@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     platform_owner_password: str | None = None
     seed_test_accounts: bool = False
     test_accounts_password: str = "YalumniTest@12345!"
+    contribution_webhook_secret: str | None = None
     mwf_directory_fellows_url: str = (
         "https://www.mandelawashingtonfellowship.org/wp-json/yali/v1/fellows/"
     )

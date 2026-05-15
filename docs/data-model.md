@@ -113,7 +113,9 @@
   intent foundation with campaign, contributor, amount, method, provider intent
   reference, status, anonymous flag, and note metadata. Local confirmation moves
   an eligible intent to `CONFIRMED` and records the matching contribution,
-  receipt, and ledger credit entry.
+  receipt, and ledger credit entry. Signed provider webhook success events now
+  reconcile the same eligible intent path, while provider failure/cancel events
+  mark the intent without creating contribution, receipt, or ledger rows.
 - `contribution_receipts` - implemented for one issued receipt per contribution
   with receipt number, issued-to details, amount, currency, status, and tax note.
 - `contribution_ledger_entries` - implemented for foundation credit entries,
