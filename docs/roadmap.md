@@ -140,8 +140,10 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
   audit PDF reports, and local finance-admin refund/void adjustment controls
   with ledger reversals/markers. Signed provider webhook reconciliation now
   confirms eligible payment intents idempotently and marks failed/canceled
-  provider events; real provider checkout/client secrets, provider-specific
-  adapters, provider-side refunds, and production reconciliation storage remain.
+  provider events. Webhook diagnostics now persist provider event deliveries,
+  processing status, and replay counts; real provider checkout/client secrets,
+  provider-specific adapters, provider-side refunds, and checkout-level payment
+  attempt orchestration remain.
 - Elections. Started with draft setup, candidate creation, voter-roll
   management, open/close lifecycle, one-vote-per-user ballot casting, result
   counts, quorum reporting, and admin audit/privacy summaries.

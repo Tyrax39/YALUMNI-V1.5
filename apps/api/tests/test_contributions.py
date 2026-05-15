@@ -431,6 +431,11 @@ def test_contribution_finance_role_and_receipt_privacy_are_enforced(client: Test
         headers=member_headers,
     )
     assert denied_audit_report.status_code == 403
+    denied_webhook_events = client.get(
+        "/api/v1/contributions/admin/webhook-events",
+        headers=member_headers,
+    )
+    assert denied_webhook_events.status_code == 403
 
     create_response = client.post(
         "/api/v1/contributions/admin/campaigns",
@@ -642,6 +647,18 @@ def test_provider_webhook_confirms_payment_intent_idempotently(
         assert contribution_list.status_code == 200
         assert contribution_list.json()["total"] == 1
 
+        event_list = client.get(
+            "/api/v1/contributions/admin/webhook-events",
+            headers=admin_headers,
+            params={"provider_intent_id": intent["provider_intent_id"]},
+        )
+        assert event_list.status_code == 200
+        event_log = event_list.json()
+        assert event_log["total"] == 1
+        assert event_log["events"][0]["delivery_count"] == 2
+        assert event_log["events"][0]["status"] == "DUPLICATE"
+        assert event_log["events"][0]["contribution_id"] == webhook_result["contribution_id"]
+
         duplicate_manual_confirm = client.post(
             f"/api/v1/contributions/{campaign['id']}/payment-intents/{intent['id']}/confirm",
             headers=member_headers,
@@ -704,6 +721,17 @@ def test_provider_webhook_rejects_bad_signature_and_mismatched_amount(
             headers=signed_webhook_headers(mismatched_body),
         )
         assert mismatched_response.status_code == 409
+        rejected_events = client.get(
+            "/api/v1/contributions/admin/webhook-events",
+            headers=admin_headers,
+            params={"status": "REJECTED"},
+        )
+        assert rejected_events.status_code == 200
+        rejected_event_list = rejected_events.json()
+        assert rejected_event_list["total"] == 1
+        assert rejected_event_list["events"][0]["error_message"] == (
+            "Webhook amount does not match payment intent"
+        )
 
         manual_confirm = client.post(
             f"/api/v1/contributions/{campaign['id']}/payment-intents/{intent['id']}/confirm",
@@ -768,6 +796,16 @@ def test_provider_webhook_marks_failed_payment_intent_idempotently(
         )
         assert duplicate_failed_response.status_code == 200
         assert duplicate_failed_response.json()["reconciled"] is False
+        failed_event_list = client.get(
+            "/api/v1/contributions/admin/webhook-events",
+            headers=admin_headers,
+            params={"status": "FAILED"},
+        )
+        assert failed_event_list.status_code == 200
+        failed_events = failed_event_list.json()
+        assert failed_events["total"] == 1
+        assert failed_events["events"][0]["delivery_count"] == 2
+        assert failed_events["events"][0]["payment_intent_id"] == intent["id"]
 
         manual_confirm = client.post(
             f"/api/v1/contributions/{campaign['id']}/payment-intents/{intent['id']}/confirm",

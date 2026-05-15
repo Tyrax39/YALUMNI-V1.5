@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     DateTime,
     ForeignKey,
@@ -85,6 +86,49 @@ class ContributionPaymentIntent(Base, TimestampMixin):
         foreign_keys=[campaign_id],
     )
     contributor: Mapped[User | None] = relationship(foreign_keys=[contributor_user_id])
+
+
+class ContributionWebhookEvent(Base, TimestampMixin):
+    __tablename__ = "contribution_webhook_events"
+    __table_args__ = (
+        Index("ix_contribution_webhook_events_provider_event", "provider", "provider_event_id"),
+        Index(
+            "ix_contribution_webhook_events_provider_intent",
+            "provider",
+            "provider_intent_id",
+        ),
+        Index("ix_contribution_webhook_events_status_created", "status", "created_at"),
+        UniqueConstraint(
+            "provider",
+            "provider_event_id",
+            name="uq_contribution_webhook_events_provider_event",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    provider: Mapped[str] = mapped_column(String(60), nullable=False)
+    provider_event_id: Mapped[str | None] = mapped_column(String(160))
+    provider_intent_id: Mapped[str] = mapped_column(String(120), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(80), nullable=False)
+    status: Mapped[str] = mapped_column(String(40), nullable=False)
+    amount_cents: Mapped[int | None] = mapped_column(Integer)
+    currency: Mapped[str | None] = mapped_column(String(3))
+    failure_reason: Mapped[str | None] = mapped_column(String(500))
+    error_message: Mapped[str | None] = mapped_column(String(500))
+    delivery_count: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    payload_json: Mapped[dict | None] = mapped_column(JSON)
+    payment_intent_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("contribution_payment_intents.id", ondelete="SET NULL"),
+    )
+    contribution_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("contributions.id", ondelete="SET NULL"),
+    )
+
+    payment_intent: Mapped[ContributionPaymentIntent | None] = relationship(
+        foreign_keys=[payment_intent_id],
+    )
+    contribution: Mapped["Contribution | None"] = relationship(foreign_keys=[contribution_id])
 
 
 class Contribution(Base, TimestampMixin):

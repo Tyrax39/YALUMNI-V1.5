@@ -124,6 +124,7 @@ POST /api/v1/contributions/admin/campaigns
 POST /api/v1/contributions/admin/campaigns/{campaign_id}/publish
 POST /api/v1/contributions/admin/campaigns/{campaign_id}/close
 GET  /api/v1/contributions/admin/contributions
+GET  /api/v1/contributions/admin/webhook-events
 POST /api/v1/contributions/admin/contributions/{contribution_id}/refund
 POST /api/v1/contributions/admin/contributions/{contribution_id}/void
 GET  /api/v1/contributions/admin/contributions/export
@@ -584,6 +585,7 @@ POST   /api/v1/contributions/admin/campaigns         # implemented
 POST   /api/v1/contributions/admin/campaigns/{campaign_id}/publish # implemented
 POST   /api/v1/contributions/admin/campaigns/{campaign_id}/close   # implemented
 GET    /api/v1/contributions/admin/contributions     # implemented
+GET    /api/v1/contributions/admin/webhook-events     # implemented webhook diagnostics log
 POST   /api/v1/contributions/admin/contributions/{contribution_id}/refund # implemented local ledger reversal
 POST   /api/v1/contributions/admin/contributions/{contribution_id}/void # implemented pending contribution cancellation
 GET    /api/v1/contributions/admin/contributions/export # implemented CSV export

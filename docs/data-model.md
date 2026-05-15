@@ -116,6 +116,10 @@
   receipt, and ledger credit entry. Signed provider webhook success events now
   reconcile the same eligible intent path, while provider failure/cancel events
   mark the intent without creating contribution, receipt, or ledger rows.
+- `contribution_webhook_events` - implemented for signed provider webhook
+  diagnostics with provider event IDs, provider intent references, normalized
+  event type, processing status, delivery count, payment intent/contribution
+  links, payload snapshot, processed timestamp, and error metadata.
 - `contribution_receipts` - implemented for one issued receipt per contribution
   with receipt number, issued-to details, amount, currency, status, and tax note.
 - `contribution_ledger_entries` - implemented for foundation credit entries,
@@ -125,8 +129,9 @@
   adjustment controls currently read these live tables directly rather than
   using separate export snapshot tables.
 - `pledges` - future split from confirmed local contribution recording.
-- `payment_attempts` - future expansion for provider webhook attempts,
-  retries, failures, and reconciliation events.
+- `payment_attempts` - future expansion for checkout-session level attempts,
+  provider authorization details, and richer retry orchestration beyond the
+  current webhook diagnostics table.
 - `disbursement_requests`
 - `disbursement_approvals`
 - `expense_reports`

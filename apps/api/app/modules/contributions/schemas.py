@@ -148,6 +148,33 @@ class ContributionWebhookResponse(BaseModel):
     reconciled: bool
 
 
+class ContributionWebhookEventResponse(BaseModel):
+    amount_cents: int | None
+    contribution_id: uuid.UUID | None
+    created_at: datetime
+    currency: str | None
+    delivery_count: int
+    error_message: str | None
+    event_type: str
+    failure_reason: str | None
+    id: uuid.UUID
+    payment_intent_id: uuid.UUID | None
+    processed_at: datetime | None
+    provider: str
+    provider_event_id: str | None
+    provider_intent_id: str
+    status: str
+    updated_at: datetime
+
+
+class ContributionWebhookEventListResponse(BaseModel):
+    events: list[ContributionWebhookEventResponse]
+    has_more: bool
+    limit: int
+    offset: int
+    total: int
+
+
 class ContributionCampaignResponse(BaseModel):
     chapter_name: str | None
     closed_at: datetime | None

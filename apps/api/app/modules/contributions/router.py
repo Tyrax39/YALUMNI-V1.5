@@ -25,6 +25,7 @@ from app.modules.contributions.models import (
     ContributionLedgerEntry,
     ContributionPaymentIntent,
     ContributionReceipt,
+    ContributionWebhookEvent,
 )
 from app.modules.contributions.schemas import (
     ContributionCampaignCreate,
@@ -38,6 +39,8 @@ from app.modules.contributions.schemas import (
     ContributionPaymentIntentResponse,
     ContributionReceiptResponse,
     ContributionResponse,
+    ContributionWebhookEventListResponse,
+    ContributionWebhookEventResponse,
     ContributionWebhookPayload,
     ContributionWebhookResponse,
     TreasurySummaryResponse,
@@ -64,6 +67,13 @@ PAYMENT_INTENT_REQUIRES_CONFIRMATION = "REQUIRES_CONFIRMATION"
 PAYMENT_INTENT_CONFIRMED = "CONFIRMED"
 PAYMENT_INTENT_FAILED = "FAILED"
 PAYMENT_INTENT_CANCELED = "CANCELED"
+WEBHOOK_EVENT_RECEIVED = "RECEIVED"
+WEBHOOK_EVENT_RECONCILED = "RECONCILED"
+WEBHOOK_EVENT_DUPLICATE = "DUPLICATE"
+WEBHOOK_EVENT_FAILED = "FAILED"
+WEBHOOK_EVENT_CANCELED = "CANCELED"
+WEBHOOK_EVENT_UNMATCHED = "UNMATCHED"
+WEBHOOK_EVENT_REJECTED = "REJECTED"
 WEBHOOK_SUCCESS_EVENTS = {
     "CHECKOUT_SESSION_COMPLETED",
     "CHARGE_SUCCEEDED",
@@ -395,6 +405,29 @@ def _serialize_webhook_response(
         provider_intent_id=payment_intent.provider_intent_id,
         receipt_id=contribution.receipt.id if contribution and contribution.receipt else None,
         reconciled=reconciled,
+    )
+
+
+def _serialize_webhook_event(
+    event: ContributionWebhookEvent,
+) -> ContributionWebhookEventResponse:
+    return ContributionWebhookEventResponse(
+        amount_cents=event.amount_cents,
+        contribution_id=event.contribution_id,
+        created_at=event.created_at,
+        currency=event.currency,
+        delivery_count=event.delivery_count,
+        error_message=event.error_message,
+        event_type=event.event_type,
+        failure_reason=event.failure_reason,
+        id=event.id,
+        payment_intent_id=event.payment_intent_id,
+        processed_at=event.processed_at,
+        provider=event.provider,
+        provider_event_id=event.provider_event_id,
+        provider_intent_id=event.provider_intent_id,
+        status=event.status,
+        updated_at=event.updated_at,
     )
 
 
@@ -887,6 +920,7 @@ def _record_payment_intent_contribution(
     ledger_memo: str,
     payment_intent: ContributionPaymentIntent,
     request: Request,
+    webhook_event: ContributionWebhookEvent | None = None,
 ) -> Contribution:
     receipt_user = payment_intent.contributor or actor_user
     if receipt_user is None:
@@ -942,6 +976,13 @@ def _record_payment_intent_contribution(
     }
     if event_metadata:
         metadata.update(event_metadata)
+    if webhook_event:
+        _finalize_webhook_event(
+            webhook_event,
+            contribution=contribution,
+            payment_intent=payment_intent,
+            status_value=WEBHOOK_EVENT_RECONCILED,
+        )
     if actor_user:
         _create_security_event(db, request, actor_user, event_type, metadata)
     else:
@@ -964,6 +1005,73 @@ def _validate_webhook_amount(
             status_code=status.HTTP_409_CONFLICT,
             detail="Webhook currency does not match payment intent",
         )
+
+
+def _webhook_payload_snapshot(payload: ContributionWebhookPayload) -> dict:
+    return {
+        "amount_cents": payload.amount_cents,
+        "currency": payload.currency,
+        "event_type": payload.event_type,
+        "failure_reason": payload.failure_reason,
+        "provider_event_id": payload.provider_event_id,
+        "provider_intent_id": payload.provider_intent_id,
+    }
+
+
+def _start_webhook_event(
+    db: Session,
+    *,
+    payload: ContributionWebhookPayload,
+    provider: str,
+) -> ContributionWebhookEvent:
+    existing_event = None
+    if payload.provider_event_id:
+        existing_event = db.scalar(
+            select(ContributionWebhookEvent).where(
+                ContributionWebhookEvent.provider == provider,
+                ContributionWebhookEvent.provider_event_id == payload.provider_event_id,
+            )
+        )
+    if existing_event:
+        existing_event.amount_cents = payload.amount_cents
+        existing_event.currency = payload.currency
+        existing_event.delivery_count += 1
+        existing_event.event_type = payload.event_type
+        existing_event.failure_reason = payload.failure_reason
+        existing_event.payload_json = _webhook_payload_snapshot(payload)
+        existing_event.provider_intent_id = payload.provider_intent_id
+        existing_event.status = WEBHOOK_EVENT_RECEIVED
+        existing_event.error_message = None
+        return existing_event
+
+    event = ContributionWebhookEvent(
+        amount_cents=payload.amount_cents,
+        currency=payload.currency,
+        event_type=payload.event_type,
+        failure_reason=payload.failure_reason,
+        payload_json=_webhook_payload_snapshot(payload),
+        provider=provider,
+        provider_event_id=payload.provider_event_id,
+        provider_intent_id=payload.provider_intent_id,
+        status=WEBHOOK_EVENT_RECEIVED,
+    )
+    db.add(event)
+    return event
+
+
+def _finalize_webhook_event(
+    event: ContributionWebhookEvent,
+    *,
+    contribution: Contribution | None = None,
+    error_message: str | None = None,
+    payment_intent: ContributionPaymentIntent | None = None,
+    status_value: str,
+) -> None:
+    event.contribution_id = contribution.id if contribution else event.contribution_id
+    event.error_message = error_message
+    event.payment_intent_id = payment_intent.id if payment_intent else event.payment_intent_id
+    event.processed_at = utcnow()
+    event.status = status_value
 
 
 def _build_treasury_audit_package(
@@ -1701,6 +1809,46 @@ def confirm_payment_intent(
     return _serialize_contribution(contribution)
 
 
+@router.get("/admin/webhook-events", response_model=ContributionWebhookEventListResponse)
+@router.get("/admin/webhook-events/", response_model=ContributionWebhookEventListResponse)
+def list_admin_webhook_events(
+    current_user: Annotated[User, Depends(finance_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+    event_type: Annotated[str | None, Query(max_length=80)] = None,
+    provider: Annotated[str | None, Query(max_length=60)] = None,
+    provider_intent_id: Annotated[str | None, Query(max_length=120)] = None,
+    status_filter: Annotated[str | None, Query(alias="status", max_length=40)] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> ContributionWebhookEventListResponse:
+    _ = current_user
+    query = select(ContributionWebhookEvent)
+    normalized_provider = _normalize_enum(provider)
+    normalized_event_type = _normalize_enum(event_type)
+    normalized_status = _normalize_enum(status_filter)
+    if normalized_provider:
+        query = query.where(ContributionWebhookEvent.provider == normalized_provider)
+    if normalized_event_type:
+        query = query.where(ContributionWebhookEvent.event_type == normalized_event_type)
+    if normalized_status:
+        query = query.where(ContributionWebhookEvent.status == normalized_status)
+    if provider_intent_id:
+        query = query.where(
+            ContributionWebhookEvent.provider_intent_id == provider_intent_id.strip()
+        )
+    total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+    events = db.scalars(
+        query.order_by(ContributionWebhookEvent.created_at.desc()).offset(offset).limit(limit)
+    ).all()
+    return ContributionWebhookEventListResponse(
+        events=[_serialize_webhook_event(event) for event in events],
+        has_more=offset + len(events) < total,
+        limit=limit,
+        offset=offset,
+        total=total,
+    )
+
+
 @router.post("/webhooks/{provider}", response_model=ContributionWebhookResponse)
 async def receive_provider_webhook(
     provider: str,
@@ -1716,8 +1864,15 @@ async def receive_provider_webhook(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Provider is required",
         )
+    webhook_event = _start_webhook_event(db, payload=payload, provider=normalized_provider)
     supported_events = WEBHOOK_SUCCESS_EVENTS | WEBHOOK_FAILED_EVENTS | WEBHOOK_CANCELED_EVENTS
     if payload.event_type not in supported_events:
+        _finalize_webhook_event(
+            webhook_event,
+            error_message="Unsupported contribution webhook event",
+            status_value=WEBHOOK_EVENT_REJECTED,
+        )
+        db.commit()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Unsupported contribution webhook event",
@@ -1729,6 +1884,11 @@ async def receive_provider_webhook(
         provider_intent_id=payload.provider_intent_id,
     )
     if payment_intent is None:
+        _finalize_webhook_event(
+            webhook_event,
+            error_message="Payment intent not found",
+            status_value=WEBHOOK_EVENT_UNMATCHED,
+        )
         _create_system_security_event(
             db,
             request,
@@ -1746,7 +1906,17 @@ async def receive_provider_webhook(
             detail="Payment intent not found",
         )
 
-    _validate_webhook_amount(payload, payment_intent)
+    try:
+        _validate_webhook_amount(payload, payment_intent)
+    except HTTPException as exc:
+        _finalize_webhook_event(
+            webhook_event,
+            error_message=str(exc.detail),
+            payment_intent=payment_intent,
+            status_value=WEBHOOK_EVENT_REJECTED,
+        )
+        db.commit()
+        raise
     event_metadata = {
         "event_type": payload.event_type,
         "provider": normalized_provider,
@@ -1769,6 +1939,12 @@ async def receive_provider_webhook(
                     "provider_intent_id": payment_intent.provider_intent_id,
                 },
             )
+            _finalize_webhook_event(
+                webhook_event,
+                contribution=existing_contribution,
+                payment_intent=payment_intent,
+                status_value=WEBHOOK_EVENT_DUPLICATE,
+            )
             db.commit()
             return _serialize_webhook_response(
                 contribution=existing_contribution,
@@ -1779,6 +1955,13 @@ async def receive_provider_webhook(
                 reconciled=False,
             )
         if payment_intent.status != PAYMENT_INTENT_REQUIRES_CONFIRMATION:
+            _finalize_webhook_event(
+                webhook_event,
+                error_message="Payment intent cannot be reconciled from its current status",
+                payment_intent=payment_intent,
+                status_value=WEBHOOK_EVENT_REJECTED,
+            )
+            db.commit()
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Payment intent cannot be reconciled from its current status",
@@ -1791,6 +1974,7 @@ async def receive_provider_webhook(
             ledger_memo=f"Provider webhook reconciled for {payment_intent.campaign.title}",
             payment_intent=payment_intent,
             request=request,
+            webhook_event=webhook_event,
         )
         return _serialize_webhook_response(
             contribution=contribution,
@@ -1807,6 +1991,13 @@ async def receive_provider_webhook(
         else PAYMENT_INTENT_CANCELED
     )
     if payment_intent.status == PAYMENT_INTENT_CONFIRMED:
+        _finalize_webhook_event(
+            webhook_event,
+            error_message="Confirmed payment intent cannot be marked failed or canceled",
+            payment_intent=payment_intent,
+            status_value=WEBHOOK_EVENT_REJECTED,
+        )
+        db.commit()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Confirmed payment intent cannot be marked failed or canceled",
@@ -1825,6 +2016,15 @@ async def receive_provider_webhook(
             "payment_intent_id": str(payment_intent.id),
             "provider_intent_id": payment_intent.provider_intent_id,
         },
+    )
+    _finalize_webhook_event(
+        webhook_event,
+        payment_intent=payment_intent,
+        status_value=(
+            WEBHOOK_EVENT_FAILED
+            if next_status == PAYMENT_INTENT_FAILED
+            else WEBHOOK_EVENT_CANCELED
+        ),
     )
     db.commit()
     return _serialize_webhook_response(
