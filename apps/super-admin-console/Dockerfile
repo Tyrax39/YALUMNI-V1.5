@@ -10,11 +10,10 @@ COPY apps ./apps
 COPY packages ./packages
 
 RUN npm ci
-RUN npm run build:web
+RUN npm run build:superadmin
 
 EXPOSE 3000
 
-WORKDIR /app/apps/web
+WORKDIR /app/apps/super-admin-console
 
 CMD ["sh", "-c", "/app/node_modules/.bin/next start --hostname 0.0.0.0 --port ${PORT:-3000}"]
-
