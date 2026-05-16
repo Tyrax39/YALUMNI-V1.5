@@ -104,8 +104,9 @@
 ### Contributions
 
 - `contribution_campaigns` - implemented for finance-admin-created campaigns
-  with goal amount, currency, country/chapter metadata, draft/published/closed
-  status, funding window, creator, and publish/close timestamps.
+  with goal amount, currency, country/chapter metadata,
+  draft/pending-approval/approved/published/closed status, funding window,
+  creator, and publish/close timestamps.
 - `contributions` - implemented for member contribution records with amount,
   currency, payment method/reference, contributor, status, paid timestamp,
   anonymous flag, and campaign link.

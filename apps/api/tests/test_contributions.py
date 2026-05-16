@@ -512,6 +512,79 @@ def test_contribution_campaign_payment_receipt_and_treasury(client: TestClient) 
     assert closed_intent.status_code == 409
 
 
+def test_contribution_campaign_approval_workflow_foundation(client: TestClient) -> None:
+    admin_headers = create_admin(client, "approval.finance@example.com")
+    member = register_user(client, "approval.member@example.com", "Approval Member")
+    member_headers = auth_headers(member["access_token"])
+
+    create_response = client.post(
+        "/api/v1/contributions/admin/campaigns",
+        headers=admin_headers,
+        json=campaign_payload("Approval workflow scholarship fund"),
+    )
+    assert create_response.status_code == 201
+    campaign = create_response.json()
+    assert campaign["status"] == "DRAFT"
+
+    denied_request = client.post(
+        f"/api/v1/contributions/admin/campaigns/{campaign['id']}/request-approval",
+        headers=member_headers,
+        json={"note": "Member cannot submit finance campaign approval."},
+    )
+    assert denied_request.status_code == 403
+
+    request_response = client.post(
+        f"/api/v1/contributions/admin/campaigns/{campaign['id']}/request-approval",
+        headers=admin_headers,
+        json={"note": "Ready for approval review."},
+    )
+    assert request_response.status_code == 200
+    assert request_response.json()["status"] == "PENDING_APPROVAL"
+
+    hidden_pending = client.get("/api/v1/contributions", headers=member_headers)
+    assert hidden_pending.status_code == 200
+    assert hidden_pending.json()["total"] == 0
+
+    pending_admin_list = client.get(
+        "/api/v1/contributions/admin/campaigns",
+        headers=admin_headers,
+        params={"status": "pending-approval"},
+    )
+    assert pending_admin_list.status_code == 200
+    assert pending_admin_list.json()["total"] == 1
+
+    approve_response = client.post(
+        f"/api/v1/contributions/admin/campaigns/{campaign['id']}/approve",
+        headers=admin_headers,
+        json={"note": "Approved for publication."},
+    )
+    assert approve_response.status_code == 200
+    assert approve_response.json()["status"] == "APPROVED"
+
+    hidden_approved = client.get("/api/v1/contributions", headers=member_headers)
+    assert hidden_approved.status_code == 200
+    assert hidden_approved.json()["total"] == 0
+
+    duplicate_approval = client.post(
+        f"/api/v1/contributions/admin/campaigns/{campaign['id']}/approve",
+        headers=admin_headers,
+        json={"note": "Already approved."},
+    )
+    assert duplicate_approval.status_code == 409
+
+    publish_response = client.post(
+        f"/api/v1/contributions/admin/campaigns/{campaign['id']}/publish",
+        headers=admin_headers,
+        json={"note": "Publish approved campaign."},
+    )
+    assert publish_response.status_code == 200
+    assert publish_response.json()["status"] == "PUBLISHED"
+
+    visible_published = client.get("/api/v1/contributions", headers=member_headers)
+    assert visible_published.status_code == 200
+    assert visible_published.json()["total"] == 1
+
+
 def test_contribution_finance_role_and_receipt_privacy_are_enforced(client: TestClient) -> None:
     admin_headers = create_admin(client, "finance.owner@example.com")
     member = register_user(client, "member.finance@example.com", "Finance Member")

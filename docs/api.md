@@ -122,6 +122,8 @@ GET  /api/v1/contributions/receipts/{receipt_id}/download
 GET  /api/v1/contributions/receipts/{receipt_id}/download.pdf
 GET  /api/v1/contributions/admin/campaigns
 POST /api/v1/contributions/admin/campaigns
+POST /api/v1/contributions/admin/campaigns/{campaign_id}/request-approval
+POST /api/v1/contributions/admin/campaigns/{campaign_id}/approve
 POST /api/v1/contributions/admin/campaigns/{campaign_id}/publish
 POST /api/v1/contributions/admin/campaigns/{campaign_id}/close
 GET  /api/v1/contributions/admin/contributions
@@ -602,6 +604,8 @@ GET    /api/v1/contributions/receipts/{receipt_id}/download # implemented text r
 GET    /api/v1/contributions/receipts/{receipt_id}/download.pdf # implemented PDF receipt download
 GET    /api/v1/contributions/admin/campaigns         # implemented
 POST   /api/v1/contributions/admin/campaigns         # implemented
+POST   /api/v1/contributions/admin/campaigns/{campaign_id}/request-approval # implemented optional approval workflow
+POST   /api/v1/contributions/admin/campaigns/{campaign_id}/approve # implemented optional approval workflow
 POST   /api/v1/contributions/admin/campaigns/{campaign_id}/publish # implemented
 POST   /api/v1/contributions/admin/campaigns/{campaign_id}/close   # implemented
 GET    /api/v1/contributions/admin/contributions     # implemented

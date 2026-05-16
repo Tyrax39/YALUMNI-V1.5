@@ -58,7 +58,7 @@ finance_admin_dependency = require_roles(
     GlobalRole.FINANCE_ADMIN.value,
 )
 
-CAMPAIGN_STATUSES = {"ARCHIVED", "CLOSED", "DRAFT", "PUBLISHED"}
+CAMPAIGN_STATUSES = {"APPROVED", "ARCHIVED", "CLOSED", "DRAFT", "PENDING_APPROVAL", "PUBLISHED"}
 VISIBLE_CAMPAIGN_STATUSES = {"CLOSED", "PUBLISHED"}
 PAYMENT_METHODS = {"BANK_TRANSFER", "CARD_TEST", "MOBILE_MONEY", "OFFLINE_CASH"}
 RECEIVED_STATUS = "RECEIVED"
@@ -1848,10 +1848,10 @@ def publish_campaign(
     db: Annotated[Session, Depends(get_db_session)],
 ) -> ContributionCampaignResponse:
     campaign = _get_campaign_or_404(db, campaign_id)
-    if campaign.status not in {"CLOSED", "DRAFT"}:
+    if campaign.status not in {"APPROVED", "CLOSED", "DRAFT"}:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Only draft or closed campaigns can be published",
+            detail="Only draft, approved, or closed campaigns can be published",
         )
     campaign.status = "PUBLISHED"
     campaign.published_at = campaign.published_at or utcnow()
@@ -1861,6 +1861,63 @@ def publish_campaign(
         request,
         current_user,
         "contributions.campaign_published",
+        {"campaign_id": str(campaign.id), "note": payload.note},
+    )
+    db.commit()
+    campaign = _get_campaign_or_404(db, campaign.id)
+    return _serialize_campaign(db, campaign, current_user)
+
+
+@router.post(
+    "/admin/campaigns/{campaign_id}/request-approval",
+    response_model=ContributionCampaignResponse,
+)
+def request_campaign_approval(
+    campaign_id: uuid.UUID,
+    payload: ContributionCampaignStatusAction,
+    request: Request,
+    current_user: Annotated[User, Depends(finance_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> ContributionCampaignResponse:
+    campaign = _get_campaign_or_404(db, campaign_id)
+    if campaign.status != "DRAFT":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only draft campaigns can be submitted for approval",
+        )
+    campaign.status = "PENDING_APPROVAL"
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "contributions.campaign_approval_requested",
+        {"campaign_id": str(campaign.id), "note": payload.note},
+    )
+    db.commit()
+    campaign = _get_campaign_or_404(db, campaign.id)
+    return _serialize_campaign(db, campaign, current_user)
+
+
+@router.post("/admin/campaigns/{campaign_id}/approve", response_model=ContributionCampaignResponse)
+def approve_campaign(
+    campaign_id: uuid.UUID,
+    payload: ContributionCampaignStatusAction,
+    request: Request,
+    current_user: Annotated[User, Depends(finance_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> ContributionCampaignResponse:
+    campaign = _get_campaign_or_404(db, campaign_id)
+    if campaign.status != "PENDING_APPROVAL":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only campaigns pending approval can be approved",
+        )
+    campaign.status = "APPROVED"
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "contributions.campaign_approved",
         {"campaign_id": str(campaign.id), "note": payload.note},
     )
     db.commit()
