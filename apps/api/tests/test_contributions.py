@@ -529,6 +529,23 @@ def test_contribution_finance_role_and_receipt_privacy_are_enforced(client: Test
     )
     assert duplicate_confirm.status_code == 409
 
+    provider_refund = client.post(
+        f"/api/v1/contributions/admin/contributions/{confirmed['id']}/provider-refund",
+        headers=admin_headers,
+        json={"note": "Local provider refund fallback."},
+    )
+    assert provider_refund.status_code == 200
+    provider_refunded = provider_refund.json()
+    assert provider_refunded["status"] == "REFUNDED"
+    assert provider_refunded["receipt_id"] == confirmed["receipt_id"]
+
+    duplicate_provider_refund = client.post(
+        f"/api/v1/contributions/admin/contributions/{confirmed['id']}/provider-refund",
+        headers=admin_headers,
+        json={"note": "Second provider refund should be blocked."},
+    )
+    assert duplicate_provider_refund.status_code == 409
+
     payment_response = client.post(
         f"/api/v1/contributions/{campaign_id}/pay",
         headers=member_headers,
@@ -544,6 +561,24 @@ def test_contribution_finance_role_and_receipt_privacy_are_enforced(client: Test
         json={"note": "Member cannot refund."},
     )
     assert denied_refund.status_code == 403
+
+    denied_provider_refund = client.post(
+        f"/api/v1/contributions/admin/contributions/{payment['id']}/provider-refund",
+        headers=member_headers,
+        json={"note": "Member cannot request provider refund."},
+    )
+    assert denied_provider_refund.status_code == 403
+
+    missing_reference_provider_refund = client.post(
+        f"/api/v1/contributions/admin/contributions/{payment['id']}/provider-refund",
+        headers=admin_headers,
+        json={"note": "Provider refund needs a provider reference."},
+    )
+    assert missing_reference_provider_refund.status_code == 409
+    assert (
+        missing_reference_provider_refund.json()["detail"]
+        == "Provider refund requires a payment reference"
+    )
 
     other_receipt = client.get(
         f"/api/v1/contributions/receipts/{receipt_id}",

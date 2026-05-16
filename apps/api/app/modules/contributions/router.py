@@ -1356,6 +1356,44 @@ def refund_contribution(
     )
 
 
+@router.post("/admin/{contribution_id}/provider-refund", response_model=ContributionResponse)
+@router.post(
+    "/admin/contributions/{contribution_id}/provider-refund",
+    response_model=ContributionResponse,
+)
+def provider_refund_contribution(
+    contribution_id: uuid.UUID,
+    payload: ContributionCampaignStatusAction,
+    request: Request,
+    current_user: Annotated[User, Depends(finance_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> ContributionResponse:
+    contribution = _get_contribution_or_404(db, contribution_id)
+    if contribution.status != RECEIVED_STATUS:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only received contributions can be refunded",
+        )
+    if not contribution.payment_reference:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Provider refund requires a payment reference",
+        )
+    return _apply_contribution_adjustment(
+        action="Provider refund",
+        contribution=contribution,
+        current_user=current_user,
+        db=db,
+        event_type="contributions.provider_refund_requested",
+        ledger_amount_cents=-contribution.amount_cents,
+        ledger_type=LEDGER_REFUND,
+        next_status=REFUNDED_STATUS,
+        note=payload.note,
+        receipt_status=REFUNDED_STATUS,
+        request=request,
+    )
+
+
 @router.post("/admin/{contribution_id}/void", response_model=ContributionResponse)
 @router.post("/admin/contributions/{contribution_id}/void", response_model=ContributionResponse)
 def void_contribution(

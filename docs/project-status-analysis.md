@@ -8,6 +8,85 @@ The current Yalumni project is a useful Laravel 9 alumni management platform, bu
 
 The V1.5 implementation is active in `D:\YALUMNI-V1.5`. The new repository now contains a platform foundation with a FastAPI backend, Next.js web shell, Docker Compose, CI workflow, shared packages, copied YALUMNI logo assets, and documentation.
 
+## Current V1.5 Implementation Update: 2026-05-16 Contribution Provider Refund Orchestration Slice
+
+Completed after the contribution webhook diagnostics slice:
+
+- Added finance-admin provider-refund routes at
+  `/api/v1/contributions/admin/contributions/{contribution_id}/provider-refund`
+  and the legacy `/api/v1/contributions/admin/{contribution_id}/provider-refund`
+  alias.
+- Provider-refund fallback now requires a received contribution with a stored
+  payment reference, then reuses the existing ledger-safe refund path to mark
+  the contribution and receipt as `REFUNDED`.
+- The provider-refund action records a negative treasury ledger refund entry and
+  emits a `contributions.provider_refund_requested` security event for audit
+  visibility.
+- Expanded contribution tests to verify successful provider-refund fallback,
+  duplicate refund rejection, and member denial on the finance-admin endpoint.
+
+Current plan position:
+
+- Phase 1 remains functionally complete for local foundation.
+- Phase 2 remains roughly 91% complete.
+- Phase 3 remains roughly 52% complete.
+- Phase 4 remains roughly 38% complete.
+- Phase 5 remains roughly 81% complete.
+- Phase 6 feed/moderation remains roughly 55% complete.
+- Phase 7 messaging/notifications remains roughly 51% complete.
+- Phase 8 events remains roughly 28% complete.
+- Post-MVP initiatives remain roughly 24% complete.
+- Post-MVP mentorship remains roughly 18% complete.
+- Post-MVP elections remain roughly 24% complete.
+- Post-MVP contributions/treasury are now roughly 41% complete because local
+  provider-refund orchestration is represented in the API, ledger, receipts, and
+  tests.
+- Overall 24-week MVP-plus implementation remains roughly 72% complete.
+
+Implemented now:
+
+- Runtime split across public/member `3010`, admin RBAC `3011`, super-admin
+  `3012`, and FastAPI `8002`.
+- Auth, protected platform owner seed, web sessions, CSRF, 2FA enforcement, rate
+  limiting, verification, YALUMNI directory, MWF alumni cache directory plus
+  worker/history operations, communities, notifications, direct messages,
+  moderation, opportunities, resources, success stories, member events, member
+  initiatives, mentorship foundation, elections foundation, contributions
+  foundation, local payment intent creation/confirmation, signed contribution
+  provider webhook reconciliation, webhook diagnostics persistence, local
+  provider-refund fallback, contribution finance exports, signed treasury audit
+  packages, certified treasury audit PDF reports, local refund/void finance
+  adjustments, and generated receipt PDFs.
+
+Main gaps now:
+
+- Contributions still need real provider checkout/client secret integration,
+  provider-specific adapters, provider-side refund API calls, checkout-level
+  attempt storage, campaign approvals, disbursement requests, expense reports,
+  multi-currency accounting rules, and immutable stored audit package
+  approval/certification workflows.
+- Elections still need nomination workflows, candidate approval/rejection,
+  position-based multi-seat ballots, stronger anonymous ballot envelopes,
+  dispute handling, exportable certified audit reports, notification hooks,
+  voter-roll imports from chapters/cohorts, and admin detail subroutes beyond
+  the consolidated console panel.
+- Chapter analytics still needs a backend module.
+- Mentorship still needs matching recommendations, scheduling, mentor capacity
+  enforcement beyond counts, session notes, feedback, reporting/moderation,
+  notifications, and admin analytics.
+- MWF cache still needs admin diff review, source-field quality dashboards,
+  retention policy controls, and scheduled background sync infrastructure.
+
+Recommended next implementation slices:
+
+1. Provider checkout/client-secret foundation with provider-neutral payment
+   attempt records.
+2. Real provider refund adapters that call the payment provider before the local
+   refund ledger transition.
+3. Treasury certification workflow with stored reviewer approvals and immutable
+   audit-package snapshots.
+4. Chapter analytics backend module feeding the existing admin route shell.
+
 ## Current V1.5 Implementation Update: 2026-05-15 Contribution Webhook Diagnostics Slice
 
 Completed after the provider webhook reconciliation slice:

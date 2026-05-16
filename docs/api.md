@@ -587,13 +587,13 @@ POST   /api/v1/contributions/admin/campaigns/{campaign_id}/close   # implemented
 GET    /api/v1/contributions/admin/contributions     # implemented
 GET    /api/v1/contributions/admin/webhook-events     # implemented webhook diagnostics log
 POST   /api/v1/contributions/admin/contributions/{contribution_id}/refund # implemented local ledger reversal
+POST   /api/v1/contributions/admin/contributions/{contribution_id}/provider-refund # implemented local provider refund fallback
 POST   /api/v1/contributions/admin/contributions/{contribution_id}/void # implemented pending contribution cancellation
 GET    /api/v1/contributions/admin/contributions/export # implemented CSV export
 GET    /api/v1/contributions/admin/treasury          # implemented
 GET    /api/v1/contributions/admin/treasury/export   # implemented ledger CSV export
 GET    /api/v1/contributions/admin/treasury/audit-package # implemented signed JSON snapshot
 GET    /api/v1/contributions/admin/treasury/audit-report # implemented certified PDF report
-POST   /api/v1/contributions/admin/{contribution_id}/provider-refund # planned provider-side refund orchestration
 ```
 
 ## Admin
