@@ -1021,6 +1021,15 @@ def _create_checkout_session(
     )
 
 
+def _create_provider_refund_request(*, contribution: Contribution, provider: str) -> None:
+    if provider == "LOCAL_TEST":
+        return
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail=f"Contribution refund provider {provider} is not implemented",
+    )
+
+
 def _create_payment_attempt(
     *,
     checkout_session: CheckoutSessionDraft,
@@ -1526,6 +1535,8 @@ def provider_refund_contribution(
             status_code=status.HTTP_409_CONFLICT,
             detail="Provider refund requires a payment reference",
         )
+    refund_provider = _normalize_enum(get_settings().contribution_refund_provider) or "LOCAL_TEST"
+    _create_provider_refund_request(contribution=contribution, provider=refund_provider)
     return _apply_contribution_adjustment(
         action="Provider refund",
         contribution=contribution,

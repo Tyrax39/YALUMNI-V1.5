@@ -131,10 +131,12 @@
   with receipt number, issued-to details, amount, currency, status, and tax note.
 - `contribution_ledger_entries` - implemented for foundation credit entries,
   negative refund reversals, local provider-refund fallback reversals, and
-  zero-value void markers tied to recorded contributions. Member text/PDF
-  receipt downloads, finance CSV exports, signed JSON treasury audit packages,
-  certified PDF audit reports, and admin adjustment controls currently read
-  these live tables directly rather than using separate export snapshot tables.
+  zero-value void markers tied to recorded contributions. Provider-refund
+  requests now fail closed unless the configured refund provider has an adapter.
+  Member text/PDF receipt downloads, finance CSV exports, signed JSON treasury
+  audit packages, certified PDF audit reports, and admin adjustment controls
+  currently read these live tables directly rather than using separate export
+  snapshot tables.
 - `pledges` - future split from confirmed local contribution recording.
 - Provider payment attempts still need real provider authorization details,
   external checkout sessions, retries, and multi-attempt checkout orchestration

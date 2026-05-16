@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     seed_test_accounts: bool = False
     test_accounts_password: str = "YalumniTest@12345!"
     contribution_checkout_provider: str = "LOCAL_TEST"
+    contribution_refund_provider: str = "LOCAL_TEST"
     contribution_webhook_secret: str | None = None
     mwf_directory_fellows_url: str = (
         "https://www.mandelawashingtonfellowship.org/wp-json/yali/v1/fellows/"

@@ -212,6 +212,51 @@ def test_payment_intent_rejects_unimplemented_checkout_provider(client: TestClie
         settings.contribution_checkout_provider = previous_provider
 
 
+def test_provider_refund_rejects_unimplemented_refund_provider(client: TestClient) -> None:
+    settings = get_settings()
+    previous_provider = settings.contribution_refund_provider
+    settings.contribution_refund_provider = "stripe"
+    try:
+        admin_headers = create_admin(client, "refund.boundary.finance@example.com")
+        member = register_user(client, "refund.boundary.donor@example.com", "Refund Donor")
+        member_headers = auth_headers(member["access_token"])
+        campaign = create_published_campaign(
+            client,
+            admin_headers,
+            "Refund boundary scholarship fund",
+        )
+        intent_response = client.post(
+            f"/api/v1/contributions/{campaign['id']}/payment-intents",
+            headers=member_headers,
+            json={
+                "amount_cents": 8500,
+                "currency": "USD",
+                "payment_method": "CARD_TEST",
+            },
+        )
+        assert intent_response.status_code == 201
+        intent = intent_response.json()
+        confirmed_response = client.post(
+            f"/api/v1/contributions/{campaign['id']}/payment-intents/{intent['id']}/confirm",
+            headers=member_headers,
+        )
+        assert confirmed_response.status_code == 201
+        confirmed = confirmed_response.json()
+
+        provider_refund_response = client.post(
+            f"/api/v1/contributions/admin/contributions/{confirmed['id']}/provider-refund",
+            headers=admin_headers,
+            json={"note": "Refund should wait for a real provider adapter."},
+        )
+        assert provider_refund_response.status_code == 503
+        assert (
+            provider_refund_response.json()["detail"]
+            == "Contribution refund provider STRIPE is not implemented"
+        )
+    finally:
+        settings.contribution_refund_provider = previous_provider
+
+
 def payment_attempt_snapshots_for_intent(payment_intent_id: str) -> list[dict]:
     db_override = app.dependency_overrides[get_db_session]
     db_iterator = db_override()

@@ -127,6 +127,7 @@ GET  /api/v1/contributions/admin/contributions
 GET  /api/v1/contributions/admin/payment-attempts
 GET  /api/v1/contributions/admin/webhook-events
 POST /api/v1/contributions/admin/contributions/{contribution_id}/refund
+POST /api/v1/contributions/admin/contributions/{contribution_id}/provider-refund
 POST /api/v1/contributions/admin/contributions/{contribution_id}/void
 GET  /api/v1/contributions/admin/contributions/export
 GET  /api/v1/contributions/admin/treasury
@@ -174,6 +175,8 @@ Contribution checkout support:
 
 - `CONTRIBUTION_CHECKOUT_PROVIDER=LOCAL_TEST` is the implemented checkout
   adapter. Other provider names fail closed until their adapters are added.
+- `CONTRIBUTION_REFUND_PROVIDER=LOCAL_TEST` is the implemented refund adapter
+  boundary. Other provider names fail closed until their refund APIs are added.
 - Finance admins can inspect persisted checkout attempts through
   `GET /api/v1/contributions/admin/payment-attempts` with `provider`, `status`,
   `provider_intent_id`, `payment_intent_id`, `limit`, and `offset` filters.
