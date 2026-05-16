@@ -263,10 +263,12 @@ def payment_attempt_snapshots_for_intent(payment_intent_id: str) -> list[dict]:
     db = next(db_iterator)
     try:
         attempts = db.scalars(
-            select(contribution_models.ContributionPaymentAttempt).where(
+            select(contribution_models.ContributionPaymentAttempt)
+            .where(
                 contribution_models.ContributionPaymentAttempt.payment_intent_id
                 == uuid.UUID(payment_intent_id)
             )
+            .order_by(contribution_models.ContributionPaymentAttempt.created_at)
         ).all()
         return [
             {
@@ -945,7 +947,9 @@ def test_provider_webhook_marks_failed_payment_intent_idempotently(
     try:
         admin_headers = create_admin(client, "webhook.failed.finance@example.com")
         member = register_user(client, "webhook.failed.donor@example.com", "Webhook Failed Donor")
+        other = register_user(client, "webhook.failed.other@example.com", "Other Donor")
         member_headers = auth_headers(member["access_token"])
+        other_headers = auth_headers(other["access_token"])
         campaign = create_published_campaign(
             client,
             admin_headers,
@@ -1009,5 +1013,33 @@ def test_provider_webhook_marks_failed_payment_intent_idempotently(
             headers=member_headers,
         )
         assert manual_confirm.status_code == 409
+        denied_retry = client.post(
+            f"/api/v1/contributions/{campaign['id']}/payment-intents/{intent['id']}/retry",
+            headers=other_headers,
+        )
+        assert denied_retry.status_code == 404
+        retry_response = client.post(
+            f"/api/v1/contributions/{campaign['id']}/payment-intents/{intent['id']}/retry",
+            headers=member_headers,
+        )
+        assert retry_response.status_code == 201
+        retried_intent = retry_response.json()
+        assert retried_intent["id"] == intent["id"]
+        assert retried_intent["status"] == "REQUIRES_CONFIRMATION"
+        assert retried_intent["checkout_attempt_id"] != intent["checkout_attempt_id"]
+        assert retried_intent["provider_intent_id"] == intent["provider_intent_id"]
+        assert retried_intent["client_secret"] != intent["client_secret"]
+        retried_attempts = payment_attempt_snapshots_for_intent(intent["id"])
+        assert [attempt["status"] for attempt in retried_attempts] == [
+            "FAILED",
+            "REQUIRES_CONFIRMATION",
+        ]
+
+        confirmed_retry = client.post(
+            f"/api/v1/contributions/{campaign['id']}/payment-intents/{intent['id']}/confirm",
+            headers=member_headers,
+        )
+        assert confirmed_retry.status_code == 201
+        assert confirmed_retry.json()["payment_reference"] == intent["provider_intent_id"]
     finally:
         settings.contribution_webhook_secret = previous_secret

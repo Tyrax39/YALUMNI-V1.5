@@ -126,7 +126,9 @@
   metadata, lifecycle status, and error message. Checkout creation now uses a
   provider adapter boundary with `LOCAL_TEST` implemented and other providers
   rejected until their adapters exist. Finance-admin diagnostics can now list
-  attempts without exposing stored client secrets.
+  attempts without exposing stored client secrets. Failed or canceled local
+  payment intents can now create a new checkout attempt while preserving the
+  original payment intent record.
 - `contribution_receipts` - implemented for one issued receipt per contribution
   with receipt number, issued-to details, amount, currency, status, and tax note.
 - `contribution_ledger_entries` - implemented for foundation credit entries,
@@ -139,8 +141,8 @@
   snapshot tables.
 - `pledges` - future split from confirmed local contribution recording.
 - Provider payment attempts still need real provider authorization details,
-  external checkout sessions, retries, and multi-attempt checkout orchestration
-  beyond the current local checkout-adapter foundation.
+  external checkout sessions, and production-grade multi-attempt checkout
+  orchestration beyond the current local retry foundation.
 - `disbursement_requests`
 - `disbursement_approvals`
 - `expense_reports`

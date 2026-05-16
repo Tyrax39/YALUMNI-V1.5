@@ -113,6 +113,7 @@ DELETE /api/v1/messages/blocks/{blocked_user_id}
 GET  /api/v1/contributions
 GET  /api/v1/contributions/{campaign_id}
 POST /api/v1/contributions/{campaign_id}/payment-intents
+POST /api/v1/contributions/{campaign_id}/payment-intents/{payment_intent_id}/retry
 POST /api/v1/contributions/{campaign_id}/payment-intents/{payment_intent_id}/confirm
 POST /api/v1/contributions/webhooks/{provider}
 POST /api/v1/contributions/{campaign_id}/pay
@@ -177,6 +178,10 @@ Contribution checkout support:
   adapter. Other provider names fail closed until their adapters are added.
 - `CONTRIBUTION_REFUND_PROVIDER=LOCAL_TEST` is the implemented refund adapter
   boundary. Other provider names fail closed until their refund APIs are added.
+- Failed or canceled local checkout attempts can be retried with
+  `POST /api/v1/contributions/{campaign_id}/payment-intents/{payment_intent_id}/retry`.
+  The retry creates a new checkout attempt and returns the refreshed local
+  client secret; in-flight and confirmed intents remain protected from retry.
 - Finance admins can inspect persisted checkout attempts through
   `GET /api/v1/contributions/admin/payment-attempts` with `provider`, `status`,
   `provider_intent_id`, `payment_intent_id`, `limit`, and `offset` filters.
@@ -588,6 +593,7 @@ POST   /api/v1/elections/{election_id}/disputes       # planned
 GET    /api/v1/contributions                         # implemented
 GET    /api/v1/contributions/{campaign_id}           # implemented
 POST   /api/v1/contributions/{campaign_id}/payment-intents # implemented local intent + checkout adapter/client secret
+POST   /api/v1/contributions/{campaign_id}/payment-intents/{payment_intent_id}/retry # implemented local failed/canceled retry
 POST   /api/v1/contributions/{campaign_id}/payment-intents/{payment_intent_id}/confirm # implemented local intent confirmation
 POST   /api/v1/contributions/webhooks/{provider}     # implemented signed webhook reconciliation foundation
 POST   /api/v1/contributions/{campaign_id}/pay       # implemented local confirmed payment

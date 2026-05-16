@@ -1052,6 +1052,18 @@ def _create_payment_attempt(
     )
 
 
+def _payment_intent_retry_payload(
+    payment_intent: ContributionPaymentIntent,
+) -> ContributionPaymentIntentCreate:
+    return ContributionPaymentIntentCreate(
+        amount_cents=payment_intent.amount_cents,
+        anonymous=payment_intent.anonymous,
+        currency=payment_intent.currency,
+        note=payment_intent.note,
+        payment_method=payment_intent.payment_method,
+    )
+
+
 def _update_latest_payment_attempt_status(
     db: Session,
     payment_intent: ContributionPaymentIntent,
@@ -1972,6 +1984,63 @@ def create_payment_intent(
             "payment_attempt_id": str(payment_attempt.id),
             "payment_intent_id": str(payment_intent.id),
             "payment_method": payment_intent.payment_method,
+            "provider": payment_intent.provider,
+            "status": payment_intent.status,
+        },
+    )
+    db.commit()
+    db.refresh(payment_intent)
+    return _serialize_payment_intent(payment_intent)
+
+
+@router.post(
+    "/{campaign_id}/payment-intents/{payment_intent_id}/retry",
+    response_model=ContributionPaymentIntentResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def retry_payment_intent(
+    campaign_id: uuid.UUID,
+    payment_intent_id: uuid.UUID,
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> ContributionPaymentIntentResponse:
+    payment_intent = _get_payment_intent_or_404(
+        db,
+        campaign_id=campaign_id,
+        payment_intent_id=payment_intent_id,
+    )
+    _ensure_payment_intent_access(payment_intent, current_user)
+    _ensure_campaign_visible(payment_intent.campaign, current_user)
+    if payment_intent.status not in {PAYMENT_INTENT_FAILED, PAYMENT_INTENT_CANCELED}:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only failed or canceled payment intents can be retried",
+        )
+    _ensure_campaign_accepts_payment(payment_intent.campaign)
+    checkout_session = _create_checkout_session(
+        campaign=payment_intent.campaign,
+        intent_id=payment_intent.id,
+        payload=_payment_intent_retry_payload(payment_intent),
+        provider=_configured_checkout_provider(),
+    )
+    payment_intent.provider = checkout_session.provider
+    payment_intent.provider_intent_id = checkout_session.provider_intent_id
+    payment_intent.status = PAYMENT_INTENT_REQUIRES_CONFIRMATION
+    payment_attempt = _create_payment_attempt(
+        checkout_session=checkout_session,
+        payment_intent=payment_intent,
+    )
+    db.add(payment_attempt)
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "contributions.payment_intent_retried",
+        {
+            "campaign_id": str(payment_intent.campaign_id),
+            "payment_attempt_id": str(payment_attempt.id),
+            "payment_intent_id": str(payment_intent.id),
             "provider": payment_intent.provider,
             "status": payment_intent.status,
         },
