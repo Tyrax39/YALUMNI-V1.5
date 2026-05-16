@@ -101,6 +101,33 @@ class ContributionPaymentIntentResponse(BaseModel):
     updated_at: datetime
 
 
+class ContributionPaymentAttemptResponse(BaseModel):
+    amount_cents: int
+    campaign_id: uuid.UUID | None
+    contributor_user_id: uuid.UUID | None
+    created_at: datetime
+    currency: str
+    error_message: str | None
+    has_checkout_url: bool
+    has_client_secret: bool
+    id: uuid.UUID
+    payment_intent_id: uuid.UUID
+    payment_intent_status: str | None
+    payment_method: str
+    provider: str
+    provider_intent_id: str
+    status: str
+    updated_at: datetime
+
+
+class ContributionPaymentAttemptListResponse(BaseModel):
+    attempts: list[ContributionPaymentAttemptResponse]
+    has_more: bool
+    limit: int
+    offset: int
+    total: int
+
+
 class ContributionWebhookPayload(BaseModel):
     event_type: str = Field(min_length=1, max_length=80)
     provider_event_id: str | None = Field(default=None, max_length=160)

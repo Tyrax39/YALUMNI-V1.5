@@ -125,7 +125,8 @@
   reference, local client secret, optional checkout URL, request/response
   metadata, lifecycle status, and error message. Checkout creation now uses a
   provider adapter boundary with `LOCAL_TEST` implemented and other providers
-  rejected until their adapters exist.
+  rejected until their adapters exist. Finance-admin diagnostics can now list
+  attempts without exposing stored client secrets.
 - `contribution_receipts` - implemented for one issued receipt per contribution
   with receipt number, issued-to details, amount, currency, status, and tax note.
 - `contribution_ledger_entries` - implemented for foundation credit entries,

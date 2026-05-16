@@ -37,6 +37,8 @@ from app.modules.contributions.schemas import (
     ContributionCampaignStatusAction,
     ContributionLedgerEntryResponse,
     ContributionListResponse,
+    ContributionPaymentAttemptListResponse,
+    ContributionPaymentAttemptResponse,
     ContributionPaymentCreate,
     ContributionPaymentIntentCreate,
     ContributionPaymentIntentResponse,
@@ -412,6 +414,30 @@ def _serialize_payment_intent(
         provider_intent_id=payment_intent.provider_intent_id,
         status=payment_intent.status,
         updated_at=payment_intent.updated_at,
+    )
+
+
+def _serialize_payment_attempt(
+    payment_attempt: ContributionPaymentAttempt,
+) -> ContributionPaymentAttemptResponse:
+    payment_intent = payment_attempt.payment_intent
+    return ContributionPaymentAttemptResponse(
+        amount_cents=payment_attempt.amount_cents,
+        campaign_id=payment_intent.campaign_id if payment_intent else None,
+        contributor_user_id=payment_intent.contributor_user_id if payment_intent else None,
+        created_at=payment_attempt.created_at,
+        currency=payment_attempt.currency,
+        error_message=payment_attempt.error_message,
+        has_checkout_url=bool(payment_attempt.checkout_url),
+        has_client_secret=bool(payment_attempt.client_secret),
+        id=payment_attempt.id,
+        payment_intent_id=payment_attempt.payment_intent_id,
+        payment_intent_status=payment_intent.status if payment_intent else None,
+        payment_method=payment_attempt.payment_method,
+        provider=payment_attempt.provider,
+        provider_intent_id=payment_attempt.provider_intent_id,
+        status=payment_attempt.status,
+        updated_at=payment_attempt.updated_at,
     )
 
 
@@ -1979,6 +2005,47 @@ def confirm_payment_intent(
         request=request,
     )
     return _serialize_contribution(contribution)
+
+
+@router.get("/admin/payment-attempts", response_model=ContributionPaymentAttemptListResponse)
+@router.get("/admin/payment-attempts/", response_model=ContributionPaymentAttemptListResponse)
+def list_admin_payment_attempts(
+    current_user: Annotated[User, Depends(finance_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+    payment_intent_id: Annotated[uuid.UUID | None, Query()] = None,
+    provider: Annotated[str | None, Query(max_length=60)] = None,
+    provider_intent_id: Annotated[str | None, Query(max_length=120)] = None,
+    status_filter: Annotated[str | None, Query(alias="status", max_length=40)] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> ContributionPaymentAttemptListResponse:
+    _ = current_user
+    query = select(ContributionPaymentAttempt).options(
+        joinedload(ContributionPaymentAttempt.payment_intent)
+    )
+    normalized_provider = _normalize_enum(provider)
+    normalized_status = _normalize_enum(status_filter)
+    if payment_intent_id:
+        query = query.where(ContributionPaymentAttempt.payment_intent_id == payment_intent_id)
+    if normalized_provider:
+        query = query.where(ContributionPaymentAttempt.provider == normalized_provider)
+    if normalized_status:
+        query = query.where(ContributionPaymentAttempt.status == normalized_status)
+    if provider_intent_id:
+        query = query.where(
+            ContributionPaymentAttempt.provider_intent_id == provider_intent_id.strip()
+        )
+    total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+    attempts = db.scalars(
+        query.order_by(ContributionPaymentAttempt.created_at.desc()).offset(offset).limit(limit)
+    ).all()
+    return ContributionPaymentAttemptListResponse(
+        attempts=[_serialize_payment_attempt(attempt) for attempt in attempts],
+        has_more=offset + len(attempts) < total,
+        limit=limit,
+        offset=offset,
+        total=total,
+    )
 
 
 @router.get("/admin/webhook-events", response_model=ContributionWebhookEventListResponse)

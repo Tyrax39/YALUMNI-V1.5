@@ -493,6 +493,11 @@ def test_contribution_finance_role_and_receipt_privacy_are_enforced(client: Test
         headers=member_headers,
     )
     assert denied_webhook_events.status_code == 403
+    denied_payment_attempts = client.get(
+        "/api/v1/contributions/admin/payment-attempts",
+        headers=member_headers,
+    )
+    assert denied_payment_attempts.status_code == 403
 
     create_response = client.post(
         "/api/v1/contributions/admin/campaigns",
@@ -565,6 +570,28 @@ def test_contribution_finance_role_and_receipt_privacy_are_enforced(client: Test
     assert intent["checkout_attempt_id"]
     assert intent["checkout_url"] is None
     assert intent["client_secret"].startswith(f"{intent['provider_intent_id']}_secret_")
+    admin_attempts = client.get(
+        "/api/v1/contributions/admin/payment-attempts"
+        "?provider=local-test&status=requires-confirmation",
+        headers=admin_headers,
+    )
+    assert admin_attempts.status_code == 200
+    admin_attempt_list = admin_attempts.json()
+    assert admin_attempt_list["total"] == 1
+    assert admin_attempt_list["has_more"] is False
+    assert admin_attempt_list["limit"] == 25
+    assert admin_attempt_list["offset"] == 0
+    admin_attempt = admin_attempt_list["attempts"][0]
+    assert admin_attempt["id"] == intent["checkout_attempt_id"]
+    assert admin_attempt["payment_intent_id"] == intent["id"]
+    assert admin_attempt["payment_intent_status"] == "REQUIRES_CONFIRMATION"
+    assert admin_attempt["campaign_id"] == campaign_id
+    assert admin_attempt["contributor_user_id"] == member["user"]["id"]
+    assert admin_attempt["provider"] == "LOCAL_TEST"
+    assert admin_attempt["provider_intent_id"] == intent["provider_intent_id"]
+    assert admin_attempt["has_client_secret"] is True
+    assert admin_attempt["has_checkout_url"] is False
+    assert admin_attempt["error_message"] is None
     created_attempts = payment_attempt_snapshots_for_intent(intent["id"])
     assert created_attempts == [
         {
@@ -593,6 +620,19 @@ def test_contribution_finance_role_and_receipt_privacy_are_enforced(client: Test
     assert confirmed["payment_reference"] == intent["provider_intent_id"]
     assert confirmed["receipt_id"]
     assert confirmed["status"] == "RECEIVED"
+    confirmed_admin_attempts = client.get(
+        f"/api/v1/contributions/admin/payment-attempts"
+        f"?payment_intent_id={intent['id']}&status=confirmed",
+        headers=admin_headers,
+    )
+    assert confirmed_admin_attempts.status_code == 200
+    confirmed_admin_attempt_list = confirmed_admin_attempts.json()
+    assert confirmed_admin_attempt_list["total"] == 1
+    assert confirmed_admin_attempt_list["attempts"][0]["status"] == "CONFIRMED"
+    assert (
+        confirmed_admin_attempt_list["attempts"][0]["payment_intent_status"]
+        == "CONFIRMED"
+    )
     confirmed_attempts = payment_attempt_snapshots_for_intent(intent["id"])
     assert confirmed_attempts[0]["status"] == "CONFIRMED"
     assert confirmed_attempts[0]["error_message"] is None
