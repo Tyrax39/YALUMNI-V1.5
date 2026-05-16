@@ -149,6 +149,14 @@
   review/payment timestamps. Requests reserve available received campaign funds
   while in requested/approved/paid states, but they do not yet write treasury
   ledger expense entries.
+- `contribution_expense_reports` - implemented for finance-admin expense reports
+  tied to paid disbursement requests, with amount, currency, vendor, expense date,
+  summary, description, submitter, reviewer, submitted/approved/rejected status,
+  notes, and review timestamps. Submitted and approved reports reserve paid
+  disbursement funds but do not yet create independent expense ledger entries.
+- `contribution_expense_evidence` - implemented for structured expense report
+  evidence rows including evidence type, title, reference URL, receipt number,
+  optional amount, issued timestamp, and notes.
 - `pledges` - future split from confirmed local contribution recording.
 - Provider payment attempts still need real provider authorization details,
   external checkout sessions, and production-grade multi-attempt checkout
@@ -156,7 +164,6 @@
 - `disbursement_approvals` - may become a separate multi-reviewer table if
   disbursements require quorum-based approvals beyond the current single
   finance-admin review fields.
-- `expense_reports`
 - `treasury_export_runs` - still planned only if one-off CSV/PDF export history
   needs separate operational tracking beyond stored certification snapshots.
 

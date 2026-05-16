@@ -701,6 +701,178 @@ def test_contribution_disbursement_request_foundation(client: TestClient) -> Non
     assert all_disbursements.json()["total"] == 2
 
 
+def test_contribution_expense_report_foundation(client: TestClient) -> None:
+    admin_headers = create_admin(client, "expense.finance@example.com")
+    donor = register_user(client, "expense.donor@example.com", "Expense Donor")
+    donor_headers = auth_headers(donor["access_token"])
+    campaign = create_published_campaign(
+        client,
+        admin_headers,
+        "Expense report scholarship fund",
+    )
+    contribution_response = client.post(
+        f"/api/v1/contributions/{campaign['id']}/pay",
+        headers=donor_headers,
+        json={
+            "amount_cents": 10000,
+            "currency": "USD",
+            "note": "Fund expense report testing.",
+            "payment_method": "CARD_TEST",
+            "payment_reference": "EXP-100",
+        },
+    )
+    assert contribution_response.status_code == 201
+
+    disbursement_payload = {
+        "amount_cents": 6000,
+        "currency": "USD",
+        "note": "Program expense request.",
+        "payee_name": "Chapter Project Lead",
+        "payee_reference": "BANK-EXPENSE-001",
+        "purpose": "Scholarship material purchase for expense report testing.",
+    }
+    disbursement_response = client.post(
+        f"/api/v1/contributions/admin/campaigns/{campaign['id']}/disbursement-requests",
+        headers=admin_headers,
+        json=disbursement_payload,
+    )
+    assert disbursement_response.status_code == 201
+    disbursement = disbursement_response.json()
+
+    unpaid_expense = client.post(
+        f"/api/v1/contributions/admin/disbursement-requests/{disbursement['id']}/expense-reports",
+        headers=admin_headers,
+        json={
+            "amount_cents": 5000,
+            "currency": "USD",
+            "summary": "Attempted expense before payment",
+            "vendor_name": "Book Supplier Ltd",
+        },
+    )
+    assert unpaid_expense.status_code == 409
+
+    approve_response = client.post(
+        f"/api/v1/contributions/admin/disbursement-requests/{disbursement['id']}/approve",
+        headers=admin_headers,
+        json={"note": "Approved for expense reporting."},
+    )
+    assert approve_response.status_code == 200
+    mark_paid_response = client.post(
+        f"/api/v1/contributions/admin/disbursement-requests/{disbursement['id']}/mark-paid",
+        headers=admin_headers,
+        json={"note": "Paid by bank transfer."},
+    )
+    assert mark_paid_response.status_code == 200
+
+    expense_payload = {
+        "amount_cents": 5500,
+        "currency": "USD",
+        "description": "Purchased learning materials for scholarship recipients.",
+        "evidence_items": [
+            {
+                "amount_cents": 5500,
+                "evidence_type": "receipt",
+                "receipt_number": "RCPT-BOOK-001",
+                "reference_url": "https://example.com/receipt/book-001",
+                "title": "Book supplier receipt",
+            }
+        ],
+        "note": "Submitted with supplier receipt.",
+        "summary": "Purchased scholarship books",
+        "vendor_name": "Book Supplier Ltd",
+    }
+    denied_create = client.post(
+        f"/api/v1/contributions/admin/disbursement-requests/{disbursement['id']}/expense-reports",
+        headers=donor_headers,
+        json=expense_payload,
+    )
+    assert denied_create.status_code == 403
+
+    overreported_create = client.post(
+        f"/api/v1/contributions/admin/disbursement-requests/{disbursement['id']}/expense-reports",
+        headers=admin_headers,
+        json={**expense_payload, "amount_cents": 7000},
+    )
+    assert overreported_create.status_code == 409
+
+    create_response = client.post(
+        f"/api/v1/contributions/admin/disbursement-requests/{disbursement['id']}/expense-reports",
+        headers=admin_headers,
+        json=expense_payload,
+    )
+    assert create_response.status_code == 201
+    expense_report = create_response.json()
+    assert expense_report["amount_cents"] == 5500
+    assert expense_report["campaign_id"] == campaign["id"]
+    assert expense_report["campaign_title"] == campaign["title"]
+    assert expense_report["disbursement_request_id"] == disbursement["id"]
+    assert expense_report["status"] == "SUBMITTED"
+    assert expense_report["submitted_by_email"] == "expense.finance@example.com"
+    assert expense_report["evidence_items"][0]["evidence_type"] == "RECEIPT"
+    assert expense_report["evidence_items"][0]["receipt_number"] == "RCPT-BOOK-001"
+
+    submitted_list = client.get(
+        "/api/v1/contributions/admin/expense-reports",
+        headers=admin_headers,
+        params={"status": "submitted"},
+    )
+    assert submitted_list.status_code == 200
+    assert submitted_list.json()["total"] == 1
+
+    detail_response = client.get(
+        f"/api/v1/contributions/admin/expense-reports/{expense_report['id']}",
+        headers=admin_headers,
+    )
+    assert detail_response.status_code == 200
+    assert detail_response.json()["evidence_items"][0]["title"] == "Book supplier receipt"
+
+    reserved_overreport = client.post(
+        f"/api/v1/contributions/admin/disbursement-requests/{disbursement['id']}/expense-reports",
+        headers=admin_headers,
+        json={**expense_payload, "amount_cents": 600, "summary": "Extra book purchase"},
+    )
+    assert reserved_overreport.status_code == 409
+
+    approve_expense = client.post(
+        f"/api/v1/contributions/admin/expense-reports/{expense_report['id']}/approve",
+        headers=admin_headers,
+        json={"note": "Receipt reviewed and approved."},
+    )
+    assert approve_expense.status_code == 200
+    approved_expense = approve_expense.json()
+    assert approved_expense["decision_note"] == "Receipt reviewed and approved."
+    assert approved_expense["reviewed_by_email"] == "expense.finance@example.com"
+    assert approved_expense["status"] == "APPROVED"
+
+    duplicate_approve = client.post(
+        f"/api/v1/contributions/admin/expense-reports/{expense_report['id']}/approve",
+        headers=admin_headers,
+        json={"note": "Already approved."},
+    )
+    assert duplicate_approve.status_code == 409
+
+    second_expense = client.post(
+        f"/api/v1/contributions/admin/disbursement-requests/{disbursement['id']}/expense-reports",
+        headers=admin_headers,
+        json={**expense_payload, "amount_cents": 500, "summary": "Final book delivery"},
+    )
+    assert second_expense.status_code == 201
+    reject_expense = client.post(
+        f"/api/v1/contributions/admin/expense-reports/{second_expense.json()['id']}/reject",
+        headers=admin_headers,
+        json={"note": "Duplicate receipt reference."},
+    )
+    assert reject_expense.status_code == 200
+    assert reject_expense.json()["status"] == "REJECTED"
+
+    all_expenses = client.get(
+        "/api/v1/contributions/admin/expense-reports",
+        headers=admin_headers,
+    )
+    assert all_expenses.status_code == 200
+    assert all_expenses.json()["total"] == 2
+
+
 def test_contribution_campaign_approval_workflow_foundation(client: TestClient) -> None:
     admin_headers = create_admin(client, "approval.finance@example.com")
     member = register_user(client, "approval.member@example.com", "Approval Member")

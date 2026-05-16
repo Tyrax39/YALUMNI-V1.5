@@ -135,6 +135,11 @@ GET  /api/v1/contributions/admin/disbursement-requests/{disbursement_request_id}
 POST /api/v1/contributions/admin/disbursement-requests/{disbursement_request_id}/approve
 POST /api/v1/contributions/admin/disbursement-requests/{disbursement_request_id}/reject
 POST /api/v1/contributions/admin/disbursement-requests/{disbursement_request_id}/mark-paid
+POST /api/v1/contributions/admin/disbursement-requests/{disbursement_request_id}/expense-reports
+GET  /api/v1/contributions/admin/expense-reports
+GET  /api/v1/contributions/admin/expense-reports/{expense_report_id}
+POST /api/v1/contributions/admin/expense-reports/{expense_report_id}/approve
+POST /api/v1/contributions/admin/expense-reports/{expense_report_id}/reject
 POST /api/v1/contributions/admin/contributions/{contribution_id}/refund
 POST /api/v1/contributions/admin/contributions/{contribution_id}/provider-refund
 POST /api/v1/contributions/admin/contributions/{contribution_id}/void
@@ -626,6 +631,11 @@ GET    /api/v1/contributions/admin/disbursement-requests/{disbursement_request_i
 POST   /api/v1/contributions/admin/disbursement-requests/{disbursement_request_id}/approve # implemented
 POST   /api/v1/contributions/admin/disbursement-requests/{disbursement_request_id}/reject # implemented
 POST   /api/v1/contributions/admin/disbursement-requests/{disbursement_request_id}/mark-paid # implemented
+POST   /api/v1/contributions/admin/disbursement-requests/{disbursement_request_id}/expense-reports # implemented expense report foundation
+GET    /api/v1/contributions/admin/expense-reports # implemented
+GET    /api/v1/contributions/admin/expense-reports/{expense_report_id} # implemented
+POST   /api/v1/contributions/admin/expense-reports/{expense_report_id}/approve # implemented
+POST   /api/v1/contributions/admin/expense-reports/{expense_report_id}/reject # implemented
 POST   /api/v1/contributions/admin/contributions/{contribution_id}/refund # implemented local ledger reversal
 POST   /api/v1/contributions/admin/contributions/{contribution_id}/provider-refund # implemented local provider refund fallback
 POST   /api/v1/contributions/admin/contributions/{contribution_id}/void # implemented pending contribution cancellation

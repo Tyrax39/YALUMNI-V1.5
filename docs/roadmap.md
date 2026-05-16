@@ -141,6 +141,8 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
   finance-admin refund/void adjustment controls with ledger reversals/markers.
   Added finance-admin disbursement request records with received-funds
   availability checks and request/approve/reject/mark-paid status transitions.
+  Added finance-admin expense reports tied to paid disbursements, with structured
+  receipt/evidence rows and submit/approve/reject status transitions.
   Signed provider webhook reconciliation now
   confirms eligible payment intents idempotently and marks failed/canceled
   provider events. Webhook diagnostics now persist provider event deliveries,

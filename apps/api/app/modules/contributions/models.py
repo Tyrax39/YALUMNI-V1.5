@@ -359,3 +359,91 @@ class ContributionDisbursementRequest(Base, TimestampMixin):
     requested_by: Mapped[User | None] = relationship(foreign_keys=[requested_by_user_id])
     reviewed_by: Mapped[User | None] = relationship(foreign_keys=[reviewed_by_user_id])
     paid_by: Mapped[User | None] = relationship(foreign_keys=[paid_by_user_id])
+
+
+class ContributionExpenseReport(Base, TimestampMixin):
+    __tablename__ = "contribution_expense_reports"
+    __table_args__ = (
+        Index(
+            "ix_contribution_expense_reports_campaign_status",
+            "campaign_id",
+            "status",
+        ),
+        Index(
+            "ix_contribution_expense_reports_disbursement_status",
+            "disbursement_request_id",
+            "status",
+        ),
+        Index(
+            "ix_contribution_expense_reports_status_created",
+            "status",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    campaign_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("contribution_campaigns.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    disbursement_request_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("contribution_disbursement_requests.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    submitted_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+    )
+    reviewed_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+    )
+    amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    vendor_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    expense_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    summary: Mapped[str] = mapped_column(String(500), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(40), default="SUBMITTED", nullable=False)
+    note: Mapped[str | None] = mapped_column(Text)
+    decision_note: Mapped[str | None] = mapped_column(Text)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    campaign: Mapped[ContributionCampaign] = relationship(foreign_keys=[campaign_id])
+    disbursement_request: Mapped[ContributionDisbursementRequest] = relationship(
+        foreign_keys=[disbursement_request_id],
+    )
+    submitted_by: Mapped[User | None] = relationship(foreign_keys=[submitted_by_user_id])
+    reviewed_by: Mapped[User | None] = relationship(foreign_keys=[reviewed_by_user_id])
+    evidence_items: Mapped[list["ContributionExpenseEvidence"]] = relationship(
+        back_populates="expense_report",
+        cascade="all, delete-orphan",
+        order_by="ContributionExpenseEvidence.created_at",
+    )
+
+
+class ContributionExpenseEvidence(Base, TimestampMixin):
+    __tablename__ = "contribution_expense_evidence"
+    __table_args__ = (
+        Index(
+            "ix_contribution_expense_evidence_report",
+            "expense_report_id",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    expense_report_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("contribution_expense_reports.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    evidence_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    title: Mapped[str] = mapped_column(String(160), nullable=False)
+    reference_url: Mapped[str | None] = mapped_column(String(500))
+    receipt_number: Mapped[str | None] = mapped_column(String(120))
+    amount_cents: Mapped[int | None] = mapped_column(Integer)
+    issued_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    note: Mapped[str | None] = mapped_column(Text)
+
+    expense_report: Mapped[ContributionExpenseReport] = relationship(
+        back_populates="evidence_items",
+        foreign_keys=[expense_report_id],
+    )

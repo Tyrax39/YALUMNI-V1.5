@@ -25,6 +25,8 @@ from app.modules.contributions.models import (
     Contribution,
     ContributionCampaign,
     ContributionDisbursementRequest,
+    ContributionExpenseEvidence,
+    ContributionExpenseReport,
     ContributionLedgerEntry,
     ContributionPaymentAttempt,
     ContributionPaymentIntent,
@@ -41,6 +43,10 @@ from app.modules.contributions.schemas import (
     ContributionDisbursementRequestListResponse,
     ContributionDisbursementRequestResponse,
     ContributionDisbursementStatusAction,
+    ContributionExpenseEvidenceResponse,
+    ContributionExpenseReportCreate,
+    ContributionExpenseReportListResponse,
+    ContributionExpenseReportResponse,
     ContributionLedgerEntryResponse,
     ContributionListResponse,
     ContributionPaymentAttemptListResponse,
@@ -97,6 +103,18 @@ DISBURSEMENT_COMMITTED_STATUSES = {
     DISBURSEMENT_APPROVED,
     DISBURSEMENT_PAID,
     DISBURSEMENT_REQUESTED,
+}
+EXPENSE_SUBMITTED = "SUBMITTED"
+EXPENSE_APPROVED = "APPROVED"
+EXPENSE_REJECTED = "REJECTED"
+EXPENSE_STATUSES = {
+    EXPENSE_APPROVED,
+    EXPENSE_REJECTED,
+    EXPENSE_SUBMITTED,
+}
+EXPENSE_COMMITTED_STATUSES = {
+    EXPENSE_APPROVED,
+    EXPENSE_SUBMITTED,
 }
 WEBHOOK_EVENT_RECEIVED = "RECEIVED"
 WEBHOOK_EVENT_RECONCILED = "RECONCILED"
@@ -241,6 +259,28 @@ def _get_disbursement_or_404(
             detail="Disbursement request not found",
         )
     return disbursement_request
+
+
+def _get_expense_report_or_404(
+    db: Session,
+    expense_report_id: uuid.UUID,
+) -> ContributionExpenseReport:
+    expense_report = db.scalar(
+        select(ContributionExpenseReport)
+        .options(
+            joinedload(ContributionExpenseReport.campaign),
+            joinedload(ContributionExpenseReport.disbursement_request),
+            joinedload(ContributionExpenseReport.submitted_by),
+            joinedload(ContributionExpenseReport.reviewed_by),
+        )
+        .where(ContributionExpenseReport.id == expense_report_id)
+    )
+    if expense_report is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Expense report not found",
+        )
+    return expense_report
 
 
 def _get_contribution_or_404(db: Session, contribution_id: uuid.UUID) -> Contribution:
@@ -1497,6 +1537,40 @@ def _ensure_disbursement_amount_available(
         )
 
 
+def _disbursement_reported_expense_amount(
+    db: Session,
+    disbursement_request_id: uuid.UUID,
+    *,
+    exclude_expense_report_id: uuid.UUID | None = None,
+) -> int:
+    query = select(func.coalesce(func.sum(ContributionExpenseReport.amount_cents), 0)).where(
+        ContributionExpenseReport.disbursement_request_id == disbursement_request_id,
+        ContributionExpenseReport.status.in_(EXPENSE_COMMITTED_STATUSES),
+    )
+    if exclude_expense_report_id:
+        query = query.where(ContributionExpenseReport.id != exclude_expense_report_id)
+    return int(db.scalar(query) or 0)
+
+
+def _ensure_expense_amount_available(
+    db: Session,
+    *,
+    amount_cents: int,
+    disbursement_request: ContributionDisbursementRequest,
+    exclude_expense_report_id: uuid.UUID | None = None,
+) -> None:
+    committed_amount = _disbursement_reported_expense_amount(
+        db,
+        disbursement_request.id,
+        exclude_expense_report_id=exclude_expense_report_id,
+    )
+    if amount_cents > disbursement_request.amount_cents - committed_amount:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Expense report amount exceeds available disbursement funds",
+        )
+
+
 def _serialize_disbursement_request(
     disbursement_request: ContributionDisbursementRequest,
 ) -> ContributionDisbursementRequestResponse:
@@ -1539,6 +1613,65 @@ def _serialize_disbursement_request(
         reviewed_by_user_id=disbursement_request.reviewed_by_user_id,
         status=disbursement_request.status,
         updated_at=disbursement_request.updated_at,
+    )
+
+
+def _serialize_expense_evidence(
+    evidence: ContributionExpenseEvidence,
+) -> ContributionExpenseEvidenceResponse:
+    return ContributionExpenseEvidenceResponse(
+        amount_cents=evidence.amount_cents,
+        created_at=evidence.created_at,
+        evidence_type=evidence.evidence_type,
+        expense_report_id=evidence.expense_report_id,
+        id=evidence.id,
+        issued_at=evidence.issued_at,
+        note=evidence.note,
+        receipt_number=evidence.receipt_number,
+        reference_url=evidence.reference_url,
+        title=evidence.title,
+        updated_at=evidence.updated_at,
+    )
+
+
+def _serialize_expense_report(
+    expense_report: ContributionExpenseReport,
+) -> ContributionExpenseReportResponse:
+    return ContributionExpenseReportResponse(
+        amount_cents=expense_report.amount_cents,
+        campaign_id=expense_report.campaign_id,
+        campaign_title=expense_report.campaign.title if expense_report.campaign else None,
+        created_at=expense_report.created_at,
+        currency=expense_report.currency,
+        decision_note=expense_report.decision_note,
+        description=expense_report.description,
+        disbursement_request_id=expense_report.disbursement_request_id,
+        evidence_items=[
+            _serialize_expense_evidence(evidence)
+            for evidence in expense_report.evidence_items
+        ],
+        expense_at=expense_report.expense_at,
+        id=expense_report.id,
+        note=expense_report.note,
+        reviewed_at=expense_report.reviewed_at,
+        reviewed_by_display_name=expense_report.reviewed_by.display_name
+        if expense_report.reviewed_by
+        else None,
+        reviewed_by_email=expense_report.reviewed_by.email
+        if expense_report.reviewed_by
+        else None,
+        reviewed_by_user_id=expense_report.reviewed_by_user_id,
+        status=expense_report.status,
+        submitted_by_display_name=expense_report.submitted_by.display_name
+        if expense_report.submitted_by
+        else None,
+        submitted_by_email=expense_report.submitted_by.email
+        if expense_report.submitted_by
+        else None,
+        submitted_by_user_id=expense_report.submitted_by_user_id,
+        summary=expense_report.summary,
+        updated_at=expense_report.updated_at,
+        vendor_name=expense_report.vendor_name,
     )
 
 
@@ -2288,6 +2421,224 @@ def mark_disbursement_request_paid(
     db.commit()
     db.refresh(disbursement_request)
     return _serialize_disbursement_request(disbursement_request)
+
+
+@router.post(
+    "/admin/disbursement-requests/{disbursement_request_id}/expense-reports",
+    response_model=ContributionExpenseReportResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+@router.post(
+    "/admin/disbursement-requests/{disbursement_request_id}/expense-reports/",
+    response_model=ContributionExpenseReportResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_expense_report(
+    disbursement_request_id: uuid.UUID,
+    payload: ContributionExpenseReportCreate,
+    request: Request,
+    current_user: Annotated[User, Depends(finance_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> ContributionExpenseReportResponse:
+    disbursement_request = _get_disbursement_or_404(db, disbursement_request_id)
+    if disbursement_request.status != DISBURSEMENT_PAID:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only paid disbursements can receive expense reports",
+        )
+    if payload.currency != disbursement_request.currency:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Currency must match disbursement request",
+        )
+    _ensure_expense_amount_available(
+        db,
+        amount_cents=payload.amount_cents,
+        disbursement_request=disbursement_request,
+    )
+    expense_report = ContributionExpenseReport(
+        amount_cents=payload.amount_cents,
+        campaign_id=disbursement_request.campaign_id,
+        currency=payload.currency,
+        description=payload.description,
+        disbursement_request_id=disbursement_request.id,
+        expense_at=payload.expense_at,
+        note=payload.note,
+        status=EXPENSE_SUBMITTED,
+        submitted_by_user_id=current_user.id,
+        summary=payload.summary,
+        vendor_name=payload.vendor_name,
+    )
+    expense_report.evidence_items = [
+        ContributionExpenseEvidence(
+            amount_cents=evidence.amount_cents,
+            evidence_type=evidence.evidence_type,
+            issued_at=evidence.issued_at,
+            note=evidence.note,
+            receipt_number=evidence.receipt_number,
+            reference_url=evidence.reference_url,
+            title=evidence.title,
+        )
+        for evidence in payload.evidence_items
+    ]
+    db.add(expense_report)
+    db.flush()
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "contributions.expense_report_submitted",
+        {
+            "amount_cents": expense_report.amount_cents,
+            "disbursement_request_id": str(disbursement_request.id),
+            "expense_report_id": str(expense_report.id),
+        },
+    )
+    db.commit()
+    expense_report = _get_expense_report_or_404(db, expense_report.id)
+    return _serialize_expense_report(expense_report)
+
+
+@router.get(
+    "/admin/expense-reports",
+    response_model=ContributionExpenseReportListResponse,
+)
+@router.get(
+    "/admin/expense-reports/",
+    response_model=ContributionExpenseReportListResponse,
+)
+def list_expense_reports(
+    current_user: Annotated[User, Depends(finance_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+    campaign_id: Annotated[uuid.UUID | None, Query()] = None,
+    disbursement_request_id: Annotated[uuid.UUID | None, Query()] = None,
+    status_filter: Annotated[str | None, Query(alias="status", max_length=40)] = "ALL",
+    limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> ContributionExpenseReportListResponse:
+    _ = current_user
+    normalized_status = _normalize_enum(status_filter)
+    query = select(ContributionExpenseReport).options(
+        joinedload(ContributionExpenseReport.campaign),
+        joinedload(ContributionExpenseReport.disbursement_request),
+        joinedload(ContributionExpenseReport.submitted_by),
+        joinedload(ContributionExpenseReport.reviewed_by),
+    )
+    if campaign_id:
+        query = query.where(ContributionExpenseReport.campaign_id == campaign_id)
+    if disbursement_request_id:
+        query = query.where(
+            ContributionExpenseReport.disbursement_request_id == disbursement_request_id
+        )
+    if normalized_status and normalized_status != "ALL":
+        if normalized_status not in EXPENSE_STATUSES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid expense report status",
+            )
+        query = query.where(ContributionExpenseReport.status == normalized_status)
+    total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+    expense_reports = db.scalars(
+        query.order_by(ContributionExpenseReport.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+    ).all()
+    return ContributionExpenseReportListResponse(
+        expense_reports=[
+            _serialize_expense_report(expense_report)
+            for expense_report in expense_reports
+        ],
+        has_more=offset + len(expense_reports) < total,
+        limit=limit,
+        offset=offset,
+        total=total,
+    )
+
+
+@router.get(
+    "/admin/expense-reports/{expense_report_id}",
+    response_model=ContributionExpenseReportResponse,
+)
+def get_expense_report(
+    expense_report_id: uuid.UUID,
+    current_user: Annotated[User, Depends(finance_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> ContributionExpenseReportResponse:
+    _ = current_user
+    expense_report = _get_expense_report_or_404(db, expense_report_id)
+    return _serialize_expense_report(expense_report)
+
+
+@router.post(
+    "/admin/expense-reports/{expense_report_id}/approve",
+    response_model=ContributionExpenseReportResponse,
+)
+def approve_expense_report(
+    expense_report_id: uuid.UUID,
+    payload: ContributionDisbursementStatusAction,
+    request: Request,
+    current_user: Annotated[User, Depends(finance_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> ContributionExpenseReportResponse:
+    expense_report = _get_expense_report_or_404(db, expense_report_id)
+    if expense_report.status != EXPENSE_SUBMITTED:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only submitted expense reports can be approved",
+        )
+    _ensure_expense_amount_available(
+        db,
+        amount_cents=expense_report.amount_cents,
+        disbursement_request=expense_report.disbursement_request,
+        exclude_expense_report_id=expense_report.id,
+    )
+    expense_report.decision_note = payload.note
+    expense_report.reviewed_at = utcnow()
+    expense_report.reviewed_by_user_id = current_user.id
+    expense_report.status = EXPENSE_APPROVED
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "contributions.expense_report_approved",
+        {"expense_report_id": str(expense_report.id)},
+    )
+    db.commit()
+    expense_report = _get_expense_report_or_404(db, expense_report.id)
+    return _serialize_expense_report(expense_report)
+
+
+@router.post(
+    "/admin/expense-reports/{expense_report_id}/reject",
+    response_model=ContributionExpenseReportResponse,
+)
+def reject_expense_report(
+    expense_report_id: uuid.UUID,
+    payload: ContributionDisbursementStatusAction,
+    request: Request,
+    current_user: Annotated[User, Depends(finance_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> ContributionExpenseReportResponse:
+    expense_report = _get_expense_report_or_404(db, expense_report_id)
+    if expense_report.status not in {EXPENSE_APPROVED, EXPENSE_SUBMITTED}:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only submitted or approved expense reports can be rejected",
+        )
+    expense_report.decision_note = payload.note
+    expense_report.reviewed_at = utcnow()
+    expense_report.reviewed_by_user_id = current_user.id
+    expense_report.status = EXPENSE_REJECTED
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "contributions.expense_report_rejected",
+        {"expense_report_id": str(expense_report.id)},
+    )
+    db.commit()
+    expense_report = _get_expense_report_or_404(db, expense_report.id)
+    return _serialize_expense_report(expense_report)
 
 
 @router.get("/admin/treasury/audit-package")
