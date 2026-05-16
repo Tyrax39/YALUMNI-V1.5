@@ -139,6 +139,8 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
   ledger CSV exports, signed treasury audit JSON packages, certified treasury
   audit PDF reports, stored treasury certification snapshots, and local
   finance-admin refund/void adjustment controls with ledger reversals/markers.
+  Added finance-admin disbursement request records with received-funds
+  availability checks and request/approve/reject/mark-paid status transitions.
   Signed provider webhook reconciliation now
   confirms eligible payment intents idempotently and marks failed/canceled
   provider events. Webhook diagnostics now persist provider event deliveries,

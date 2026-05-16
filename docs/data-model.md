@@ -143,12 +143,19 @@
   immutable treasury certification snapshots, storing the signed audit package,
   canonical SHA-256 digest, HMAC signature metadata, reviewer, scope, summary
   counts, currencies, and optional certification note.
+- `contribution_disbursement_requests` - implemented for finance-admin
+  campaign disbursement requests with amount, currency, payee, purpose, requester,
+  reviewer, paid-by user, request/approval/rejection/paid status, notes, and
+  review/payment timestamps. Requests reserve available received campaign funds
+  while in requested/approved/paid states, but they do not yet write treasury
+  ledger expense entries.
 - `pledges` - future split from confirmed local contribution recording.
 - Provider payment attempts still need real provider authorization details,
   external checkout sessions, and production-grade multi-attempt checkout
   orchestration beyond the current local retry foundation.
-- `disbursement_requests`
-- `disbursement_approvals`
+- `disbursement_approvals` - may become a separate multi-reviewer table if
+  disbursements require quorum-based approvals beyond the current single
+  finance-admin review fields.
 - `expense_reports`
 - `treasury_export_runs` - still planned only if one-off CSV/PDF export history
   needs separate operational tracking beyond stored certification snapshots.

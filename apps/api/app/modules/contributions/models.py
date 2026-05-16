@@ -308,3 +308,54 @@ class ContributionTreasuryCertification(Base, TimestampMixin):
 
     campaign: Mapped[ContributionCampaign | None] = relationship(foreign_keys=[campaign_id])
     certified_by: Mapped[User | None] = relationship(foreign_keys=[certified_by_user_id])
+
+
+class ContributionDisbursementRequest(Base, TimestampMixin):
+    __tablename__ = "contribution_disbursement_requests"
+    __table_args__ = (
+        Index(
+            "ix_contribution_disbursement_requests_campaign_status",
+            "campaign_id",
+            "status",
+        ),
+        Index(
+            "ix_contribution_disbursement_requests_requested_by_status",
+            "requested_by_user_id",
+            "status",
+        ),
+        Index(
+            "ix_contribution_disbursement_requests_status_created",
+            "status",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    campaign_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("contribution_campaigns.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    requested_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+    )
+    reviewed_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+    )
+    paid_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+    )
+    amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    payee_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    payee_reference: Mapped[str | None] = mapped_column(String(160))
+    purpose: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(40), default="REQUESTED", nullable=False)
+    note: Mapped[str | None] = mapped_column(Text)
+    decision_note: Mapped[str | None] = mapped_column(Text)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    campaign: Mapped[ContributionCampaign] = relationship(foreign_keys=[campaign_id])
+    requested_by: Mapped[User | None] = relationship(foreign_keys=[requested_by_user_id])
+    reviewed_by: Mapped[User | None] = relationship(foreign_keys=[reviewed_by_user_id])
+    paid_by: Mapped[User | None] = relationship(foreign_keys=[paid_by_user_id])

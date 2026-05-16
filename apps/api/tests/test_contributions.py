@@ -570,6 +570,137 @@ def test_contribution_campaign_payment_receipt_and_treasury(client: TestClient) 
     assert closed_intent.status_code == 409
 
 
+def test_contribution_disbursement_request_foundation(client: TestClient) -> None:
+    admin_headers = create_admin(client, "disbursement.finance@example.com")
+    donor = register_user(client, "disbursement.donor@example.com", "Disbursement Donor")
+    donor_headers = auth_headers(donor["access_token"])
+    campaign = create_published_campaign(
+        client,
+        admin_headers,
+        "Disbursement scholarship fund",
+    )
+    contribution_response = client.post(
+        f"/api/v1/contributions/{campaign['id']}/pay",
+        headers=donor_headers,
+        json={
+            "amount_cents": 10000,
+            "currency": "USD",
+            "note": "Fund disbursement request testing.",
+            "payment_method": "CARD_TEST",
+            "payment_reference": "DISB-100",
+        },
+    )
+    assert contribution_response.status_code == 201
+
+    disbursement_payload = {
+        "amount_cents": 6000,
+        "currency": "USD",
+        "note": "Initial program expense request.",
+        "payee_name": "Chapter Project Lead",
+        "payee_reference": "BANK-CHAPTER-001",
+        "purpose": "Scholarship material purchase for the chapter program.",
+    }
+    denied_create = client.post(
+        f"/api/v1/contributions/admin/campaigns/{campaign['id']}/disbursement-requests",
+        headers=donor_headers,
+        json=disbursement_payload,
+    )
+    assert denied_create.status_code == 403
+
+    overdrawn_create = client.post(
+        f"/api/v1/contributions/admin/campaigns/{campaign['id']}/disbursement-requests",
+        headers=admin_headers,
+        json={**disbursement_payload, "amount_cents": 15000},
+    )
+    assert overdrawn_create.status_code == 409
+
+    create_response = client.post(
+        f"/api/v1/contributions/admin/campaigns/{campaign['id']}/disbursement-requests",
+        headers=admin_headers,
+        json=disbursement_payload,
+    )
+    assert create_response.status_code == 201
+    disbursement = create_response.json()
+    assert disbursement["amount_cents"] == 6000
+    assert disbursement["campaign_id"] == campaign["id"]
+    assert disbursement["campaign_title"] == campaign["title"]
+    assert disbursement["requested_by_email"] == "disbursement.finance@example.com"
+    assert disbursement["status"] == "REQUESTED"
+
+    requested_list = client.get(
+        "/api/v1/contributions/admin/disbursement-requests",
+        headers=admin_headers,
+        params={"status": "requested"},
+    )
+    assert requested_list.status_code == 200
+    assert requested_list.json()["total"] == 1
+
+    detail_response = client.get(
+        f"/api/v1/contributions/admin/disbursement-requests/{disbursement['id']}",
+        headers=admin_headers,
+    )
+    assert detail_response.status_code == 200
+    assert detail_response.json()["payee_reference"] == "BANK-CHAPTER-001"
+
+    reserved_overdrawn_create = client.post(
+        f"/api/v1/contributions/admin/campaigns/{campaign['id']}/disbursement-requests",
+        headers=admin_headers,
+        json={**disbursement_payload, "amount_cents": 4500},
+    )
+    assert reserved_overdrawn_create.status_code == 409
+
+    approve_response = client.post(
+        f"/api/v1/contributions/admin/disbursement-requests/{disbursement['id']}/approve",
+        headers=admin_headers,
+        json={"note": "Approved against received funds."},
+    )
+    assert approve_response.status_code == 200
+    approved = approve_response.json()
+    assert approved["decision_note"] == "Approved against received funds."
+    assert approved["reviewed_by_email"] == "disbursement.finance@example.com"
+    assert approved["status"] == "APPROVED"
+
+    second_create = client.post(
+        f"/api/v1/contributions/admin/campaigns/{campaign['id']}/disbursement-requests",
+        headers=admin_headers,
+        json={**disbursement_payload, "amount_cents": 3000, "payee_reference": "BANK-002"},
+    )
+    assert second_create.status_code == 201
+    second_disbursement = second_create.json()
+    reject_response = client.post(
+        f"/api/v1/contributions/admin/disbursement-requests/{second_disbursement['id']}/reject",
+        headers=admin_headers,
+        json={"note": "Need stronger evidence before approval."},
+    )
+    assert reject_response.status_code == 200
+    assert reject_response.json()["status"] == "REJECTED"
+
+    mark_paid_response = client.post(
+        f"/api/v1/contributions/admin/disbursement-requests/{disbursement['id']}/mark-paid",
+        headers=admin_headers,
+        json={"note": "Paid by bank transfer."},
+    )
+    assert mark_paid_response.status_code == 200
+    paid = mark_paid_response.json()
+    assert paid["paid_at"] is not None
+    assert paid["paid_by_email"] == "disbursement.finance@example.com"
+    assert paid["status"] == "PAID"
+
+    duplicate_paid = client.post(
+        f"/api/v1/contributions/admin/disbursement-requests/{disbursement['id']}/mark-paid",
+        headers=admin_headers,
+        json={"note": "Already paid."},
+    )
+    assert duplicate_paid.status_code == 409
+
+    all_disbursements = client.get(
+        "/api/v1/contributions/admin/disbursement-requests",
+        headers=admin_headers,
+    )
+    assert all_disbursements.status_code == 200
+    assert all_disbursements.json()["total"] == 2
+
+
 def test_contribution_campaign_approval_workflow_foundation(client: TestClient) -> None:
     admin_headers = create_admin(client, "approval.finance@example.com")
     member = register_user(client, "approval.member@example.com", "Approval Member")

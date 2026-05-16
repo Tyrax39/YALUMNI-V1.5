@@ -97,6 +97,48 @@ class TreasuryCertificationCreate(BaseModel):
         return normalized or None
 
 
+class ContributionDisbursementRequestCreate(BaseModel):
+    amount_cents: int = Field(ge=100, le=100_000_000_000)
+    currency: str = Field(default="USD", min_length=3, max_length=3)
+    note: str | None = Field(default=None, max_length=2000)
+    payee_name: str = Field(min_length=2, max_length=160)
+    payee_reference: str | None = Field(default=None, max_length=160)
+    purpose: str = Field(min_length=10, max_length=4000)
+
+    @field_validator("currency")
+    @classmethod
+    def normalize_currency(cls, value: str) -> str:
+        return value.strip().upper()
+
+    @field_validator("note", "payee_reference")
+    @classmethod
+    def normalize_optional_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+    @field_validator("payee_name", "purpose")
+    @classmethod
+    def normalize_required_text(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("This field is required")
+        return normalized
+
+
+class ContributionDisbursementStatusAction(BaseModel):
+    note: str | None = Field(default=None, max_length=2000)
+
+    @field_validator("note")
+    @classmethod
+    def normalize_note(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+
 class ContributionPaymentIntentResponse(BaseModel):
     amount_cents: int
     anonymous: bool
@@ -345,6 +387,41 @@ class TreasuryCertificationResponse(BaseModel):
 
 class TreasuryCertificationListResponse(BaseModel):
     certifications: list[TreasuryCertificationResponse]
+    has_more: bool
+    limit: int
+    offset: int
+    total: int
+
+
+class ContributionDisbursementRequestResponse(BaseModel):
+    amount_cents: int
+    campaign_id: uuid.UUID
+    campaign_title: str | None
+    created_at: datetime
+    currency: str
+    decision_note: str | None
+    id: uuid.UUID
+    note: str | None
+    paid_at: datetime | None
+    paid_by_display_name: str | None
+    paid_by_email: str | None
+    paid_by_user_id: uuid.UUID | None
+    payee_name: str
+    payee_reference: str | None
+    purpose: str
+    requested_by_display_name: str | None
+    requested_by_email: str | None
+    requested_by_user_id: uuid.UUID | None
+    reviewed_at: datetime | None
+    reviewed_by_display_name: str | None
+    reviewed_by_email: str | None
+    reviewed_by_user_id: uuid.UUID | None
+    status: str
+    updated_at: datetime
+
+
+class ContributionDisbursementRequestListResponse(BaseModel):
+    disbursement_requests: list[ContributionDisbursementRequestResponse]
     has_more: bool
     limit: int
     offset: int

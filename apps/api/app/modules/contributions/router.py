@@ -24,6 +24,7 @@ from app.modules.auth.models import SecurityEvent, User
 from app.modules.contributions.models import (
     Contribution,
     ContributionCampaign,
+    ContributionDisbursementRequest,
     ContributionLedgerEntry,
     ContributionPaymentAttempt,
     ContributionPaymentIntent,
@@ -36,6 +37,10 @@ from app.modules.contributions.schemas import (
     ContributionCampaignListResponse,
     ContributionCampaignResponse,
     ContributionCampaignStatusAction,
+    ContributionDisbursementRequestCreate,
+    ContributionDisbursementRequestListResponse,
+    ContributionDisbursementRequestResponse,
+    ContributionDisbursementStatusAction,
     ContributionLedgerEntryResponse,
     ContributionListResponse,
     ContributionPaymentAttemptListResponse,
@@ -76,6 +81,23 @@ PAYMENT_INTENT_REQUIRES_CONFIRMATION = "REQUIRES_CONFIRMATION"
 PAYMENT_INTENT_CONFIRMED = "CONFIRMED"
 PAYMENT_INTENT_FAILED = "FAILED"
 PAYMENT_INTENT_CANCELED = "CANCELED"
+DISBURSEMENT_REQUESTED = "REQUESTED"
+DISBURSEMENT_APPROVED = "APPROVED"
+DISBURSEMENT_REJECTED = "REJECTED"
+DISBURSEMENT_PAID = "PAID"
+DISBURSEMENT_CANCELED = "CANCELED"
+DISBURSEMENT_STATUSES = {
+    DISBURSEMENT_APPROVED,
+    DISBURSEMENT_CANCELED,
+    DISBURSEMENT_PAID,
+    DISBURSEMENT_REJECTED,
+    DISBURSEMENT_REQUESTED,
+}
+DISBURSEMENT_COMMITTED_STATUSES = {
+    DISBURSEMENT_APPROVED,
+    DISBURSEMENT_PAID,
+    DISBURSEMENT_REQUESTED,
+}
 WEBHOOK_EVENT_RECEIVED = "RECEIVED"
 WEBHOOK_EVENT_RECONCILED = "RECONCILED"
 WEBHOOK_EVENT_DUPLICATE = "DUPLICATE"
@@ -197,6 +219,28 @@ def _get_campaign_or_404(db: Session, campaign_id: uuid.UUID) -> ContributionCam
     if campaign is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
     return campaign
+
+
+def _get_disbursement_or_404(
+    db: Session,
+    disbursement_request_id: uuid.UUID,
+) -> ContributionDisbursementRequest:
+    disbursement_request = db.scalar(
+        select(ContributionDisbursementRequest)
+        .options(
+            joinedload(ContributionDisbursementRequest.campaign),
+            joinedload(ContributionDisbursementRequest.requested_by),
+            joinedload(ContributionDisbursementRequest.reviewed_by),
+            joinedload(ContributionDisbursementRequest.paid_by),
+        )
+        .where(ContributionDisbursementRequest.id == disbursement_request_id)
+    )
+    if disbursement_request is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Disbursement request not found",
+        )
+    return disbursement_request
 
 
 def _get_contribution_or_404(db: Session, contribution_id: uuid.UUID) -> Contribution:
@@ -1406,6 +1450,98 @@ def _serialize_treasury_certification(
     )
 
 
+def _campaign_received_amount(db: Session, campaign_id: uuid.UUID) -> int:
+    return int(
+        db.scalar(
+            select(func.coalesce(func.sum(Contribution.amount_cents), 0)).where(
+                Contribution.campaign_id == campaign_id,
+                Contribution.status == RECEIVED_STATUS,
+            )
+        )
+        or 0
+    )
+
+
+def _campaign_committed_disbursement_amount(
+    db: Session,
+    campaign_id: uuid.UUID,
+    *,
+    exclude_disbursement_request_id: uuid.UUID | None = None,
+) -> int:
+    query = select(func.coalesce(func.sum(ContributionDisbursementRequest.amount_cents), 0)).where(
+        ContributionDisbursementRequest.campaign_id == campaign_id,
+        ContributionDisbursementRequest.status.in_(DISBURSEMENT_COMMITTED_STATUSES),
+    )
+    if exclude_disbursement_request_id:
+        query = query.where(ContributionDisbursementRequest.id != exclude_disbursement_request_id)
+    return int(db.scalar(query) or 0)
+
+
+def _ensure_disbursement_amount_available(
+    db: Session,
+    *,
+    amount_cents: int,
+    campaign_id: uuid.UUID,
+    exclude_disbursement_request_id: uuid.UUID | None = None,
+) -> None:
+    received_amount = _campaign_received_amount(db, campaign_id)
+    committed_amount = _campaign_committed_disbursement_amount(
+        db,
+        campaign_id,
+        exclude_disbursement_request_id=exclude_disbursement_request_id,
+    )
+    if amount_cents > received_amount - committed_amount:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Disbursement amount exceeds available received funds",
+        )
+
+
+def _serialize_disbursement_request(
+    disbursement_request: ContributionDisbursementRequest,
+) -> ContributionDisbursementRequestResponse:
+    return ContributionDisbursementRequestResponse(
+        amount_cents=disbursement_request.amount_cents,
+        campaign_id=disbursement_request.campaign_id,
+        campaign_title=disbursement_request.campaign.title
+        if disbursement_request.campaign
+        else None,
+        created_at=disbursement_request.created_at,
+        currency=disbursement_request.currency,
+        decision_note=disbursement_request.decision_note,
+        id=disbursement_request.id,
+        note=disbursement_request.note,
+        paid_at=disbursement_request.paid_at,
+        paid_by_display_name=disbursement_request.paid_by.display_name
+        if disbursement_request.paid_by
+        else None,
+        paid_by_email=disbursement_request.paid_by.email
+        if disbursement_request.paid_by
+        else None,
+        paid_by_user_id=disbursement_request.paid_by_user_id,
+        payee_name=disbursement_request.payee_name,
+        payee_reference=disbursement_request.payee_reference,
+        purpose=disbursement_request.purpose,
+        requested_by_display_name=disbursement_request.requested_by.display_name
+        if disbursement_request.requested_by
+        else None,
+        requested_by_email=disbursement_request.requested_by.email
+        if disbursement_request.requested_by
+        else None,
+        requested_by_user_id=disbursement_request.requested_by_user_id,
+        reviewed_at=disbursement_request.reviewed_at,
+        reviewed_by_display_name=disbursement_request.reviewed_by.display_name
+        if disbursement_request.reviewed_by
+        else None,
+        reviewed_by_email=disbursement_request.reviewed_by.email
+        if disbursement_request.reviewed_by
+        else None,
+        reviewed_by_user_id=disbursement_request.reviewed_by_user_id,
+        status=disbursement_request.status,
+        updated_at=disbursement_request.updated_at,
+    )
+
+
 @router.get("", response_model=ContributionCampaignListResponse)
 @router.get("/", response_model=ContributionCampaignListResponse)
 def list_campaigns(
@@ -1924,6 +2060,234 @@ def get_treasury_certification(
             detail="Treasury certification not found",
         )
     return _serialize_treasury_certification(certification)
+
+
+@router.post(
+    "/admin/campaigns/{campaign_id}/disbursement-requests",
+    response_model=ContributionDisbursementRequestResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+@router.post(
+    "/admin/campaigns/{campaign_id}/disbursement-requests/",
+    response_model=ContributionDisbursementRequestResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_disbursement_request(
+    campaign_id: uuid.UUID,
+    payload: ContributionDisbursementRequestCreate,
+    request: Request,
+    current_user: Annotated[User, Depends(finance_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> ContributionDisbursementRequestResponse:
+    campaign = _get_campaign_or_404(db, campaign_id)
+    if payload.currency != campaign.currency:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Currency must match campaign",
+        )
+    _ensure_disbursement_amount_available(
+        db,
+        amount_cents=payload.amount_cents,
+        campaign_id=campaign.id,
+    )
+    disbursement_request = ContributionDisbursementRequest(
+        amount_cents=payload.amount_cents,
+        campaign_id=campaign.id,
+        currency=payload.currency,
+        note=payload.note,
+        payee_name=payload.payee_name,
+        payee_reference=payload.payee_reference,
+        purpose=payload.purpose,
+        requested_by_user_id=current_user.id,
+        status=DISBURSEMENT_REQUESTED,
+    )
+    db.add(disbursement_request)
+    db.flush()
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "contributions.disbursement_requested",
+        {
+            "amount_cents": payload.amount_cents,
+            "campaign_id": str(campaign.id),
+            "disbursement_request_id": str(disbursement_request.id),
+        },
+    )
+    db.commit()
+    db.refresh(disbursement_request)
+    return _serialize_disbursement_request(disbursement_request)
+
+
+@router.get(
+    "/admin/disbursement-requests",
+    response_model=ContributionDisbursementRequestListResponse,
+)
+@router.get(
+    "/admin/disbursement-requests/",
+    response_model=ContributionDisbursementRequestListResponse,
+)
+def list_disbursement_requests(
+    current_user: Annotated[User, Depends(finance_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+    campaign_id: Annotated[uuid.UUID | None, Query()] = None,
+    status_filter: Annotated[str | None, Query(alias="status", max_length=40)] = "ALL",
+    limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> ContributionDisbursementRequestListResponse:
+    _ = current_user
+    normalized_status = _normalize_enum(status_filter)
+    query = select(ContributionDisbursementRequest).options(
+        joinedload(ContributionDisbursementRequest.campaign),
+        joinedload(ContributionDisbursementRequest.requested_by),
+        joinedload(ContributionDisbursementRequest.reviewed_by),
+        joinedload(ContributionDisbursementRequest.paid_by),
+    )
+    if campaign_id:
+        query = query.where(ContributionDisbursementRequest.campaign_id == campaign_id)
+    if normalized_status and normalized_status != "ALL":
+        if normalized_status not in DISBURSEMENT_STATUSES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid disbursement request status",
+            )
+        query = query.where(ContributionDisbursementRequest.status == normalized_status)
+    total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+    disbursement_requests = db.scalars(
+        query.order_by(ContributionDisbursementRequest.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+    ).all()
+    return ContributionDisbursementRequestListResponse(
+        disbursement_requests=[
+            _serialize_disbursement_request(disbursement_request)
+            for disbursement_request in disbursement_requests
+        ],
+        has_more=offset + len(disbursement_requests) < total,
+        limit=limit,
+        offset=offset,
+        total=total,
+    )
+
+
+@router.get(
+    "/admin/disbursement-requests/{disbursement_request_id}",
+    response_model=ContributionDisbursementRequestResponse,
+)
+def get_disbursement_request(
+    disbursement_request_id: uuid.UUID,
+    current_user: Annotated[User, Depends(finance_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> ContributionDisbursementRequestResponse:
+    _ = current_user
+    disbursement_request = _get_disbursement_or_404(db, disbursement_request_id)
+    return _serialize_disbursement_request(disbursement_request)
+
+
+@router.post(
+    "/admin/disbursement-requests/{disbursement_request_id}/approve",
+    response_model=ContributionDisbursementRequestResponse,
+)
+def approve_disbursement_request(
+    disbursement_request_id: uuid.UUID,
+    payload: ContributionDisbursementStatusAction,
+    request: Request,
+    current_user: Annotated[User, Depends(finance_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> ContributionDisbursementRequestResponse:
+    disbursement_request = _get_disbursement_or_404(db, disbursement_request_id)
+    if disbursement_request.status != DISBURSEMENT_REQUESTED:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only requested disbursements can be approved",
+        )
+    _ensure_disbursement_amount_available(
+        db,
+        amount_cents=disbursement_request.amount_cents,
+        campaign_id=disbursement_request.campaign_id,
+        exclude_disbursement_request_id=disbursement_request.id,
+    )
+    disbursement_request.decision_note = payload.note
+    disbursement_request.reviewed_at = utcnow()
+    disbursement_request.reviewed_by_user_id = current_user.id
+    disbursement_request.status = DISBURSEMENT_APPROVED
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "contributions.disbursement_approved",
+        {"disbursement_request_id": str(disbursement_request.id)},
+    )
+    db.commit()
+    db.refresh(disbursement_request)
+    return _serialize_disbursement_request(disbursement_request)
+
+
+@router.post(
+    "/admin/disbursement-requests/{disbursement_request_id}/reject",
+    response_model=ContributionDisbursementRequestResponse,
+)
+def reject_disbursement_request(
+    disbursement_request_id: uuid.UUID,
+    payload: ContributionDisbursementStatusAction,
+    request: Request,
+    current_user: Annotated[User, Depends(finance_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> ContributionDisbursementRequestResponse:
+    disbursement_request = _get_disbursement_or_404(db, disbursement_request_id)
+    if disbursement_request.status not in {DISBURSEMENT_APPROVED, DISBURSEMENT_REQUESTED}:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only requested or approved disbursements can be rejected",
+        )
+    disbursement_request.decision_note = payload.note
+    disbursement_request.reviewed_at = utcnow()
+    disbursement_request.reviewed_by_user_id = current_user.id
+    disbursement_request.status = DISBURSEMENT_REJECTED
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "contributions.disbursement_rejected",
+        {"disbursement_request_id": str(disbursement_request.id)},
+    )
+    db.commit()
+    db.refresh(disbursement_request)
+    return _serialize_disbursement_request(disbursement_request)
+
+
+@router.post(
+    "/admin/disbursement-requests/{disbursement_request_id}/mark-paid",
+    response_model=ContributionDisbursementRequestResponse,
+)
+def mark_disbursement_request_paid(
+    disbursement_request_id: uuid.UUID,
+    payload: ContributionDisbursementStatusAction,
+    request: Request,
+    current_user: Annotated[User, Depends(finance_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> ContributionDisbursementRequestResponse:
+    disbursement_request = _get_disbursement_or_404(db, disbursement_request_id)
+    if disbursement_request.status != DISBURSEMENT_APPROVED:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only approved disbursements can be marked paid",
+        )
+    if payload.note:
+        disbursement_request.decision_note = payload.note
+    disbursement_request.paid_at = utcnow()
+    disbursement_request.paid_by_user_id = current_user.id
+    disbursement_request.status = DISBURSEMENT_PAID
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "contributions.disbursement_paid",
+        {"disbursement_request_id": str(disbursement_request.id)},
+    )
+    db.commit()
+    db.refresh(disbursement_request)
+    return _serialize_disbursement_request(disbursement_request)
 
 
 @router.get("/admin/treasury/audit-package")
