@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import io
 import json
+import secrets
 import textwrap
 import uuid
 from datetime import UTC, datetime
@@ -23,6 +24,7 @@ from app.modules.contributions.models import (
     Contribution,
     ContributionCampaign,
     ContributionLedgerEntry,
+    ContributionPaymentAttempt,
     ContributionPaymentIntent,
     ContributionReceipt,
     ContributionWebhookEvent,
@@ -239,6 +241,17 @@ def _get_payment_intent_by_provider_reference(
     )
 
 
+def _get_latest_payment_attempt(
+    db: Session,
+    payment_intent_id: uuid.UUID,
+) -> ContributionPaymentAttempt | None:
+    return db.scalar(
+        select(ContributionPaymentAttempt)
+        .where(ContributionPaymentAttempt.payment_intent_id == payment_intent_id)
+        .order_by(ContributionPaymentAttempt.created_at.desc())
+    )
+
+
 def _get_receipt_or_404(db: Session, receipt_id: uuid.UUID) -> ContributionReceipt:
     receipt = db.scalar(
         select(ContributionReceipt)
@@ -368,10 +381,16 @@ def _serialize_contribution(contribution: Contribution) -> ContributionResponse:
 def _serialize_payment_intent(
     payment_intent: ContributionPaymentIntent,
 ) -> ContributionPaymentIntentResponse:
+    checkout_attempt = (
+        payment_intent.payment_attempts[-1] if payment_intent.payment_attempts else None
+    )
     return ContributionPaymentIntentResponse(
         amount_cents=payment_intent.amount_cents,
         anonymous=payment_intent.anonymous,
         campaign_id=payment_intent.campaign_id,
+        checkout_attempt_id=checkout_attempt.id if checkout_attempt else None,
+        checkout_url=checkout_attempt.checkout_url if checkout_attempt else None,
+        client_secret=checkout_attempt.client_secret if checkout_attempt else None,
         contributor_user_id=payment_intent.contributor_user_id,
         created_at=payment_intent.created_at,
         currency=payment_intent.currency,
@@ -911,6 +930,54 @@ def _find_contribution_for_payment_intent(
     )
 
 
+def _local_checkout_client_secret(provider_intent_id: str) -> str:
+    return f"{provider_intent_id}_secret_{secrets.token_urlsafe(24)}"
+
+
+def _create_payment_attempt(
+    *,
+    payment_intent: ContributionPaymentIntent,
+) -> ContributionPaymentAttempt:
+    client_secret = _local_checkout_client_secret(payment_intent.provider_intent_id)
+    return ContributionPaymentAttempt(
+        id=uuid.uuid4(),
+        amount_cents=payment_intent.amount_cents,
+        checkout_url=None,
+        client_secret=client_secret,
+        currency=payment_intent.currency,
+        error_message=None,
+        payment_intent_id=payment_intent.id,
+        payment_method=payment_intent.payment_method,
+        provider=payment_intent.provider,
+        provider_intent_id=payment_intent.provider_intent_id,
+        request_payload_json={
+            "amount_cents": payment_intent.amount_cents,
+            "currency": payment_intent.currency,
+            "payment_method": payment_intent.payment_method,
+            "provider": payment_intent.provider,
+        },
+        response_payload_json={
+            "client_secret_available": True,
+            "provider_intent_id": payment_intent.provider_intent_id,
+        },
+        status=payment_intent.status,
+    )
+
+
+def _update_latest_payment_attempt_status(
+    db: Session,
+    payment_intent: ContributionPaymentIntent,
+    status_value: str,
+    *,
+    error_message: str | None = None,
+) -> None:
+    payment_attempt = _get_latest_payment_attempt(db, payment_intent.id)
+    if payment_attempt is None:
+        return
+    payment_attempt.status = status_value
+    payment_attempt.error_message = error_message
+
+
 def _record_payment_intent_contribution(
     *,
     actor_user: User | None,
@@ -942,6 +1009,7 @@ def _record_payment_intent_contribution(
         status=RECEIVED_STATUS,
     )
     payment_intent.status = PAYMENT_INTENT_CONFIRMED
+    _update_latest_payment_attempt_status(db, payment_intent, PAYMENT_INTENT_CONFIRMED)
     db.add(contribution)
     db.flush()
     receipt = ContributionReceipt(
@@ -1789,7 +1857,9 @@ def create_payment_intent(
         provider_intent_id=f"yalumni_pi_{intent_id.hex}",
         status=PAYMENT_INTENT_REQUIRES_CONFIRMATION,
     )
+    payment_attempt = _create_payment_attempt(payment_intent=payment_intent)
     db.add(payment_intent)
+    db.add(payment_attempt)
     _create_security_event(
         db,
         request,
@@ -1799,6 +1869,7 @@ def create_payment_intent(
             "amount_cents": payment_intent.amount_cents,
             "campaign_id": str(campaign.id),
             "currency": payment_intent.currency,
+            "payment_attempt_id": str(payment_attempt.id),
             "payment_intent_id": str(payment_intent.id),
             "payment_method": payment_intent.payment_method,
             "provider": payment_intent.provider,
@@ -1966,6 +2037,11 @@ async def receive_provider_webhook(
         if existing_contribution is not None:
             if payment_intent.status != PAYMENT_INTENT_CONFIRMED:
                 payment_intent.status = PAYMENT_INTENT_CONFIRMED
+                _update_latest_payment_attempt_status(
+                    db,
+                    payment_intent,
+                    PAYMENT_INTENT_CONFIRMED,
+                )
             _create_system_security_event(
                 db,
                 request,
@@ -2042,6 +2118,12 @@ async def receive_provider_webhook(
         )
     was_already_marked = payment_intent.status == next_status
     payment_intent.status = next_status
+    _update_latest_payment_attempt_status(
+        db,
+        payment_intent,
+        next_status,
+        error_message=payload.failure_reason,
+    )
     _create_system_security_event(
         db,
         request,

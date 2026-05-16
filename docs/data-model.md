@@ -120,6 +120,10 @@
   diagnostics with provider event IDs, provider intent references, normalized
   event type, processing status, delivery count, payment intent/contribution
   links, payload snapshot, processed timestamp, and error metadata.
+- `contribution_payment_attempts` - implemented as the provider-neutral checkout
+  attempt record tied to each local payment intent, including provider
+  reference, local client secret, optional checkout URL, request/response
+  metadata, lifecycle status, and error message.
 - `contribution_receipts` - implemented for one issued receipt per contribution
   with receipt number, issued-to details, amount, currency, status, and tax note.
 - `contribution_ledger_entries` - implemented for foundation credit entries,
@@ -129,9 +133,9 @@
   certified PDF audit reports, and admin adjustment controls currently read
   these live tables directly rather than using separate export snapshot tables.
 - `pledges` - future split from confirmed local contribution recording.
-- `payment_attempts` - future expansion for checkout-session level attempts,
-  provider authorization details, and richer retry orchestration beyond the
-  current webhook diagnostics table.
+- Provider payment attempts still need real provider authorization details,
+  retries, and multi-attempt checkout orchestration beyond the current local
+  checkout-attempt foundation.
 - `disbursement_requests`
 - `disbursement_approvals`
 - `expense_reports`

@@ -573,7 +573,7 @@ POST   /api/v1/elections/{election_id}/disputes       # planned
 ```text
 GET    /api/v1/contributions                         # implemented
 GET    /api/v1/contributions/{campaign_id}           # implemented
-POST   /api/v1/contributions/{campaign_id}/payment-intents # implemented local intent foundation
+POST   /api/v1/contributions/{campaign_id}/payment-intents # implemented local intent + checkout attempt/client secret
 POST   /api/v1/contributions/{campaign_id}/payment-intents/{payment_intent_id}/confirm # implemented local intent confirmation
 POST   /api/v1/contributions/webhooks/{provider}     # implemented signed webhook reconciliation foundation
 POST   /api/v1/contributions/{campaign_id}/pay       # implemented local confirmed payment

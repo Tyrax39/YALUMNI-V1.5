@@ -86,6 +86,49 @@ class ContributionPaymentIntent(Base, TimestampMixin):
         foreign_keys=[campaign_id],
     )
     contributor: Mapped[User | None] = relationship(foreign_keys=[contributor_user_id])
+    payment_attempts: Mapped[list["ContributionPaymentAttempt"]] = relationship(
+        back_populates="payment_intent",
+        cascade="all, delete-orphan",
+        order_by="ContributionPaymentAttempt.created_at",
+    )
+
+
+class ContributionPaymentAttempt(Base, TimestampMixin):
+    __tablename__ = "contribution_payment_attempts"
+    __table_args__ = (
+        Index(
+            "ix_contribution_payment_attempts_intent_status",
+            "payment_intent_id",
+            "status",
+        ),
+        Index(
+            "ix_contribution_payment_attempts_provider_intent",
+            "provider",
+            "provider_intent_id",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    payment_intent_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("contribution_payment_intents.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    payment_method: Mapped[str] = mapped_column(String(60), nullable=False)
+    provider: Mapped[str] = mapped_column(String(60), nullable=False)
+    provider_intent_id: Mapped[str] = mapped_column(String(120), nullable=False)
+    status: Mapped[str] = mapped_column(String(40), nullable=False)
+    client_secret: Mapped[str | None] = mapped_column(String(220))
+    checkout_url: Mapped[str | None] = mapped_column(String(500))
+    request_payload_json: Mapped[dict | None] = mapped_column(JSON)
+    response_payload_json: Mapped[dict | None] = mapped_column(JSON)
+    error_message: Mapped[str | None] = mapped_column(String(500))
+
+    payment_intent: Mapped[ContributionPaymentIntent] = relationship(
+        back_populates="payment_attempts",
+        foreign_keys=[payment_intent_id],
+    )
 
 
 class ContributionWebhookEvent(Base, TimestampMixin):

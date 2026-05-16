@@ -6,7 +6,7 @@ from collections.abc import Generator
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -177,6 +177,31 @@ def create_pending_contribution_for_test(
         db.commit()
         db.refresh(contribution)
         return str(contribution.id)
+    finally:
+        db_iterator.close()
+
+
+def payment_attempt_snapshots_for_intent(payment_intent_id: str) -> list[dict]:
+    db_override = app.dependency_overrides[get_db_session]
+    db_iterator = db_override()
+    db = next(db_iterator)
+    try:
+        attempts = db.scalars(
+            select(contribution_models.ContributionPaymentAttempt).where(
+                contribution_models.ContributionPaymentAttempt.payment_intent_id
+                == uuid.UUID(payment_intent_id)
+            )
+        ).all()
+        return [
+            {
+                "client_secret": attempt.client_secret,
+                "error_message": attempt.error_message,
+                "provider": attempt.provider,
+                "provider_intent_id": attempt.provider_intent_id,
+                "status": attempt.status,
+            }
+            for attempt in attempts
+        ]
     finally:
         db_iterator.close()
 
@@ -505,6 +530,19 @@ def test_contribution_finance_role_and_receipt_privacy_are_enforced(client: Test
     )
     assert intent_response.status_code == 201
     intent = intent_response.json()
+    assert intent["checkout_attempt_id"]
+    assert intent["checkout_url"] is None
+    assert intent["client_secret"].startswith(f"{intent['provider_intent_id']}_secret_")
+    created_attempts = payment_attempt_snapshots_for_intent(intent["id"])
+    assert created_attempts == [
+        {
+            "client_secret": intent["client_secret"],
+            "error_message": None,
+            "provider": "LOCAL_TEST",
+            "provider_intent_id": intent["provider_intent_id"],
+            "status": "REQUIRES_CONFIRMATION",
+        }
+    ]
 
     denied_confirm = client.post(
         f"/api/v1/contributions/{campaign_id}/payment-intents/{intent['id']}/confirm",
@@ -522,6 +560,9 @@ def test_contribution_finance_role_and_receipt_privacy_are_enforced(client: Test
     assert confirmed["payment_reference"] == intent["provider_intent_id"]
     assert confirmed["receipt_id"]
     assert confirmed["status"] == "RECEIVED"
+    confirmed_attempts = payment_attempt_snapshots_for_intent(intent["id"])
+    assert confirmed_attempts[0]["status"] == "CONFIRMED"
+    assert confirmed_attempts[0]["error_message"] is None
 
     duplicate_confirm = client.post(
         f"/api/v1/contributions/{campaign_id}/payment-intents/{intent['id']}/confirm",
@@ -823,6 +864,9 @@ def test_provider_webhook_marks_failed_payment_intent_idempotently(
         assert failed_result["reconciled"] is True
         assert failed_result["contribution_id"] is None
         assert failed_result["payment_intent_status"] == "FAILED"
+        failed_attempts = payment_attempt_snapshots_for_intent(intent["id"])
+        assert failed_attempts[0]["status"] == "FAILED"
+        assert failed_attempts[0]["error_message"] == "Provider declined the payment."
 
         duplicate_failed_response = client.post(
             "/api/v1/contributions/webhooks/local-test",

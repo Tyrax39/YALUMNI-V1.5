@@ -86,6 +86,9 @@ class ContributionPaymentIntentResponse(BaseModel):
     amount_cents: int
     anonymous: bool
     campaign_id: uuid.UUID
+    checkout_attempt_id: uuid.UUID | None
+    checkout_url: str | None
+    client_secret: str | None
     contributor_user_id: uuid.UUID | None
     created_at: datetime
     currency: str

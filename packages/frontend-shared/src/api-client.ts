@@ -732,6 +732,9 @@ export type ContributionPaymentIntent = {
   amount_cents: number;
   anonymous: boolean;
   campaign_id: string;
+  checkout_attempt_id?: string | null;
+  checkout_url?: string | null;
+  client_secret?: string | null;
   contributor_user_id?: string | null;
   created_at: string;
   currency: string;
