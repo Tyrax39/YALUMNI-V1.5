@@ -135,6 +135,9 @@ POST /api/v1/contributions/admin/contributions/{contribution_id}/void
 GET  /api/v1/contributions/admin/contributions/export
 GET  /api/v1/contributions/admin/treasury
 GET  /api/v1/contributions/admin/treasury/export
+GET  /api/v1/contributions/admin/treasury/certifications
+POST /api/v1/contributions/admin/treasury/certifications
+GET  /api/v1/contributions/admin/treasury/certifications/{certification_id}
 GET  /api/v1/contributions/admin/treasury/audit-package
 GET  /api/v1/contributions/admin/treasury/audit-report
 GET  /api/v1/elections
@@ -617,6 +620,9 @@ POST   /api/v1/contributions/admin/contributions/{contribution_id}/void # implem
 GET    /api/v1/contributions/admin/contributions/export # implemented CSV export
 GET    /api/v1/contributions/admin/treasury          # implemented
 GET    /api/v1/contributions/admin/treasury/export   # implemented ledger CSV export
+GET    /api/v1/contributions/admin/treasury/certifications # implemented stored certification list
+POST   /api/v1/contributions/admin/treasury/certifications # implemented immutable certification snapshot
+GET    /api/v1/contributions/admin/treasury/certifications/{certification_id} # implemented stored certification detail
 GET    /api/v1/contributions/admin/treasury/audit-package # implemented signed JSON snapshot
 GET    /api/v1/contributions/admin/treasury/audit-report # implemented certified PDF report
 ```

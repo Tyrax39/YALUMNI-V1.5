@@ -455,6 +455,53 @@ def test_contribution_campaign_payment_receipt_and_treasury(client: TestClient) 
     assert audit_report_response.content.startswith(b"%PDF-1.4")
     assert b"YALUMNI Treasury Audit Report" in audit_report_response.content
 
+    certification_response = client.post(
+        "/api/v1/contributions/admin/treasury/certifications",
+        headers=admin_headers,
+        json={
+            "campaign_id": campaign["id"],
+            "limit": 100,
+            "note": "Certified after receipt reconciliation.",
+            "status": "received",
+        },
+    )
+    assert certification_response.status_code == 201
+    certification = certification_response.json()
+    assert certification["campaign_id"] == campaign["id"]
+    assert certification["campaign_title"] == campaign["title"]
+    assert certification["certified_by_email"] == "finance.admin@example.com"
+    assert certification["contribution_count"] == 1
+    assert certification["ledger_entry_count"] == 1
+    assert certification["note"] == "Certified after receipt reconciliation."
+    assert certification["received_amount_cents"] == 12500
+    assert certification["status_filter"] == "RECEIVED"
+    canonical_certified_package = json.dumps(
+        certification["package_json"]["package"],
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    assert certification["canonical_sha256"] == hashlib.sha256(
+        canonical_certified_package
+    ).hexdigest()
+
+    certification_list_response = client.get(
+        "/api/v1/contributions/admin/treasury/certifications",
+        headers=admin_headers,
+    )
+    assert certification_list_response.status_code == 200
+    certification_list = certification_list_response.json()
+    assert certification_list["total"] == 1
+    assert certification_list["certifications"][0]["id"] == certification["id"]
+
+    certification_detail_response = client.get(
+        f"/api/v1/contributions/admin/treasury/certifications/{certification['id']}",
+        headers=admin_headers,
+    )
+    assert certification_detail_response.status_code == 200
+    assert certification_detail_response.json()["canonical_sha256"] == certification[
+        "canonical_sha256"
+    ]
+
     refund_response = client.post(
         f"/api/v1/contributions/admin/contributions/{contribution['id']}/refund",
         headers=admin_headers,
@@ -488,6 +535,17 @@ def test_contribution_campaign_payment_receipt_and_treasury(client: TestClient) 
     assert refunded_treasury["received_amount_cents"] == 0
     assert refunded_treasury["ledger_entries"][0]["entry_type"] == "CONTRIBUTION_REFUND"
     assert refunded_treasury["ledger_entries"][0]["amount_cents"] == -12500
+    certified_snapshot_response = client.get(
+        f"/api/v1/contributions/admin/treasury/certifications/{certification['id']}",
+        headers=admin_headers,
+    )
+    assert certified_snapshot_response.status_code == 200
+    certified_snapshot = certified_snapshot_response.json()
+    assert certified_snapshot["received_amount_cents"] == 12500
+    assert (
+        certified_snapshot["package_json"]["package"]["summary"]["received_amount_cents"]
+        == 12500
+    )
 
     close_response = client.post(
         f"/api/v1/contributions/admin/campaigns/{campaign['id']}/close",
@@ -608,6 +666,17 @@ def test_contribution_finance_role_and_receipt_privacy_are_enforced(client: Test
         headers=member_headers,
     )
     assert denied_audit_report.status_code == 403
+    denied_certification_create = client.post(
+        "/api/v1/contributions/admin/treasury/certifications",
+        headers=member_headers,
+        json={"note": "Members cannot certify treasury snapshots."},
+    )
+    assert denied_certification_create.status_code == 403
+    denied_certification_list = client.get(
+        "/api/v1/contributions/admin/treasury/certifications",
+        headers=member_headers,
+    )
+    assert denied_certification_list.status_code == 403
     denied_webhook_events = client.get(
         "/api/v1/contributions/admin/webhook-events",
         headers=member_headers,

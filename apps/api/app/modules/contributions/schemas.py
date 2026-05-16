@@ -82,6 +82,21 @@ class ContributionPaymentIntentCreate(ContributionPaymentCreate):
     pass
 
 
+class TreasuryCertificationCreate(BaseModel):
+    campaign_id: uuid.UUID | None = None
+    limit: int = Field(default=1000, ge=1, le=5000)
+    note: str | None = Field(default=None, max_length=2000)
+    status: str | None = Field(default=None, max_length=40)
+
+    @field_validator("note", "status")
+    @classmethod
+    def normalize_optional_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+
 class ContributionPaymentIntentResponse(BaseModel):
     amount_cents: int
     anonymous: bool
@@ -303,3 +318,34 @@ class TreasurySummaryResponse(BaseModel):
     receipt_count: int
     received_amount_cents: int
     recent_contributions: list[ContributionResponse]
+
+
+class TreasuryCertificationResponse(BaseModel):
+    campaign_id: uuid.UUID | None
+    campaign_title: str | None
+    canonical_sha256: str
+    certified_at: datetime
+    certified_by_display_name: str | None
+    certified_by_email: str | None
+    certified_by_user_id: uuid.UUID | None
+    contribution_count: int
+    currencies: list[str]
+    id: uuid.UUID
+    ledger_entry_count: int
+    limit: int
+    note: str | None
+    package_json: dict
+    pending_amount_cents: int
+    receipt_count: int
+    received_amount_cents: int
+    signature: str
+    signature_algorithm: str
+    status_filter: str | None
+
+
+class TreasuryCertificationListResponse(BaseModel):
+    certifications: list[TreasuryCertificationResponse]
+    has_more: bool
+    limit: int
+    offset: int
+    total: int

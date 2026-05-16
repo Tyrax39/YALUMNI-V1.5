@@ -138,8 +138,11 @@
   requests now fail closed unless the configured refund provider has an adapter.
   Member text/PDF receipt downloads, finance CSV exports, signed JSON treasury
   audit packages, certified PDF audit reports, and admin adjustment controls
-  currently read these live tables directly rather than using separate export
-  snapshot tables.
+  read these live tables directly.
+- `contribution_treasury_certifications` - implemented for finance-admin
+  immutable treasury certification snapshots, storing the signed audit package,
+  canonical SHA-256 digest, HMAC signature metadata, reviewer, scope, summary
+  counts, currencies, and optional certification note.
 - `pledges` - future split from confirmed local contribution recording.
 - Provider payment attempts still need real provider authorization details,
   external checkout sessions, and production-grade multi-attempt checkout
@@ -147,8 +150,8 @@
 - `disbursement_requests`
 - `disbursement_approvals`
 - `expense_reports`
-- `treasury_export_runs` - planned if exports need persistent approvals,
-  immutable stored snapshots, or reviewer certification workflows.
+- `treasury_export_runs` - still planned only if one-off CSV/PDF export history
+  needs separate operational tracking beyond stored certification snapshots.
 
 ### Elections
 

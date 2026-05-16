@@ -28,6 +28,7 @@ from app.modules.contributions.models import (
     ContributionPaymentAttempt,
     ContributionPaymentIntent,
     ContributionReceipt,
+    ContributionTreasuryCertification,
     ContributionWebhookEvent,
 )
 from app.modules.contributions.schemas import (
@@ -48,6 +49,9 @@ from app.modules.contributions.schemas import (
     ContributionWebhookEventResponse,
     ContributionWebhookPayload,
     ContributionWebhookResponse,
+    TreasuryCertificationCreate,
+    TreasuryCertificationListResponse,
+    TreasuryCertificationResponse,
     TreasurySummaryResponse,
 )
 
@@ -1338,6 +1342,70 @@ def _build_treasury_audit_package(
     }
 
 
+def _treasury_audit_inputs(
+    db: Session,
+    *,
+    campaign_id: uuid.UUID | None,
+    limit: int,
+    status_filter: str | None,
+) -> tuple[list[Contribution], list[ContributionLedgerEntry]]:
+    contribution_query = _admin_contributions_query(
+        campaign_id=campaign_id,
+        status_filter=status_filter,
+    )
+    contributions = db.scalars(
+        contribution_query.order_by(Contribution.created_at.desc()).limit(limit)
+    ).all()
+    ledger_query = (
+        select(ContributionLedgerEntry)
+        .join(Contribution, ContributionLedgerEntry.contribution_id == Contribution.id)
+        .options(
+            joinedload(ContributionLedgerEntry.contribution).joinedload(Contribution.campaign),
+            joinedload(ContributionLedgerEntry.contribution).joinedload(Contribution.receipt),
+        )
+        .order_by(ContributionLedgerEntry.created_at.desc())
+        .limit(limit)
+    )
+    normalized_status = _normalize_enum(status_filter)
+    if campaign_id:
+        ledger_query = ledger_query.where(Contribution.campaign_id == campaign_id)
+    if normalized_status:
+        ledger_query = ledger_query.where(Contribution.status == normalized_status)
+    ledger_entries = db.scalars(ledger_query).all()
+    return contributions, ledger_entries
+
+
+def _serialize_treasury_certification(
+    certification: ContributionTreasuryCertification,
+) -> TreasuryCertificationResponse:
+    return TreasuryCertificationResponse(
+        campaign_id=certification.campaign_id,
+        campaign_title=certification.campaign.title if certification.campaign else None,
+        canonical_sha256=certification.canonical_sha256,
+        certified_at=certification.certified_at,
+        certified_by_display_name=certification.certified_by.display_name
+        if certification.certified_by
+        else None,
+        certified_by_email=certification.certified_by.email
+        if certification.certified_by
+        else None,
+        certified_by_user_id=certification.certified_by_user_id,
+        contribution_count=certification.contribution_count,
+        currencies=certification.currencies_json or [],
+        id=certification.id,
+        ledger_entry_count=certification.ledger_entry_count,
+        limit=certification.limit,
+        note=certification.note,
+        package_json=certification.package_json,
+        pending_amount_cents=certification.pending_amount_cents,
+        receipt_count=certification.receipt_count,
+        received_amount_cents=certification.received_amount_cents,
+        signature=certification.signature,
+        signature_algorithm=certification.signature_algorithm,
+        status_filter=certification.status_filter,
+    )
+
+
 @router.get("", response_model=ContributionCampaignListResponse)
 @router.get("/", response_model=ContributionCampaignListResponse)
 def list_campaigns(
@@ -1716,6 +1784,146 @@ def export_treasury_ledger(
     )
     db.commit()
     return _csv_response(f"yalumni-treasury-ledger-{utcnow().date().isoformat()}.csv", rows)
+
+
+@router.post(
+    "/admin/treasury/certifications",
+    response_model=TreasuryCertificationResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+@router.post(
+    "/admin/treasury/certifications/",
+    response_model=TreasuryCertificationResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_treasury_certification(
+    payload: TreasuryCertificationCreate,
+    request: Request,
+    current_user: Annotated[User, Depends(finance_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> TreasuryCertificationResponse:
+    if payload.campaign_id:
+        _get_campaign_or_404(db, payload.campaign_id)
+    normalized_status = _normalize_enum(payload.status)
+    generated_at = utcnow()
+    contributions, ledger_entries = _treasury_audit_inputs(
+        db,
+        campaign_id=payload.campaign_id,
+        limit=payload.limit,
+        status_filter=payload.status,
+    )
+    package = _build_treasury_audit_package(
+        campaign_id=payload.campaign_id,
+        contributions=contributions,
+        generated_at=generated_at,
+        generated_by=current_user,
+        ledger_entries=ledger_entries,
+        limit=payload.limit,
+        status_filter=payload.status,
+    )
+    summary = package["package"]["summary"]
+    certification = ContributionTreasuryCertification(
+        campaign_id=payload.campaign_id,
+        canonical_sha256=package["integrity"]["canonical_sha256"],
+        certified_at=generated_at,
+        certified_by_user_id=current_user.id,
+        contribution_count=summary["contribution_count"],
+        currencies_json=summary["currencies"],
+        ledger_entry_count=summary["ledger_entry_count"],
+        limit=payload.limit,
+        note=payload.note,
+        package_json=package,
+        pending_amount_cents=summary["pending_amount_cents"],
+        receipt_count=summary["receipt_count"],
+        received_amount_cents=summary["received_amount_cents"],
+        signature=package["integrity"]["signature"],
+        signature_algorithm=package["integrity"]["signature_algorithm"],
+        status_filter=normalized_status,
+    )
+    db.add(certification)
+    db.flush()
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "contributions.treasury_certification_created",
+        {
+            "campaign_id": str(payload.campaign_id) if payload.campaign_id else None,
+            "canonical_sha256": certification.canonical_sha256,
+            "certification_id": str(certification.id),
+            "contribution_count": certification.contribution_count,
+            "ledger_entry_count": certification.ledger_entry_count,
+        },
+    )
+    db.commit()
+    db.refresh(certification)
+    return _serialize_treasury_certification(certification)
+
+
+@router.get(
+    "/admin/treasury/certifications",
+    response_model=TreasuryCertificationListResponse,
+)
+@router.get(
+    "/admin/treasury/certifications/",
+    response_model=TreasuryCertificationListResponse,
+)
+def list_treasury_certifications(
+    current_user: Annotated[User, Depends(finance_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+    campaign_id: Annotated[uuid.UUID | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> TreasuryCertificationListResponse:
+    _ = current_user
+    query = select(ContributionTreasuryCertification).options(
+        joinedload(ContributionTreasuryCertification.campaign),
+        joinedload(ContributionTreasuryCertification.certified_by),
+    )
+    if campaign_id:
+        query = query.where(ContributionTreasuryCertification.campaign_id == campaign_id)
+    total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+    certifications = db.scalars(
+        query.order_by(ContributionTreasuryCertification.certified_at.desc())
+        .offset(offset)
+        .limit(limit)
+    ).all()
+    return TreasuryCertificationListResponse(
+        certifications=[
+            _serialize_treasury_certification(certification)
+            for certification in certifications
+        ],
+        has_more=offset + len(certifications) < total,
+        limit=limit,
+        offset=offset,
+        total=total,
+    )
+
+
+@router.get(
+    "/admin/treasury/certifications/{certification_id}",
+    response_model=TreasuryCertificationResponse,
+)
+def get_treasury_certification(
+    certification_id: uuid.UUID,
+    current_user: Annotated[User, Depends(finance_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> TreasuryCertificationResponse:
+    _ = current_user
+    certification = db.scalar(
+        select(ContributionTreasuryCertification)
+        .options(
+            joinedload(ContributionTreasuryCertification.campaign),
+            joinedload(ContributionTreasuryCertification.certified_by),
+        )
+        .where(ContributionTreasuryCertification.id == certification_id)
+    )
+    if certification is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Treasury certification not found",
+        )
+    return _serialize_treasury_certification(certification)
 
 
 @router.get("/admin/treasury/audit-package")

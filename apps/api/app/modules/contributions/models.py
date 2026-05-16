@@ -264,3 +264,47 @@ class ContributionLedgerEntry(Base, TimestampMixin):
         foreign_keys=[contribution_id],
     )
     created_by: Mapped[User | None] = relationship(foreign_keys=[created_by_user_id])
+
+
+class ContributionTreasuryCertification(Base, TimestampMixin):
+    __tablename__ = "contribution_treasury_certifications"
+    __table_args__ = (
+        Index(
+            "ix_contribution_treasury_certifications_certified_at",
+            "certified_at",
+        ),
+        Index(
+            "ix_contribution_treasury_certifications_campaign",
+            "campaign_id",
+            "certified_at",
+        ),
+        Index(
+            "ix_contribution_treasury_certifications_digest",
+            "canonical_sha256",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    campaign_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("contribution_campaigns.id", ondelete="SET NULL"),
+    )
+    certified_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+    )
+    certified_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    status_filter: Mapped[str | None] = mapped_column(String(40))
+    limit: Mapped[int] = mapped_column(Integer, nullable=False)
+    contribution_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    ledger_entry_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    receipt_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    received_amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    pending_amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    currencies_json: Mapped[list[str] | None] = mapped_column(JSON)
+    canonical_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    signature: Mapped[str] = mapped_column(String(128), nullable=False)
+    signature_algorithm: Mapped[str] = mapped_column(String(40), nullable=False)
+    note: Mapped[str | None] = mapped_column(Text)
+    package_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+
+    campaign: Mapped[ContributionCampaign | None] = relationship(foreign_keys=[campaign_id])
+    certified_by: Mapped[User | None] = relationship(foreign_keys=[certified_by_user_id])
