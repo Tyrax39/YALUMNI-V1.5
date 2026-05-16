@@ -6,6 +6,7 @@ import json
 import secrets
 import textwrap
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Annotated
 
@@ -89,6 +90,16 @@ WEBHOOK_CANCELED_EVENTS = {
     "PAYMENT_CANCELED",
     "PAYMENT_INTENT_CANCELED",
 }
+
+
+@dataclass(frozen=True)
+class CheckoutSessionDraft:
+    checkout_url: str | None
+    client_secret: str | None
+    provider: str
+    provider_intent_id: str
+    request_payload_json: dict
+    response_payload_json: dict
 
 
 def _request_context(request: Request) -> tuple[str | None, str | None]:
@@ -930,36 +941,78 @@ def _find_contribution_for_payment_intent(
     )
 
 
+def _configured_checkout_provider() -> str:
+    return _normalize_enum(get_settings().contribution_checkout_provider) or "LOCAL_TEST"
+
+
 def _local_checkout_client_secret(provider_intent_id: str) -> str:
     return f"{provider_intent_id}_secret_{secrets.token_urlsafe(24)}"
 
 
+def _create_local_test_checkout_session(
+    *,
+    campaign: ContributionCampaign,
+    intent_id: uuid.UUID,
+    payload: ContributionPaymentIntentCreate,
+) -> CheckoutSessionDraft:
+    provider_intent_id = f"yalumni_pi_{intent_id.hex}"
+    return CheckoutSessionDraft(
+        checkout_url=None,
+        client_secret=_local_checkout_client_secret(provider_intent_id),
+        provider="LOCAL_TEST",
+        provider_intent_id=provider_intent_id,
+        request_payload_json={
+            "amount_cents": payload.amount_cents,
+            "campaign_id": str(campaign.id),
+            "currency": payload.currency,
+            "payment_method": payload.payment_method,
+            "provider": "LOCAL_TEST",
+        },
+        response_payload_json={
+            "adapter": "LOCAL_TEST",
+            "client_secret_available": True,
+            "provider_intent_id": provider_intent_id,
+        },
+    )
+
+
+def _create_checkout_session(
+    *,
+    campaign: ContributionCampaign,
+    intent_id: uuid.UUID,
+    payload: ContributionPaymentIntentCreate,
+    provider: str,
+) -> CheckoutSessionDraft:
+    if provider == "LOCAL_TEST":
+        return _create_local_test_checkout_session(
+            campaign=campaign,
+            intent_id=intent_id,
+            payload=payload,
+        )
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail=f"Contribution checkout provider {provider} is not implemented",
+    )
+
+
 def _create_payment_attempt(
     *,
+    checkout_session: CheckoutSessionDraft,
     payment_intent: ContributionPaymentIntent,
 ) -> ContributionPaymentAttempt:
-    client_secret = _local_checkout_client_secret(payment_intent.provider_intent_id)
     return ContributionPaymentAttempt(
         id=uuid.uuid4(),
         amount_cents=payment_intent.amount_cents,
-        checkout_url=None,
-        client_secret=client_secret,
+        checkout_url=checkout_session.checkout_url,
+        client_secret=checkout_session.client_secret,
         currency=payment_intent.currency,
         error_message=None,
         payment_intent_id=payment_intent.id,
         payment_method=payment_intent.payment_method,
         provider=payment_intent.provider,
         provider_intent_id=payment_intent.provider_intent_id,
-        request_payload_json={
-            "amount_cents": payment_intent.amount_cents,
-            "currency": payment_intent.currency,
-            "payment_method": payment_intent.payment_method,
-            "provider": payment_intent.provider,
-        },
-        response_payload_json={
-            "client_secret_available": True,
-            "provider_intent_id": payment_intent.provider_intent_id,
-        },
+        request_payload_json=checkout_session.request_payload_json,
+        response_payload_json=checkout_session.response_payload_json,
         status=payment_intent.status,
     )
 
@@ -1844,6 +1897,13 @@ def create_payment_intent(
     _ensure_campaign_accepts_payment(campaign)
     _validate_payment_payload(payload, campaign)
     intent_id = uuid.uuid4()
+    checkout_provider = _configured_checkout_provider()
+    checkout_session = _create_checkout_session(
+        campaign=campaign,
+        intent_id=intent_id,
+        payload=payload,
+        provider=checkout_provider,
+    )
     payment_intent = ContributionPaymentIntent(
         id=intent_id,
         amount_cents=payload.amount_cents,
@@ -1853,11 +1913,14 @@ def create_payment_intent(
         currency=payload.currency,
         note=payload.note,
         payment_method=payload.payment_method,
-        provider="LOCAL_TEST",
-        provider_intent_id=f"yalumni_pi_{intent_id.hex}",
+        provider=checkout_session.provider,
+        provider_intent_id=checkout_session.provider_intent_id,
         status=PAYMENT_INTENT_REQUIRES_CONFIRMATION,
     )
-    payment_attempt = _create_payment_attempt(payment_intent=payment_intent)
+    payment_attempt = _create_payment_attempt(
+        checkout_session=checkout_session,
+        payment_intent=payment_intent,
+    )
     db.add(payment_intent)
     db.add(payment_attempt)
     _create_security_event(

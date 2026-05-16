@@ -123,7 +123,9 @@
 - `contribution_payment_attempts` - implemented as the provider-neutral checkout
   attempt record tied to each local payment intent, including provider
   reference, local client secret, optional checkout URL, request/response
-  metadata, lifecycle status, and error message.
+  metadata, lifecycle status, and error message. Checkout creation now uses a
+  provider adapter boundary with `LOCAL_TEST` implemented and other providers
+  rejected until their adapters exist.
 - `contribution_receipts` - implemented for one issued receipt per contribution
   with receipt number, issued-to details, amount, currency, status, and tax note.
 - `contribution_ledger_entries` - implemented for foundation credit entries,
@@ -134,8 +136,8 @@
   these live tables directly rather than using separate export snapshot tables.
 - `pledges` - future split from confirmed local contribution recording.
 - Provider payment attempts still need real provider authorization details,
-  retries, and multi-attempt checkout orchestration beyond the current local
-  checkout-attempt foundation.
+  external checkout sessions, retries, and multi-attempt checkout orchestration
+  beyond the current local checkout-adapter foundation.
 - `disbursement_requests`
 - `disbursement_approvals`
 - `expense_reports`

@@ -144,9 +144,10 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
   processing status, and replay counts. Local provider-refund fallback now
   records a finance-admin refund reversal when a confirmed contribution has a
   payment reference. Provider-neutral checkout attempt records now capture the
-  local payment-intent client secret and status transitions; real provider
-  checkout sessions, provider-specific adapters, provider-side refund API calls,
-  and multi-attempt retry orchestration remain.
+  local payment-intent client secret and status transitions. Checkout creation
+  now goes through a provider adapter boundary with `LOCAL_TEST` implemented;
+  real provider checkout sessions, provider-specific adapters, provider-side
+  refund API calls, and multi-attempt retry orchestration remain.
 - Elections. Started with draft setup, candidate creation, voter-roll
   management, open/close lifecycle, one-vote-per-user ballot casting, result
   counts, quorum reporting, and admin audit/privacy summaries.

@@ -181,6 +181,37 @@ def create_pending_contribution_for_test(
         db_iterator.close()
 
 
+def test_payment_intent_rejects_unimplemented_checkout_provider(client: TestClient) -> None:
+    settings = get_settings()
+    previous_provider = settings.contribution_checkout_provider
+    settings.contribution_checkout_provider = "stripe"
+    try:
+        admin_headers = create_admin(client, "provider.boundary.finance@example.com")
+        member = register_user(client, "provider.boundary.donor@example.com", "Boundary Donor")
+        member_headers = auth_headers(member["access_token"])
+        campaign = create_published_campaign(
+            client,
+            admin_headers,
+            "Provider boundary scholarship fund",
+        )
+        intent_response = client.post(
+            f"/api/v1/contributions/{campaign['id']}/payment-intents",
+            headers=member_headers,
+            json={
+                "amount_cents": 7200,
+                "currency": "USD",
+                "payment_method": "CARD_TEST",
+            },
+        )
+        assert intent_response.status_code == 503
+        assert (
+            intent_response.json()["detail"]
+            == "Contribution checkout provider STRIPE is not implemented"
+        )
+    finally:
+        settings.contribution_checkout_provider = previous_provider
+
+
 def payment_attempt_snapshots_for_intent(payment_intent_id: str) -> list[dict]:
     db_override = app.dependency_overrides[get_db_session]
     db_iterator = db_override()
@@ -198,6 +229,7 @@ def payment_attempt_snapshots_for_intent(payment_intent_id: str) -> list[dict]:
                 "error_message": attempt.error_message,
                 "provider": attempt.provider,
                 "provider_intent_id": attempt.provider_intent_id,
+                "response_adapter": (attempt.response_payload_json or {}).get("adapter"),
                 "status": attempt.status,
             }
             for attempt in attempts
@@ -540,6 +572,7 @@ def test_contribution_finance_role_and_receipt_privacy_are_enforced(client: Test
             "error_message": None,
             "provider": "LOCAL_TEST",
             "provider_intent_id": intent["provider_intent_id"],
+            "response_adapter": "LOCAL_TEST",
             "status": "REQUIRES_CONFIRMATION",
         }
     ]
