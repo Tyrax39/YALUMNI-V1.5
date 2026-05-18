@@ -81,6 +81,8 @@ PENDING_STATUS = "PENDING"
 REFUNDED_STATUS = "REFUNDED"
 VOIDED_STATUS = "VOIDED"
 LEDGER_CREDIT = "CONTRIBUTION_CREDIT"
+LEDGER_EXPENSE = "CONTRIBUTION_EXPENSE"
+LEDGER_EXPENSE_REVERSAL = "CONTRIBUTION_EXPENSE_REVERSAL"
 LEDGER_REFUND = "CONTRIBUTION_REFUND"
 LEDGER_VOID = "CONTRIBUTION_VOID"
 PAYMENT_INTENT_REQUIRES_CONFIRMATION = "REQUIRES_CONFIRMATION"
@@ -627,9 +629,32 @@ def _serialize_ledger_entry(entry: ContributionLedgerEntry) -> ContributionLedge
         created_at=entry.created_at,
         currency=entry.currency,
         entry_type=entry.entry_type,
+        expense_report_id=entry.expense_report_id,
         id=entry.id,
         memo=entry.memo,
     )
+
+
+def _ledger_entry_campaign(entry: ContributionLedgerEntry) -> ContributionCampaign | None:
+    if entry.contribution:
+        return entry.contribution.campaign
+    if entry.expense_report:
+        return entry.expense_report.campaign
+    return None
+
+
+def _ledger_entry_campaign_id(entry: ContributionLedgerEntry) -> uuid.UUID | None:
+    if entry.contribution:
+        return entry.contribution.campaign_id
+    if entry.expense_report:
+        return entry.expense_report.campaign_id
+    return None
+
+
+def _ledger_entry_receipt_number(entry: ContributionLedgerEntry) -> str | None:
+    if entry.contribution and entry.contribution.receipt:
+        return entry.contribution.receipt.receipt_number
+    return None
 
 
 def _list_campaign_response(
@@ -1330,6 +1355,43 @@ def _finalize_webhook_event(
     event.status = status_value
 
 
+def _ledger_entries_query(
+    *,
+    campaign_id: uuid.UUID | None = None,
+    status_filter: str | None = None,
+):
+    query = select(ContributionLedgerEntry).options(
+        joinedload(ContributionLedgerEntry.contribution).joinedload(Contribution.campaign),
+        joinedload(ContributionLedgerEntry.contribution).joinedload(Contribution.contributor),
+        joinedload(ContributionLedgerEntry.contribution).joinedload(Contribution.receipt),
+        joinedload(ContributionLedgerEntry.expense_report).joinedload(
+            ContributionExpenseReport.campaign
+        ),
+    )
+    normalized_status = _normalize_enum(status_filter)
+    if campaign_id or normalized_status:
+        query = query.outerjoin(
+            Contribution,
+            ContributionLedgerEntry.contribution_id == Contribution.id,
+        ).outerjoin(
+            ContributionExpenseReport,
+            ContributionLedgerEntry.expense_report_id == ContributionExpenseReport.id,
+        )
+    if campaign_id:
+        query = query.where(
+            or_(
+                Contribution.campaign_id == campaign_id,
+                ContributionExpenseReport.campaign_id == campaign_id,
+            )
+        )
+    if normalized_status:
+        if normalized_status in EXPENSE_STATUSES:
+            query = query.where(ContributionExpenseReport.status == normalized_status)
+        else:
+            query = query.where(Contribution.status == normalized_status)
+    return query
+
+
 def _build_treasury_audit_package(
     *,
     campaign_id: uuid.UUID | None,
@@ -1392,19 +1454,28 @@ def _build_treasury_audit_package(
         "ledger_entries": [
             {
                 "amount_cents": entry.amount_cents,
-                "campaign_id": str(entry.contribution.campaign_id),
-                "campaign_title": entry.contribution.campaign.title
-                if entry.contribution.campaign
+                "campaign_id": str(_ledger_entry_campaign_id(entry))
+                if _ledger_entry_campaign_id(entry)
                 else None,
-                "contribution_id": str(entry.contribution_id),
+                "campaign_title": _ledger_entry_campaign(entry).title
+                if _ledger_entry_campaign(entry)
+                else None,
+                "contribution_id": str(entry.contribution_id) if entry.contribution_id else None,
                 "created_at": entry.created_at.isoformat(),
                 "currency": entry.currency,
                 "entry_type": entry.entry_type,
+                "expense_report_id": str(entry.expense_report_id)
+                if entry.expense_report_id
+                else None,
+                "expense_summary": entry.expense_report.summary
+                if entry.expense_report
+                else None,
+                "expense_vendor_name": entry.expense_report.vendor_name
+                if entry.expense_report
+                else None,
                 "ledger_entry_id": str(entry.id),
                 "memo": entry.memo,
-                "receipt_number": entry.contribution.receipt.receipt_number
-                if entry.contribution.receipt
-                else None,
+                "receipt_number": _ledger_entry_receipt_number(entry),
             }
             for entry in ledger_entries
         ],
@@ -1440,23 +1511,12 @@ def _treasury_audit_inputs(
     contributions = db.scalars(
         contribution_query.order_by(Contribution.created_at.desc()).limit(limit)
     ).all()
-    ledger_query = (
-        select(ContributionLedgerEntry)
-        .join(Contribution, ContributionLedgerEntry.contribution_id == Contribution.id)
-        .options(
-            joinedload(ContributionLedgerEntry.contribution).joinedload(Contribution.campaign),
-            joinedload(ContributionLedgerEntry.contribution).joinedload(Contribution.receipt),
-        )
+    ledger_entries = db.scalars(
+        _ledger_entries_query(campaign_id=campaign_id, status_filter=status_filter)
         .order_by(ContributionLedgerEntry.created_at.desc())
         .limit(limit)
     )
-    normalized_status = _normalize_enum(status_filter)
-    if campaign_id:
-        ledger_query = ledger_query.where(Contribution.campaign_id == campaign_id)
-    if normalized_status:
-        ledger_query = ledger_query.where(Contribution.status == normalized_status)
-    ledger_entries = db.scalars(ledger_query).all()
-    return contributions, ledger_entries
+    return contributions, ledger_entries.all()
 
 
 def _serialize_treasury_certification(
@@ -1569,6 +1629,27 @@ def _ensure_expense_amount_available(
             status_code=status.HTTP_409_CONFLICT,
             detail="Expense report amount exceeds available disbursement funds",
         )
+
+
+def _add_expense_ledger_entry(
+    db: Session,
+    *,
+    amount_cents: int,
+    created_by_user_id: uuid.UUID,
+    entry_type: str,
+    expense_report: ContributionExpenseReport,
+    memo: str,
+) -> None:
+    db.add(
+        ContributionLedgerEntry(
+            amount_cents=amount_cents,
+            created_by_user_id=created_by_user_id,
+            currency=expense_report.currency,
+            entry_type=entry_type,
+            expense_report_id=expense_report.id,
+            memo=memo[:500],
+        )
+    )
 
 
 def _serialize_disbursement_request(
@@ -1977,7 +2058,7 @@ def get_treasury_summary(
         .limit(8)
     ).all()
     ledger_entries = db.scalars(
-        select(ContributionLedgerEntry)
+        _ledger_entries_query()
         .order_by(ContributionLedgerEntry.created_at.desc())
         .limit(8)
     ).all()
@@ -2002,12 +2083,7 @@ def export_treasury_ledger(
     limit: Annotated[int, Query(ge=1, le=5000)] = 1000,
 ) -> Response:
     entries = db.scalars(
-        select(ContributionLedgerEntry)
-        .options(
-            joinedload(ContributionLedgerEntry.contribution).joinedload(Contribution.campaign),
-            joinedload(ContributionLedgerEntry.contribution).joinedload(Contribution.contributor),
-            joinedload(ContributionLedgerEntry.contribution).joinedload(Contribution.receipt),
-        )
+        _ledger_entries_query()
         .order_by(ContributionLedgerEntry.created_at.desc())
         .limit(limit)
     ).all()
@@ -2020,10 +2096,13 @@ def export_treasury_ledger(
             "currency",
             "memo",
             "contribution_id",
+            "expense_report_id",
             "campaign_id",
             "campaign_title",
             "receipt_number",
             "contributor_email",
+            "expense_summary",
+            "expense_vendor_name",
         ]
     ]
     rows.extend(
@@ -2036,10 +2115,15 @@ def export_treasury_ledger(
                 entry.currency,
                 entry.memo,
                 entry.contribution_id,
-                entry.contribution.campaign_id,
-                entry.contribution.campaign.title if entry.contribution.campaign else None,
-                entry.contribution.receipt.receipt_number if entry.contribution.receipt else None,
-                entry.contribution.contributor.email if entry.contribution.contributor else None,
+                entry.expense_report_id,
+                _ledger_entry_campaign_id(entry),
+                _ledger_entry_campaign(entry).title if _ledger_entry_campaign(entry) else None,
+                _ledger_entry_receipt_number(entry),
+                entry.contribution.contributor.email
+                if entry.contribution and entry.contribution.contributor
+                else None,
+                entry.expense_report.summary if entry.expense_report else None,
+                entry.expense_report.vendor_name if entry.expense_report else None,
             ]
             for entry in entries
         ]
@@ -2596,6 +2680,14 @@ def approve_expense_report(
     expense_report.reviewed_at = utcnow()
     expense_report.reviewed_by_user_id = current_user.id
     expense_report.status = EXPENSE_APPROVED
+    _add_expense_ledger_entry(
+        db,
+        amount_cents=-expense_report.amount_cents,
+        created_by_user_id=current_user.id,
+        entry_type=LEDGER_EXPENSE,
+        expense_report=expense_report,
+        memo=f"Approved expense report: {expense_report.summary}",
+    )
     _create_security_event(
         db,
         request,
@@ -2620,6 +2712,7 @@ def reject_expense_report(
     db: Annotated[Session, Depends(get_db_session)],
 ) -> ContributionExpenseReportResponse:
     expense_report = _get_expense_report_or_404(db, expense_report_id)
+    was_approved = expense_report.status == EXPENSE_APPROVED
     if expense_report.status not in {EXPENSE_APPROVED, EXPENSE_SUBMITTED}:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -2629,6 +2722,15 @@ def reject_expense_report(
     expense_report.reviewed_at = utcnow()
     expense_report.reviewed_by_user_id = current_user.id
     expense_report.status = EXPENSE_REJECTED
+    if was_approved:
+        _add_expense_ledger_entry(
+            db,
+            amount_cents=expense_report.amount_cents,
+            created_by_user_id=current_user.id,
+            entry_type=LEDGER_EXPENSE_REVERSAL,
+            expense_report=expense_report,
+            memo=f"Rejected approved expense report: {expense_report.summary}",
+        )
     _create_security_event(
         db,
         request,
@@ -2658,22 +2760,11 @@ def export_treasury_audit_package(
     contributions = db.scalars(
         contribution_query.order_by(Contribution.created_at.desc()).limit(limit)
     ).all()
-    ledger_query = (
-        select(ContributionLedgerEntry)
-        .join(Contribution, ContributionLedgerEntry.contribution_id == Contribution.id)
-        .options(
-            joinedload(ContributionLedgerEntry.contribution).joinedload(Contribution.campaign),
-            joinedload(ContributionLedgerEntry.contribution).joinedload(Contribution.receipt),
-        )
+    ledger_entries = db.scalars(
+        _ledger_entries_query(campaign_id=campaign_id, status_filter=status_filter)
         .order_by(ContributionLedgerEntry.created_at.desc())
         .limit(limit)
-    )
-    normalized_status = _normalize_enum(status_filter)
-    if campaign_id:
-        ledger_query = ledger_query.where(Contribution.campaign_id == campaign_id)
-    if normalized_status:
-        ledger_query = ledger_query.where(Contribution.status == normalized_status)
-    ledger_entries = db.scalars(ledger_query).all()
+    ).all()
     generated_at = utcnow()
     package = _build_treasury_audit_package(
         campaign_id=campaign_id,
@@ -2720,22 +2811,11 @@ def export_treasury_audit_report(
     contributions = db.scalars(
         contribution_query.order_by(Contribution.created_at.desc()).limit(limit)
     ).all()
-    ledger_query = (
-        select(ContributionLedgerEntry)
-        .join(Contribution, ContributionLedgerEntry.contribution_id == Contribution.id)
-        .options(
-            joinedload(ContributionLedgerEntry.contribution).joinedload(Contribution.campaign),
-            joinedload(ContributionLedgerEntry.contribution).joinedload(Contribution.receipt),
-        )
+    ledger_entries = db.scalars(
+        _ledger_entries_query(campaign_id=campaign_id, status_filter=status_filter)
         .order_by(ContributionLedgerEntry.created_at.desc())
         .limit(limit)
-    )
-    normalized_status = _normalize_enum(status_filter)
-    if campaign_id:
-        ledger_query = ledger_query.where(Contribution.campaign_id == campaign_id)
-    if normalized_status:
-        ledger_query = ledger_query.where(Contribution.status == normalized_status)
-    ledger_entries = db.scalars(ledger_query).all()
+    ).all()
     generated_at = utcnow()
     package = _build_treasury_audit_package(
         campaign_id=campaign_id,

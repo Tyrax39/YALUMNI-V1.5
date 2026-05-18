@@ -641,7 +641,7 @@ POST   /api/v1/contributions/admin/contributions/{contribution_id}/provider-refu
 POST   /api/v1/contributions/admin/contributions/{contribution_id}/void # implemented pending contribution cancellation
 GET    /api/v1/contributions/admin/contributions/export # implemented CSV export
 GET    /api/v1/contributions/admin/treasury          # implemented
-GET    /api/v1/contributions/admin/treasury/export   # implemented ledger CSV export
+GET    /api/v1/contributions/admin/treasury/export   # implemented ledger CSV export including expense ledger rows
 GET    /api/v1/contributions/admin/treasury/certifications # implemented stored certification list
 POST   /api/v1/contributions/admin/treasury/certifications # implemented immutable certification snapshot
 GET    /api/v1/contributions/admin/treasury/certifications/{certification_id} # implemented stored certification detail

@@ -412,10 +412,11 @@ class ContributionReceiptResponse(BaseModel):
 
 class ContributionLedgerEntryResponse(BaseModel):
     amount_cents: int
-    contribution_id: uuid.UUID
+    contribution_id: uuid.UUID | None
     created_at: datetime
     currency: str
     entry_type: str
+    expense_report_id: uuid.UUID | None
     id: uuid.UUID
     memo: str | None
 

@@ -857,6 +857,12 @@ def test_contribution_expense_report_foundation(client: TestClient) -> None:
         json={**expense_payload, "amount_cents": 500, "summary": "Final book delivery"},
     )
     assert second_expense.status_code == 201
+    approve_second_expense = client.post(
+        f"/api/v1/contributions/admin/expense-reports/{second_expense.json()['id']}/approve",
+        headers=admin_headers,
+        json={"note": "Final receipt approved."},
+    )
+    assert approve_second_expense.status_code == 200
     reject_expense = client.post(
         f"/api/v1/contributions/admin/expense-reports/{second_expense.json()['id']}/reject",
         headers=admin_headers,
@@ -871,6 +877,46 @@ def test_contribution_expense_report_foundation(client: TestClient) -> None:
     )
     assert all_expenses.status_code == 200
     assert all_expenses.json()["total"] == 2
+
+    treasury_response = client.get("/api/v1/contributions/admin/treasury", headers=admin_headers)
+    assert treasury_response.status_code == 200
+    ledger_entries = treasury_response.json()["ledger_entries"]
+    expense_entries = [
+        entry for entry in ledger_entries if entry["entry_type"] == "CONTRIBUTION_EXPENSE"
+    ]
+    assert len(expense_entries) == 2
+    assert {entry["amount_cents"] for entry in expense_entries} == {-5500, -500}
+    assert {entry["contribution_id"] for entry in expense_entries} == {None}
+    assert expense_report["id"] in {entry["expense_report_id"] for entry in expense_entries}
+    reversal_entry = next(
+        entry
+        for entry in ledger_entries
+        if entry["entry_type"] == "CONTRIBUTION_EXPENSE_REVERSAL"
+    )
+    assert reversal_entry["amount_cents"] == 500
+    assert reversal_entry["expense_report_id"] == second_expense.json()["id"]
+
+    treasury_export = client.get(
+        "/api/v1/contributions/admin/treasury/export",
+        headers=admin_headers,
+    )
+    assert treasury_export.status_code == 200
+    assert "expense_report_id" in treasury_export.text
+    assert "CONTRIBUTION_EXPENSE" in treasury_export.text
+    assert expense_report["id"] in treasury_export.text
+
+    audit_package_response = client.get(
+        "/api/v1/contributions/admin/treasury/audit-package",
+        headers=admin_headers,
+        params={"campaign_id": campaign["id"]},
+    )
+    assert audit_package_response.status_code == 200
+    audit_ledger_entries = audit_package_response.json()["package"]["ledger_entries"]
+    assert any(
+        entry["expense_report_id"] == expense_report["id"]
+        and entry["entry_type"] == "CONTRIBUTION_EXPENSE"
+        for entry in audit_ledger_entries
+    )
 
 
 def test_contribution_campaign_approval_workflow_foundation(client: TestClient) -> None:

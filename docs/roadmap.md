@@ -143,6 +143,9 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
   availability checks and request/approve/reject/mark-paid status transitions.
   Added finance-admin expense reports tied to paid disbursements, with structured
   receipt/evidence rows and submit/approve/reject status transitions.
+  Expense report approvals now write contribution-ledger expense entries without
+  requiring a donor contribution row, and rejected approved reports write
+  reversal entries.
   Signed provider webhook reconciliation now
   confirms eligible payment intents idempotently and marks failed/canceled
   provider events. Webhook diagnostics now persist provider event deliveries,

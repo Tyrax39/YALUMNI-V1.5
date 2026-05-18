@@ -133,12 +133,13 @@
 - `contribution_receipts` - implemented for one issued receipt per contribution
   with receipt number, issued-to details, amount, currency, status, and tax note.
 - `contribution_ledger_entries` - implemented for foundation credit entries,
-  negative refund reversals, local provider-refund fallback reversals, and
-  zero-value void markers tied to recorded contributions. Provider-refund
-  requests now fail closed unless the configured refund provider has an adapter.
-  Member text/PDF receipt downloads, finance CSV exports, signed JSON treasury
-  audit packages, certified PDF audit reports, and admin adjustment controls
-  read these live tables directly.
+  negative refund reversals, local provider-refund fallback reversals,
+  zero-value void markers tied to recorded contributions, and expense/reversal
+  entries tied directly to approved expense reports without requiring a donor
+  contribution row. Provider-refund requests now fail closed unless the
+  configured refund provider has an adapter. Member text/PDF receipt downloads,
+  finance CSV exports, signed JSON treasury audit packages, certified PDF audit
+  reports, and admin adjustment controls read these live tables directly.
 - `contribution_treasury_certifications` - implemented for finance-admin
   immutable treasury certification snapshots, storing the signed audit package,
   canonical SHA-256 digest, HMAC signature metadata, reviewer, scope, summary
@@ -153,7 +154,8 @@
   tied to paid disbursement requests, with amount, currency, vendor, expense date,
   summary, description, submitter, reviewer, submitted/approved/rejected status,
   notes, and review timestamps. Submitted and approved reports reserve paid
-  disbursement funds but do not yet create independent expense ledger entries.
+  disbursement funds. Approved reports create negative expense ledger entries;
+  rejected approved reports create positive reversal entries.
 - `contribution_expense_evidence` - implemented for structured expense report
   evidence rows including evidence type, title, reference URL, receipt number,
   optional amount, issued timestamp, and notes.

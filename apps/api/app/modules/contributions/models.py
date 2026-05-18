@@ -244,12 +244,15 @@ class ContributionLedgerEntry(Base, TimestampMixin):
     __table_args__ = (
         Index("ix_contribution_ledger_entries_type_created", "entry_type", "created_at"),
         Index("ix_contribution_ledger_entries_contribution", "contribution_id"),
+        Index("ix_contribution_ledger_entries_expense_report", "expense_report_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    contribution_id: Mapped[uuid.UUID] = mapped_column(
+    contribution_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("contributions.id", ondelete="CASCADE"),
-        nullable=False,
+    )
+    expense_report_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("contribution_expense_reports.id", ondelete="CASCADE"),
     )
     entry_type: Mapped[str] = mapped_column(String(40), nullable=False)
     amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -259,9 +262,13 @@ class ContributionLedgerEntry(Base, TimestampMixin):
         ForeignKey("users.id", ondelete="SET NULL"),
     )
 
-    contribution: Mapped[Contribution] = relationship(
+    contribution: Mapped[Contribution | None] = relationship(
         back_populates="ledger_entries",
         foreign_keys=[contribution_id],
+    )
+    expense_report: Mapped["ContributionExpenseReport | None"] = relationship(
+        back_populates="ledger_entries",
+        foreign_keys=[expense_report_id],
     )
     created_by: Mapped[User | None] = relationship(foreign_keys=[created_by_user_id])
 
@@ -417,6 +424,10 @@ class ContributionExpenseReport(Base, TimestampMixin):
         back_populates="expense_report",
         cascade="all, delete-orphan",
         order_by="ContributionExpenseEvidence.created_at",
+    )
+    ledger_entries: Mapped[list[ContributionLedgerEntry]] = relationship(
+        back_populates="expense_report",
+        cascade="all, delete-orphan",
     )
 
 
