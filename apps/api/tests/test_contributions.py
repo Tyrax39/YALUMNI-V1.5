@@ -570,6 +570,124 @@ def test_contribution_campaign_payment_receipt_and_treasury(client: TestClient) 
     assert closed_intent.status_code == 409
 
 
+def test_treasury_currency_summaries_and_export(client: TestClient) -> None:
+    admin_headers = create_admin(client, "currency.finance@example.com")
+    donor = register_user(client, "currency.donor@example.com", "Currency Donor")
+    donor_headers = auth_headers(donor["access_token"])
+    usd_campaign = create_published_campaign(
+        client,
+        admin_headers,
+        "USD scholarship currency fund",
+    )
+    eur_payload = campaign_payload("EUR chapter equipment fund")
+    eur_payload["currency"] = "eur"
+    eur_campaign_response = client.post(
+        "/api/v1/contributions/admin/campaigns",
+        headers=admin_headers,
+        json=eur_payload,
+    )
+    assert eur_campaign_response.status_code == 201
+    eur_campaign = eur_campaign_response.json()
+    eur_publish_response = client.post(
+        f"/api/v1/contributions/admin/campaigns/{eur_campaign['id']}/publish",
+        headers=admin_headers,
+        json={"note": "Ready for EUR contributions."},
+    )
+    assert eur_publish_response.status_code == 200
+
+    usd_payment_response = client.post(
+        f"/api/v1/contributions/{usd_campaign['id']}/pay",
+        headers=donor_headers,
+        json={
+            "amount_cents": 10000,
+            "currency": "USD",
+            "payment_method": "CARD_TEST",
+            "payment_reference": "USD-CUR-100",
+        },
+    )
+    assert usd_payment_response.status_code == 201
+    eur_payment_response = client.post(
+        f"/api/v1/contributions/{eur_campaign['id']}/pay",
+        headers=donor_headers,
+        json={
+            "amount_cents": 7000,
+            "currency": "EUR",
+            "payment_method": "CARD_TEST",
+            "payment_reference": "EUR-CUR-070",
+        },
+    )
+    assert eur_payment_response.status_code == 201
+    create_pending_contribution_for_test(
+        amount_cents=2500,
+        campaign_id=usd_campaign["id"],
+        contributor_user_id=donor["user"]["id"],
+    )
+
+    treasury_response = client.get("/api/v1/contributions/admin/treasury", headers=admin_headers)
+    assert treasury_response.status_code == 200
+    currency_summaries = {
+        summary["currency"]: summary for summary in treasury_response.json()["currency_summaries"]
+    }
+    assert currency_summaries["USD"] == {
+        "contribution_count": 2,
+        "currency": "USD",
+        "ledger_entry_count": 1,
+        "ledger_net_amount_cents": 10000,
+        "pending_amount_cents": 2500,
+        "receipt_count": 1,
+        "received_amount_cents": 10000,
+    }
+    assert currency_summaries["EUR"] == {
+        "contribution_count": 1,
+        "currency": "EUR",
+        "ledger_entry_count": 1,
+        "ledger_net_amount_cents": 7000,
+        "pending_amount_cents": 0,
+        "receipt_count": 1,
+        "received_amount_cents": 7000,
+    }
+
+    currency_export_response = client.get(
+        "/api/v1/contributions/admin/treasury/currency-summary/export",
+        headers=admin_headers,
+    )
+    assert currency_export_response.status_code == 200
+    assert currency_export_response.headers["content-type"].startswith("text/csv")
+    assert "yalumni-treasury-currency-summary" in currency_export_response.headers[
+        "content-disposition"
+    ]
+    assert "USD,2,1,1,10000,2500,10000" in currency_export_response.text
+    assert "EUR,1,1,1,7000,0,7000" in currency_export_response.text
+
+    audit_package_response = client.get(
+        "/api/v1/contributions/admin/treasury/audit-package",
+        headers=admin_headers,
+    )
+    assert audit_package_response.status_code == 200
+    audit_summaries = {
+        summary["currency"]: summary
+        for summary in audit_package_response.json()["package"]["summary"][
+            "currency_summaries"
+        ]
+    }
+    assert audit_summaries["USD"]["pending_amount_cents"] == 2500
+    assert audit_summaries["EUR"]["ledger_net_amount_cents"] == 7000
+
+    certification_response = client.post(
+        "/api/v1/contributions/admin/treasury/certifications",
+        headers=admin_headers,
+        json={"limit": 100, "note": "Certified multi-currency summary."},
+    )
+    assert certification_response.status_code == 201
+    certification_summaries = {
+        summary["currency"]: summary for summary in certification_response.json()[
+            "currency_summaries"
+        ]
+    }
+    assert certification_summaries["USD"]["received_amount_cents"] == 10000
+    assert certification_summaries["EUR"]["received_amount_cents"] == 7000
+
+
 def test_contribution_disbursement_request_foundation(client: TestClient) -> None:
     admin_headers = create_admin(client, "disbursement.finance@example.com")
     donor = register_user(client, "disbursement.donor@example.com", "Disbursement Donor")

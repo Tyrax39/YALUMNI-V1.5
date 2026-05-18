@@ -76,6 +76,7 @@ from app.modules.contributions.schemas import (
     TreasuryCertificationCreate,
     TreasuryCertificationListResponse,
     TreasuryCertificationResponse,
+    TreasuryCurrencySummaryResponse,
     TreasurySummaryResponse,
 )
 from app.modules.contributions.storage import store_contribution_expense_evidence_file
@@ -671,6 +672,98 @@ def _ledger_entry_receipt_number(entry: ContributionLedgerEntry) -> str | None:
     return None
 
 
+def _empty_currency_summary(currency: str) -> dict[str, int | str]:
+    return {
+        "contribution_count": 0,
+        "currency": currency,
+        "ledger_entry_count": 0,
+        "ledger_net_amount_cents": 0,
+        "pending_amount_cents": 0,
+        "receipt_count": 0,
+        "received_amount_cents": 0,
+    }
+
+
+def _currency_summaries_from_items(
+    *,
+    contributions: list[Contribution],
+    ledger_entries: list[ContributionLedgerEntry],
+) -> list[dict[str, int | str]]:
+    summaries: dict[str, dict[str, int | str]] = {}
+    for contribution in contributions:
+        summary = summaries.setdefault(
+            contribution.currency,
+            _empty_currency_summary(contribution.currency),
+        )
+        summary["contribution_count"] = int(summary["contribution_count"]) + 1
+        if contribution.receipt:
+            summary["receipt_count"] = int(summary["receipt_count"]) + 1
+        if contribution.status == RECEIVED_STATUS:
+            summary["received_amount_cents"] = (
+                int(summary["received_amount_cents"]) + contribution.amount_cents
+            )
+        if contribution.status == PENDING_STATUS:
+            summary["pending_amount_cents"] = (
+                int(summary["pending_amount_cents"]) + contribution.amount_cents
+            )
+    for entry in ledger_entries:
+        summary = summaries.setdefault(
+            entry.currency,
+            _empty_currency_summary(entry.currency),
+        )
+        summary["ledger_entry_count"] = int(summary["ledger_entry_count"]) + 1
+        summary["ledger_net_amount_cents"] = (
+            int(summary["ledger_net_amount_cents"]) + entry.amount_cents
+        )
+    return [summaries[currency] for currency in sorted(summaries)]
+
+
+def _treasury_currency_summaries(db: Session) -> list[TreasuryCurrencySummaryResponse]:
+    summaries: dict[str, dict[str, int | str]] = {}
+    contribution_rows = db.execute(
+        select(
+            Contribution.currency,
+            Contribution.status,
+            func.count(Contribution.id),
+            func.coalesce(func.sum(Contribution.amount_cents), 0),
+        ).group_by(Contribution.currency, Contribution.status)
+    ).all()
+    for currency, status_value, count, amount_cents in contribution_rows:
+        summary = summaries.setdefault(currency, _empty_currency_summary(currency))
+        summary["contribution_count"] = int(summary["contribution_count"]) + int(count)
+        if status_value == RECEIVED_STATUS:
+            summary["received_amount_cents"] = int(amount_cents)
+        if status_value == PENDING_STATUS:
+            summary["pending_amount_cents"] = int(amount_cents)
+
+    receipt_rows = db.execute(
+        select(
+            ContributionReceipt.currency,
+            func.count(ContributionReceipt.id),
+        ).group_by(ContributionReceipt.currency)
+    ).all()
+    for currency, count in receipt_rows:
+        summary = summaries.setdefault(currency, _empty_currency_summary(currency))
+        summary["receipt_count"] = int(count)
+
+    ledger_rows = db.execute(
+        select(
+            ContributionLedgerEntry.currency,
+            func.count(ContributionLedgerEntry.id),
+            func.coalesce(func.sum(ContributionLedgerEntry.amount_cents), 0),
+        ).group_by(ContributionLedgerEntry.currency)
+    ).all()
+    for currency, count, amount_cents in ledger_rows:
+        summary = summaries.setdefault(currency, _empty_currency_summary(currency))
+        summary["ledger_entry_count"] = int(count)
+        summary["ledger_net_amount_cents"] = int(amount_cents)
+
+    return [
+        TreasuryCurrencySummaryResponse(**summaries[currency])
+        for currency in sorted(summaries)
+    ]
+
+
 def _list_campaign_response(
     db: Session,
     query,
@@ -992,9 +1085,23 @@ def _treasury_audit_report_pdf_response(package: dict, generated_at: datetime) -
         f"Received amount cents: {summary['received_amount_cents']}",
         f"Pending amount cents: {summary['pending_amount_cents']}",
         f"Currencies: {currencies}",
-        "",
-        "Recent contributions",
+        "Currency summaries:",
     ]
+    for currency_summary in summary.get("currency_summaries", []):
+        lines.append(
+            f"- {currency_summary['currency']}: "
+            f"received {currency_summary['received_amount_cents']}, "
+            f"pending {currency_summary['pending_amount_cents']}, "
+            f"ledger net {currency_summary['ledger_net_amount_cents']}"
+        )
+    if not summary.get("currency_summaries"):
+        lines.append("- none")
+    lines.extend(
+        [
+            "",
+            "Recent contributions",
+        ]
+    )
     for contribution in audit_package["contributions"][:8]:
         lines.append(
             f"- {contribution['receipt_number'] or 'no receipt'} | "
@@ -1426,6 +1533,10 @@ def _build_treasury_audit_package(
     pending_amount_cents = sum(
         item.amount_cents for item in contributions if item.status == PENDING_STATUS
     )
+    currency_summaries = _currency_summaries_from_items(
+        contributions=contributions,
+        ledger_entries=ledger_entries,
+    )
     package = {
         "generated_at": generated_at.isoformat(),
         "generated_by_email": generated_by.email,
@@ -1438,6 +1549,7 @@ def _build_treasury_audit_package(
         "summary": {
             "contribution_count": len(contributions),
             "currencies": included_currencies,
+            "currency_summaries": currency_summaries,
             "ledger_entry_count": len(ledger_entries),
             "pending_amount_cents": pending_amount_cents,
             "receipt_count": sum(1 for item in contributions if item.receipt),
@@ -1536,6 +1648,11 @@ def _treasury_audit_inputs(
 def _serialize_treasury_certification(
     certification: ContributionTreasuryCertification,
 ) -> TreasuryCertificationResponse:
+    package_summary = (
+        certification.package_json.get("package", {}).get("summary", {})
+        if certification.package_json
+        else {}
+    )
     return TreasuryCertificationResponse(
         campaign_id=certification.campaign_id,
         campaign_title=certification.campaign.title if certification.campaign else None,
@@ -1550,6 +1667,7 @@ def _serialize_treasury_certification(
         certified_by_user_id=certification.certified_by_user_id,
         contribution_count=certification.contribution_count,
         currencies=certification.currencies_json or [],
+        currency_summaries=package_summary.get("currency_summaries", []),
         id=certification.id,
         ledger_entry_count=certification.ledger_entry_count,
         limit=certification.limit,
@@ -2087,9 +2205,11 @@ def get_treasury_summary(
         .order_by(ContributionLedgerEntry.created_at.desc())
         .limit(8)
     ).all()
+    currency_summaries = _treasury_currency_summaries(db)
     return TreasurySummaryResponse(
         campaign_count=campaign_count,
         campaigns=[_serialize_campaign(db, campaign, current_user) for campaign in campaigns],
+        currency_summaries=currency_summaries,
         ledger_entries=[_serialize_ledger_entry(entry) for entry in ledger_entries],
         pending_amount_cents=int(pending),
         published_campaign_count=published_campaign_count,
@@ -2162,6 +2282,53 @@ def export_treasury_ledger(
     )
     db.commit()
     return _csv_response(f"yalumni-treasury-ledger-{utcnow().date().isoformat()}.csv", rows)
+
+
+@router.get("/admin/treasury/currency-summary/export")
+@router.get("/admin/treasury/currency-summary/export/")
+def export_treasury_currency_summary(
+    request: Request,
+    current_user: Annotated[User, Depends(finance_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> Response:
+    currency_summaries = _treasury_currency_summaries(db)
+    rows: list[list[object | None]] = [
+        [
+            "currency",
+            "contribution_count",
+            "receipt_count",
+            "ledger_entry_count",
+            "received_amount_cents",
+            "pending_amount_cents",
+            "ledger_net_amount_cents",
+        ]
+    ]
+    rows.extend(
+        [
+            [
+                summary.currency,
+                summary.contribution_count,
+                summary.receipt_count,
+                summary.ledger_entry_count,
+                summary.received_amount_cents,
+                summary.pending_amount_cents,
+                summary.ledger_net_amount_cents,
+            ]
+            for summary in currency_summaries
+        ]
+    )
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "contributions.treasury_currency_summary_exported",
+        {"currency_count": len(currency_summaries)},
+    )
+    db.commit()
+    return _csv_response(
+        f"yalumni-treasury-currency-summary-{utcnow().date().isoformat()}.csv",
+        rows,
+    )
 
 
 @router.post(

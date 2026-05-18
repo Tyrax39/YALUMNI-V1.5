@@ -139,11 +139,13 @@
   contribution row. Provider-refund requests now fail closed unless the
   configured refund provider has an adapter. Member text/PDF receipt downloads,
   finance CSV exports, signed JSON treasury audit packages, certified PDF audit
-  reports, and admin adjustment controls read these live tables directly.
+  reports, per-currency treasury summaries, and admin adjustment controls read
+  these live tables directly.
 - `contribution_treasury_certifications` - implemented for finance-admin
   immutable treasury certification snapshots, storing the signed audit package,
   canonical SHA-256 digest, HMAC signature metadata, reviewer, scope, summary
-  counts, currencies, and optional certification note.
+  counts, currencies, per-currency summary snapshots, and optional certification
+  note.
 - `contribution_disbursement_requests` - implemented for finance-admin
   campaign disbursement requests with amount, currency, payee, purpose, requester,
   reviewer, paid-by user, request/approval/rejection/paid status, notes, and

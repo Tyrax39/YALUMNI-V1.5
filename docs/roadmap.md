@@ -148,6 +148,8 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
   reversal entries.
   Expense report evidence now supports private finance-admin file upload and
   download through the shared upload storage adapter.
+  Treasury summaries, audit packages, certified snapshots, and CSV exports now
+  include per-currency accounting summaries without converting currencies.
   Signed provider webhook reconciliation now
   confirms eligible payment intents idempotently and marks failed/canceled
   provider events. Webhook diagnostics now persist provider event deliveries,

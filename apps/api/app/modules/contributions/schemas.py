@@ -421,9 +421,20 @@ class ContributionLedgerEntryResponse(BaseModel):
     memo: str | None
 
 
+class TreasuryCurrencySummaryResponse(BaseModel):
+    contribution_count: int
+    currency: str
+    ledger_entry_count: int
+    ledger_net_amount_cents: int
+    pending_amount_cents: int
+    receipt_count: int
+    received_amount_cents: int
+
+
 class TreasurySummaryResponse(BaseModel):
     campaign_count: int
     campaigns: list[ContributionCampaignResponse]
+    currency_summaries: list[TreasuryCurrencySummaryResponse]
     ledger_entries: list[ContributionLedgerEntryResponse]
     pending_amount_cents: int
     published_campaign_count: int
@@ -442,6 +453,7 @@ class TreasuryCertificationResponse(BaseModel):
     certified_by_user_id: uuid.UUID | None
     contribution_count: int
     currencies: list[str]
+    currency_summaries: list[TreasuryCurrencySummaryResponse]
     id: uuid.UUID
     ledger_entry_count: int
     limit: int

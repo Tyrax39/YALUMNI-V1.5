@@ -8,6 +8,91 @@ The current Yalumni project is a useful Laravel 9 alumni management platform, bu
 
 The V1.5 implementation is active in `D:\YALUMNI-V1.5`. The new repository now contains a platform foundation with a FastAPI backend, Next.js web shell, Docker Compose, CI workflow, shared packages, copied YALUMNI logo assets, and documentation.
 
+## Current V1.5 Implementation Update: 2026-05-18 Treasury Currency Summary Slice
+
+Completed after the contribution expense evidence upload slice:
+
+- Added per-currency treasury summaries to
+  `GET /api/v1/contributions/admin/treasury` while preserving the existing
+  aggregate totals.
+- Added per-currency accounting snapshots into signed treasury audit packages,
+  certified treasury snapshots, and PDF audit report content.
+- Added finance-admin CSV export:
+  `GET /api/v1/contributions/admin/treasury/currency-summary/export`.
+- Existing ledger rows, receipt exports, audit package signing, certification
+  persistence, contribution/refund/void flows, disbursement workflows, and
+  expense evidence workflows are preserved.
+
+Current plan position:
+
+- Phase 1 remains functionally complete for local foundation.
+- Phase 2 remains roughly 91% complete.
+- Phase 3 remains roughly 52% complete.
+- Phase 4 remains roughly 38% complete.
+- Phase 5 remains roughly 81% complete.
+- Phase 6 feed/moderation remains roughly 55% complete.
+- Phase 7 messaging/notifications remains roughly 51% complete.
+- Phase 8 events remains roughly 28% complete.
+- Post-MVP initiatives remain roughly 24% complete.
+- Post-MVP mentorship remains roughly 18% complete.
+- Post-MVP elections remain roughly 24% complete.
+- Post-MVP contributions/treasury are now roughly 60% complete because
+  treasury reporting now keeps separate per-currency accounting summaries,
+  while real provider checkout/refund adapters, provider retry/session
+  semantics, richer expense categorization, and malware scanning/retention
+  policy for uploaded evidence remain open.
+- Overall 24-week MVP-plus implementation is roughly 74-75% complete as an
+  estimate.
+
+Implemented now:
+
+- Runtime split across public/member `3010`, admin RBAC `3011`, super-admin
+  `3012`, and FastAPI `8002`.
+- Auth, protected platform owner seed, web sessions, CSRF, 2FA enforcement, rate
+  limiting, verification, YALUMNI directory, MWF alumni cache directory plus
+  worker/history operations, communities, notifications, direct messages,
+  moderation, opportunities, resources, success stories, member events, member
+  initiatives, mentorship foundation, elections foundation, contributions
+  foundation, contribution campaign approval foundation, local payment intent
+  creation/confirmation/retry, provider-neutral checkout attempt persistence,
+  local checkout adapter boundary, finance-admin checkout attempt diagnostics,
+  signed contribution provider webhook reconciliation, webhook diagnostics
+  persistence, refund adapter boundary, local provider-refund fallback,
+  contribution finance exports, signed treasury audit packages, certified
+  treasury audit PDF reports, stored treasury certification snapshots,
+  per-currency treasury summaries and exports, local refund/void finance
+  adjustments, contribution disbursement request workflow, contribution expense
+  report workflow, uploaded expense evidence files, expense-backed treasury
+  ledger entries, and generated receipt PDFs.
+
+Main gaps now:
+
+- Contributions still need a selected real payment provider, provider secrets,
+  real provider checkout-session adapters, provider-side refund API calls inside
+  implemented adapters, provider retry/session semantics, mandatory approval
+  policy if desired, richer expense categorization, and malware
+  scanning/retention policy for uploaded evidence.
+- Elections still need nomination workflows, candidate approval/rejection,
+  position-based multi-seat ballots, stronger anonymous ballot envelopes,
+  dispute handling, exportable certified audit reports, notification hooks,
+  voter-roll imports from chapters/cohorts, and admin detail subroutes beyond
+  the consolidated console panel.
+- Chapter analytics still needs a backend module.
+- Mentorship still needs matching recommendations, scheduling, mentor capacity
+  enforcement beyond counts, session notes, feedback, reporting/moderation,
+  notifications, and admin analytics.
+- MWF cache still needs admin diff review, source-field quality dashboards,
+  retention policy controls, and scheduled background sync infrastructure.
+
+Recommended next implementation slices:
+
+1. Real provider checkout adapter implementation once the payment provider and
+   provider credentials are selected.
+2. Real provider refund adapter implementation for the selected payment
+   provider, replacing the fail-closed placeholder with provider API calls.
+3. Expense evidence malware scanning and retention policy controls.
+4. Richer contribution expense categorization and reporting filters.
+
 ## Current V1.5 Implementation Update: 2026-05-18 Contribution Expense Evidence File Upload Slice
 
 Completed after the contribution expense ledger entries slice:
