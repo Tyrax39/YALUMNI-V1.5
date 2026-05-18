@@ -809,6 +809,8 @@ def test_contribution_expense_report_foundation(client: TestClient) -> None:
     assert expense_report["status"] == "SUBMITTED"
     assert expense_report["submitted_by_email"] == "expense.finance@example.com"
     assert expense_report["evidence_items"][0]["evidence_type"] == "RECEIPT"
+    assert expense_report["evidence_items"][0]["download_url"] is None
+    assert expense_report["evidence_items"][0]["file_name"] is None
     assert expense_report["evidence_items"][0]["receipt_number"] == "RCPT-BOOK-001"
 
     submitted_list = client.get(
@@ -917,6 +919,162 @@ def test_contribution_expense_report_foundation(client: TestClient) -> None:
         and entry["entry_type"] == "CONTRIBUTION_EXPENSE"
         for entry in audit_ledger_entries
     )
+
+
+def test_contribution_expense_evidence_file_upload_download(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    monkeypatch.setenv("UPLOAD_STORAGE_PROVIDER", "LOCAL")
+    monkeypatch.setenv("CONTRIBUTION_EXPENSE_EVIDENCE_UPLOAD_DIR", str(tmp_path))
+    monkeypatch.setenv("CONTRIBUTION_EXPENSE_EVIDENCE_UPLOAD_MAX_BYTES", "64")
+    monkeypatch.setenv(
+        "CONTRIBUTION_EXPENSE_EVIDENCE_ALLOWED_TYPES",
+        "application/pdf,image/png",
+    )
+    get_settings.cache_clear()
+    try:
+        admin_headers = create_admin(client, "expense.files.finance@example.com")
+        donor = register_user(client, "expense.files.donor@example.com", "Expense Donor")
+        donor_headers = auth_headers(donor["access_token"])
+        campaign = create_published_campaign(
+            client,
+            admin_headers,
+            "Expense evidence file scholarship fund",
+        )
+        contribution_response = client.post(
+            f"/api/v1/contributions/{campaign['id']}/pay",
+            headers=donor_headers,
+            json={
+                "amount_cents": 8000,
+                "currency": "USD",
+                "payment_method": "CARD_TEST",
+                "payment_reference": "EXP-FILE-100",
+            },
+        )
+        assert contribution_response.status_code == 201
+
+        disbursement_response = client.post(
+            f"/api/v1/contributions/admin/campaigns/{campaign['id']}/disbursement-requests",
+            headers=admin_headers,
+            json={
+                "amount_cents": 4000,
+                "currency": "USD",
+                "payee_name": "Chapter Program Lead",
+                "payee_reference": "BANK-EXP-FILE-001",
+                "purpose": "Scholarship material purchase with uploaded evidence.",
+            },
+        )
+        assert disbursement_response.status_code == 201
+        disbursement = disbursement_response.json()
+        approve_response = client.post(
+            f"/api/v1/contributions/admin/disbursement-requests/{disbursement['id']}/approve",
+            headers=admin_headers,
+            json={"note": "Approved for file evidence test."},
+        )
+        assert approve_response.status_code == 200
+        mark_paid_response = client.post(
+            f"/api/v1/contributions/admin/disbursement-requests/{disbursement['id']}/mark-paid",
+            headers=admin_headers,
+            json={"note": "Paid for file evidence test."},
+        )
+        assert mark_paid_response.status_code == 200
+
+        expense_response = client.post(
+            f"/api/v1/contributions/admin/disbursement-requests/{disbursement['id']}/expense-reports",
+            headers=admin_headers,
+            json={
+                "amount_cents": 3500,
+                "currency": "USD",
+                "summary": "Purchased workshop books",
+                "vendor_name": "Workshop Books Ltd",
+            },
+        )
+        assert expense_response.status_code == 201
+        expense_report = expense_response.json()
+        assert expense_report["evidence_items"] == []
+
+        denied_upload = client.post(
+            f"/api/v1/contributions/admin/expense-reports/{expense_report['id']}/evidence-files",
+            files={"file": ("denied.pdf", b"%PDF-denied", "application/pdf")},
+            headers=donor_headers,
+        )
+        assert denied_upload.status_code == 403
+
+        invalid_type_upload = client.post(
+            f"/api/v1/contributions/admin/expense-reports/{expense_report['id']}/evidence-files",
+            files={"file": ("receipt.txt", b"receipt", "text/plain")},
+            headers=admin_headers,
+        )
+        assert invalid_type_upload.status_code == 415
+
+        oversized_upload = client.post(
+            f"/api/v1/contributions/admin/expense-reports/{expense_report['id']}/evidence-files",
+            files={"file": ("large.pdf", b"x" * 65, "application/pdf")},
+            headers=admin_headers,
+        )
+        assert oversized_upload.status_code == 413
+
+        receipt_bytes = b"%PDF-yalumni-expense-receipt"
+        upload_response = client.post(
+            f"/api/v1/contributions/admin/expense-reports/{expense_report['id']}/evidence-files",
+            data={
+                "amount_cents": "3500",
+                "evidence_type": "receipt",
+                "receipt_number": "RCPT-FILE-001",
+                "title": "Book receipt scan",
+            },
+            files={"file": ("receipt.pdf", receipt_bytes, "application/pdf")},
+            headers=admin_headers,
+        )
+        assert upload_response.status_code == 201
+        evidence = upload_response.json()
+        assert evidence["amount_cents"] == 3500
+        assert evidence["content_type"] == "application/pdf"
+        assert evidence["download_url"].endswith(f"/evidence/{evidence['id']}/download")
+        assert evidence["evidence_type"] == "RECEIPT"
+        assert evidence["expense_report_id"] == expense_report["id"]
+        assert evidence["file_name"] == "receipt.pdf"
+        assert evidence["file_size_bytes"] == len(receipt_bytes)
+        assert evidence["receipt_number"] == "RCPT-FILE-001"
+        assert evidence["storage_provider"] == "LOCAL"
+        assert evidence["title"] == "Book receipt scan"
+        assert (tmp_path / expense_report["id"] / f"{evidence['id']}.pdf").read_bytes() == (
+            receipt_bytes
+        )
+
+        detail_response = client.get(
+            f"/api/v1/contributions/admin/expense-reports/{expense_report['id']}",
+            headers=admin_headers,
+        )
+        assert detail_response.status_code == 200
+        assert detail_response.json()["evidence_items"][0]["download_url"] == (
+            evidence["download_url"]
+        )
+
+        denied_download = client.get(evidence["download_url"], headers=donor_headers)
+        assert denied_download.status_code == 403
+
+        download_response = client.get(evidence["download_url"], headers=admin_headers)
+        assert download_response.status_code == 200
+        assert download_response.content == receipt_bytes
+        assert download_response.headers["content-type"].startswith("application/pdf")
+
+        approve_expense = client.post(
+            f"/api/v1/contributions/admin/expense-reports/{expense_report['id']}/approve",
+            headers=admin_headers,
+            json={"note": "Approved after file evidence review."},
+        )
+        assert approve_expense.status_code == 200
+        late_upload = client.post(
+            f"/api/v1/contributions/admin/expense-reports/{expense_report['id']}/evidence-files",
+            files={"file": ("late.pdf", b"%PDF-late", "application/pdf")},
+            headers=admin_headers,
+        )
+        assert late_upload.status_code == 409
+    finally:
+        get_settings.cache_clear()
 
 
 def test_contribution_campaign_approval_workflow_foundation(client: TestClient) -> None:

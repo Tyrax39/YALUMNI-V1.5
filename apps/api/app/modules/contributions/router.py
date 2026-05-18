@@ -10,7 +10,18 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    UploadFile,
+    status,
+)
 from pydantic import ValidationError
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload
@@ -19,6 +30,7 @@ from app.core.config import get_settings
 from app.core.database import get_db_session
 from app.core.permissions import ADMIN_ROLE_NAMES, GlobalRole, has_any_role
 from app.core.security import utcnow
+from app.core.storage import UploadCategory, upload_response
 from app.modules.auth.dependencies import get_current_user, require_roles
 from app.modules.auth.models import SecurityEvent, User
 from app.modules.contributions.models import (
@@ -43,6 +55,7 @@ from app.modules.contributions.schemas import (
     ContributionDisbursementRequestListResponse,
     ContributionDisbursementRequestResponse,
     ContributionDisbursementStatusAction,
+    ContributionExpenseEvidenceCreate,
     ContributionExpenseEvidenceResponse,
     ContributionExpenseReportCreate,
     ContributionExpenseReportListResponse,
@@ -65,6 +78,7 @@ from app.modules.contributions.schemas import (
     TreasuryCertificationResponse,
     TreasurySummaryResponse,
 )
+from app.modules.contributions.storage import store_contribution_expense_evidence_file
 
 router = APIRouter()
 finance_admin_dependency = require_roles(
@@ -1702,16 +1716,27 @@ def _serialize_expense_evidence(
 ) -> ContributionExpenseEvidenceResponse:
     return ContributionExpenseEvidenceResponse(
         amount_cents=evidence.amount_cents,
+        content_type=evidence.content_type,
         created_at=evidence.created_at,
+        download_url=(
+            f"/api/v1/contributions/admin/expense-reports/"
+            f"{evidence.expense_report_id}/evidence/{evidence.id}/download"
+            if evidence.storage_key
+            else None
+        ),
         evidence_type=evidence.evidence_type,
         expense_report_id=evidence.expense_report_id,
+        file_name=evidence.file_name,
+        file_size_bytes=evidence.file_size_bytes,
         id=evidence.id,
         issued_at=evidence.issued_at,
         note=evidence.note,
         receipt_number=evidence.receipt_number,
         reference_url=evidence.reference_url,
+        storage_provider=evidence.storage_provider,
         title=evidence.title,
         updated_at=evidence.updated_at,
+        uploaded_by_user_id=evidence.uploaded_by_user_id,
     )
 
 
@@ -2651,6 +2676,121 @@ def get_expense_report(
     _ = current_user
     expense_report = _get_expense_report_or_404(db, expense_report_id)
     return _serialize_expense_report(expense_report)
+
+
+@router.post(
+    "/admin/expense-reports/{expense_report_id}/evidence-files",
+    response_model=ContributionExpenseEvidenceResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_expense_report_evidence_file(
+    expense_report_id: uuid.UUID,
+    request: Request,
+    current_user: Annotated[User, Depends(finance_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+    evidence_file: Annotated[UploadFile, File(alias="file")],
+    evidence_type: Annotated[str, Form(max_length=40)] = "RECEIPT",
+    title: Annotated[str | None, Form(max_length=160)] = None,
+    receipt_number: Annotated[str | None, Form(max_length=120)] = None,
+    amount_cents: Annotated[int | None, Form(ge=1, le=100_000_000_000)] = None,
+    issued_at: Annotated[datetime | None, Form()] = None,
+    reference_url: Annotated[str | None, Form(max_length=500)] = None,
+    note: Annotated[str | None, Form(max_length=2000)] = None,
+) -> ContributionExpenseEvidenceResponse:
+    expense_report = _get_expense_report_or_404(db, expense_report_id)
+    if expense_report.status != EXPENSE_SUBMITTED:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Evidence files can only be added to submitted expense reports",
+        )
+
+    evidence_id = uuid.uuid4()
+    stored_file = await store_contribution_expense_evidence_file(
+        evidence_id=evidence_id,
+        expense_report_id=expense_report.id,
+        upload=evidence_file,
+    )
+    try:
+        metadata = ContributionExpenseEvidenceCreate(
+            amount_cents=amount_cents,
+            evidence_type=evidence_type,
+            issued_at=issued_at,
+            note=note,
+            receipt_number=receipt_number,
+            reference_url=reference_url,
+            title=(title.strip() if title else stored_file.file_name[:160]),
+        )
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Invalid expense evidence metadata",
+        ) from exc
+
+    evidence = ContributionExpenseEvidence(
+        id=evidence_id,
+        amount_cents=metadata.amount_cents,
+        content_type=stored_file.content_type,
+        evidence_type=metadata.evidence_type,
+        expense_report_id=expense_report.id,
+        file_name=stored_file.file_name,
+        file_size_bytes=stored_file.file_size_bytes,
+        issued_at=metadata.issued_at,
+        note=metadata.note,
+        receipt_number=metadata.receipt_number,
+        reference_url=metadata.reference_url,
+        storage_key=stored_file.storage_key,
+        storage_provider=stored_file.storage_provider,
+        title=metadata.title,
+        uploaded_by_user_id=current_user.id,
+    )
+    db.add(evidence)
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "contributions.expense_evidence_file_uploaded",
+        {
+            "content_type": evidence.content_type,
+            "evidence_id": str(evidence.id),
+            "expense_report_id": str(expense_report.id),
+            "file_size_bytes": evidence.file_size_bytes,
+        },
+    )
+    db.commit()
+    db.refresh(evidence)
+    return _serialize_expense_evidence(evidence)
+
+
+@router.get(
+    "/admin/expense-reports/{expense_report_id}/evidence/{evidence_id}/download",
+)
+def download_expense_report_evidence_file(
+    expense_report_id: uuid.UUID,
+    evidence_id: uuid.UUID,
+    current_user: Annotated[User, Depends(finance_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> Response:
+    _ = current_user
+    expense_report = _get_expense_report_or_404(db, expense_report_id)
+    evidence = db.scalar(
+        select(ContributionExpenseEvidence).where(
+            ContributionExpenseEvidence.id == evidence_id,
+            ContributionExpenseEvidence.expense_report_id == expense_report.id,
+        )
+    )
+    if evidence is None or not evidence.storage_key or not evidence.content_type:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Expense evidence file not found",
+        )
+
+    return upload_response(
+        category=UploadCategory.CONTRIBUTION_EXPENSE_EVIDENCE,
+        content_type=evidence.content_type,
+        file_name=evidence.file_name,
+        storage_key=evidence.storage_key,
+        storage_provider=evidence.storage_provider,
+    )
 
 
 @router.post(

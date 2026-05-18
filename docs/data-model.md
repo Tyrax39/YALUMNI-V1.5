@@ -158,7 +158,8 @@
   rejected approved reports create positive reversal entries.
 - `contribution_expense_evidence` - implemented for structured expense report
   evidence rows including evidence type, title, reference URL, receipt number,
-  optional amount, issued timestamp, and notes.
+  optional amount, issued timestamp, notes, optional private file metadata,
+  uploaded-by user, storage provider, and storage key.
 - `pledges` - future split from confirmed local contribution recording.
 - Provider payment attempts still need real provider authorization details,
   external checkout sessions, and production-grade multi-attempt checkout

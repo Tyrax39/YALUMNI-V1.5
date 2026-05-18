@@ -453,8 +453,17 @@ class ContributionExpenseEvidence(Base, TimestampMixin):
     amount_cents: Mapped[int | None] = mapped_column(Integer)
     issued_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     note: Mapped[str | None] = mapped_column(Text)
+    uploaded_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+    )
+    file_name: Mapped[str | None] = mapped_column(String(255))
+    content_type: Mapped[str | None] = mapped_column(String(120))
+    file_size_bytes: Mapped[int | None] = mapped_column(Integer)
+    storage_provider: Mapped[str | None] = mapped_column(String(40))
+    storage_key: Mapped[str | None] = mapped_column(String(1024))
 
     expense_report: Mapped[ContributionExpenseReport] = relationship(
         back_populates="evidence_items",
         foreign_keys=[expense_report_id],
     )
+    uploaded_by: Mapped[User | None] = relationship(foreign_keys=[uploaded_by_user_id])

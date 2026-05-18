@@ -13,6 +13,7 @@ class UploadCategory(StrEnum):
     VERIFICATION_EVIDENCE = "verification-evidence"
     PROFILE_PHOTO = "profile-photos"
     COMMUNITY_POST_MEDIA = "community-post-media"
+    CONTRIBUTION_EXPENSE_EVIDENCE = "contribution-expense-evidence"
 
 
 @dataclass(frozen=True)
@@ -62,6 +63,8 @@ def _local_base_dir(category: UploadCategory) -> str:
         return settings.profile_photo_upload_dir
     if category == UploadCategory.COMMUNITY_POST_MEDIA:
         return settings.community_post_media_upload_dir
+    if category == UploadCategory.CONTRIBUTION_EXPENSE_EVIDENCE:
+        return settings.contribution_expense_evidence_upload_dir
     raise ValueError(f"Unsupported upload category: {category}")
 
 

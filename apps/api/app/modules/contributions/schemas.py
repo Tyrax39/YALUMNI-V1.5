@@ -500,16 +500,22 @@ class ContributionDisbursementRequestListResponse(BaseModel):
 
 class ContributionExpenseEvidenceResponse(BaseModel):
     amount_cents: int | None
+    content_type: str | None
     created_at: datetime
+    download_url: str | None
     evidence_type: str
     expense_report_id: uuid.UUID
+    file_name: str | None
+    file_size_bytes: int | None
     id: uuid.UUID
     issued_at: datetime | None
     note: str | None
     receipt_number: str | None
     reference_url: str | None
+    storage_provider: str | None
     title: str
     updated_at: datetime
+    uploaded_by_user_id: uuid.UUID | None
 
 
 class ContributionExpenseReportResponse(BaseModel):

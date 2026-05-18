@@ -1,7 +1,7 @@
 # Upload Storage
 
-YALUMNI uploads now use a shared storage adapter for profile photos and
-verification evidence.
+YALUMNI uploads now use a shared storage adapter for profile photos,
+verification evidence, community post media, and contribution expense evidence.
 
 ## Local Development
 
@@ -9,6 +9,8 @@ verification evidence.
 UPLOAD_STORAGE_PROVIDER=LOCAL
 VERIFICATION_UPLOAD_DIR=.local/uploads/verification
 PROFILE_PHOTO_UPLOAD_DIR=.local/uploads/profile-photos
+COMMUNITY_POST_MEDIA_UPLOAD_DIR=.local/uploads/community-post-media
+CONTRIBUTION_EXPENSE_EVIDENCE_UPLOAD_DIR=.local/uploads/contribution-expense-evidence
 ```
 
 Local storage keeps relative keys on disk under the configured upload
@@ -31,6 +33,8 @@ S3 keys are stored under:
 ```text
 {UPLOAD_STORAGE_PREFIX}/verification-evidence/...
 {UPLOAD_STORAGE_PREFIX}/profile-photos/...
+{UPLOAD_STORAGE_PREFIX}/community-post-media/...
+{UPLOAD_STORAGE_PREFIX}/contribution-expense-evidence/...
 ```
 
 The bucket must remain private. The API streams objects only after the same
@@ -39,6 +43,6 @@ member/admin authorization checks used by local storage.
 ## Remaining Production Work
 
 - Bucket policy and lifecycle retention review.
-- Malware scanning for verification evidence.
+- Malware scanning for verification and contribution expense evidence.
 - Image processing for profile photo thumbnails.
 - CDN or signed URL strategy if traffic requires it.

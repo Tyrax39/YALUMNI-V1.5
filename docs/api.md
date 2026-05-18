@@ -634,6 +634,8 @@ POST   /api/v1/contributions/admin/disbursement-requests/{disbursement_request_i
 POST   /api/v1/contributions/admin/disbursement-requests/{disbursement_request_id}/expense-reports # implemented expense report foundation
 GET    /api/v1/contributions/admin/expense-reports # implemented
 GET    /api/v1/contributions/admin/expense-reports/{expense_report_id} # implemented
+POST   /api/v1/contributions/admin/expense-reports/{expense_report_id}/evidence-files # implemented private evidence upload
+GET    /api/v1/contributions/admin/expense-reports/{expense_report_id}/evidence/{evidence_id}/download # implemented private evidence download
 POST   /api/v1/contributions/admin/expense-reports/{expense_report_id}/approve # implemented
 POST   /api/v1/contributions/admin/expense-reports/{expense_report_id}/reject # implemented
 POST   /api/v1/contributions/admin/contributions/{contribution_id}/refund # implemented local ledger reversal

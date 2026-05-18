@@ -62,6 +62,13 @@ class Settings(BaseSettings):
     community_post_media_upload_dir: str = ".local/uploads/community-post-media"
     community_post_media_upload_max_bytes: int = 8 * 1024 * 1024
     community_post_media_allowed_types: str = "image/jpeg,image/png,image/webp,application/pdf"
+    contribution_expense_evidence_upload_dir: str = (
+        ".local/uploads/contribution-expense-evidence"
+    )
+    contribution_expense_evidence_upload_max_bytes: int = 8 * 1024 * 1024
+    contribution_expense_evidence_allowed_types: str = (
+        "application/pdf,image/jpeg,image/png,image/webp"
+    )
     notification_stream_poll_seconds: int = 8
     notification_digest_worker_interval_seconds: int = 3600
     notification_digest_worker_frequencies: str = "DAILY,WEEKLY"

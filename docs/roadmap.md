@@ -146,6 +146,8 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
   Expense report approvals now write contribution-ledger expense entries without
   requiring a donor contribution row, and rejected approved reports write
   reversal entries.
+  Expense report evidence now supports private finance-admin file upload and
+  download through the shared upload storage adapter.
   Signed provider webhook reconciliation now
   confirms eligible payment intents idempotently and marks failed/canceled
   provider events. Webhook diagnostics now persist provider event deliveries,
