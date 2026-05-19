@@ -147,6 +147,7 @@ GET  /api/v1/contributions/admin/contributions/export
 GET  /api/v1/contributions/admin/treasury
 GET  /api/v1/contributions/admin/treasury/export
 GET  /api/v1/contributions/admin/treasury/currency-summary/export
+GET  /api/v1/contributions/admin/treasury/expense-category-summary/export
 GET  /api/v1/contributions/admin/treasury/certifications
 POST /api/v1/contributions/admin/treasury/certifications
 GET  /api/v1/contributions/admin/treasury/certifications/{certification_id}
@@ -646,6 +647,7 @@ GET    /api/v1/contributions/admin/contributions/export # implemented CSV export
 GET    /api/v1/contributions/admin/treasury          # implemented
 GET    /api/v1/contributions/admin/treasury/export   # implemented ledger CSV export including expense ledger rows
 GET    /api/v1/contributions/admin/treasury/currency-summary/export # implemented per-currency CSV summary
+GET    /api/v1/contributions/admin/treasury/expense-category-summary/export # implemented expense-category CSV summary
 GET    /api/v1/contributions/admin/treasury/certifications # implemented stored certification list
 POST   /api/v1/contributions/admin/treasury/certifications # implemented immutable certification snapshot
 GET    /api/v1/contributions/admin/treasury/certifications/{certification_id} # implemented stored certification detail

@@ -1042,14 +1042,30 @@ def test_contribution_expense_report_foundation(client: TestClient) -> None:
 
     treasury_response = client.get("/api/v1/contributions/admin/treasury", headers=admin_headers)
     assert treasury_response.status_code == 200
-    ledger_entries = treasury_response.json()["ledger_entries"]
+    treasury = treasury_response.json()
+    ledger_entries = treasury["ledger_entries"]
     expense_entries = [
         entry for entry in ledger_entries if entry["entry_type"] == "CONTRIBUTION_EXPENSE"
     ]
     assert len(expense_entries) == 2
     assert {entry["amount_cents"] for entry in expense_entries} == {-5500, -500}
     assert {entry["contribution_id"] for entry in expense_entries} == {None}
+    assert {entry["expense_category"] for entry in expense_entries} == {"LEARNING_MATERIALS"}
     assert expense_report["id"] in {entry["expense_report_id"] for entry in expense_entries}
+    assert treasury["expense_category_summaries"] == [
+        {
+            "approved_amount_cents": 5500,
+            "approved_report_count": 1,
+            "currency": "USD",
+            "expense_category": "LEARNING_MATERIALS",
+            "rejected_amount_cents": 500,
+            "rejected_report_count": 1,
+            "report_count": 2,
+            "submitted_amount_cents": 0,
+            "submitted_report_count": 0,
+            "total_amount_cents": 6000,
+        }
+    ]
     reversal_entry = next(
         entry
         for entry in ledger_entries
@@ -1063,9 +1079,23 @@ def test_contribution_expense_report_foundation(client: TestClient) -> None:
         headers=admin_headers,
     )
     assert treasury_export.status_code == 200
+    assert "expense_category" in treasury_export.text
     assert "expense_report_id" in treasury_export.text
+    assert "LEARNING_MATERIALS" in treasury_export.text
     assert "CONTRIBUTION_EXPENSE" in treasury_export.text
     assert expense_report["id"] in treasury_export.text
+
+    expense_category_export = client.get(
+        "/api/v1/contributions/admin/treasury/expense-category-summary/export",
+        headers=admin_headers,
+    )
+    assert expense_category_export.status_code == 200
+    assert expense_category_export.headers["content-type"].startswith("text/csv")
+    assert (
+        "yalumni-treasury-expense-category-summary"
+        in expense_category_export.headers["content-disposition"]
+    )
+    assert "LEARNING_MATERIALS,USD,2,1,1,0,5500,500,0,6000" in expense_category_export.text
 
     audit_package_response = client.get(
         "/api/v1/contributions/admin/treasury/audit-package",
@@ -1077,6 +1107,7 @@ def test_contribution_expense_report_foundation(client: TestClient) -> None:
     assert any(
         entry["expense_report_id"] == expense_report["id"]
         and entry["entry_type"] == "CONTRIBUTION_EXPENSE"
+        and entry["expense_category"] == "LEARNING_MATERIALS"
         for entry in audit_ledger_entries
     )
 

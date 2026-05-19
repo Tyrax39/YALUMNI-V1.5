@@ -425,9 +425,23 @@ class ContributionLedgerEntryResponse(BaseModel):
     created_at: datetime
     currency: str
     entry_type: str
+    expense_category: str | None
     expense_report_id: uuid.UUID | None
     id: uuid.UUID
     memo: str | None
+
+
+class TreasuryExpenseCategorySummaryResponse(BaseModel):
+    approved_amount_cents: int
+    approved_report_count: int
+    currency: str
+    expense_category: str
+    rejected_amount_cents: int
+    rejected_report_count: int
+    report_count: int
+    submitted_amount_cents: int
+    submitted_report_count: int
+    total_amount_cents: int
 
 
 class TreasuryCurrencySummaryResponse(BaseModel):
@@ -444,6 +458,7 @@ class TreasurySummaryResponse(BaseModel):
     campaign_count: int
     campaigns: list[ContributionCampaignResponse]
     currency_summaries: list[TreasuryCurrencySummaryResponse]
+    expense_category_summaries: list[TreasuryExpenseCategorySummaryResponse]
     ledger_entries: list[ContributionLedgerEntryResponse]
     pending_amount_cents: int
     published_campaign_count: int

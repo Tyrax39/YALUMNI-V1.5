@@ -77,6 +77,7 @@ from app.modules.contributions.schemas import (
     TreasuryCertificationListResponse,
     TreasuryCertificationResponse,
     TreasuryCurrencySummaryResponse,
+    TreasuryExpenseCategorySummaryResponse,
     TreasurySummaryResponse,
 )
 from app.modules.contributions.storage import store_contribution_expense_evidence_file
@@ -644,6 +645,7 @@ def _serialize_ledger_entry(entry: ContributionLedgerEntry) -> ContributionLedge
         created_at=entry.created_at,
         currency=entry.currency,
         entry_type=entry.entry_type,
+        expense_category=entry.expense_report.expense_category if entry.expense_report else None,
         expense_report_id=entry.expense_report_id,
         id=entry.id,
         memo=entry.memo,
@@ -761,6 +763,73 @@ def _treasury_currency_summaries(db: Session) -> list[TreasuryCurrencySummaryRes
     return [
         TreasuryCurrencySummaryResponse(**summaries[currency])
         for currency in sorted(summaries)
+    ]
+
+
+def _empty_expense_category_summary(
+    *,
+    currency: str,
+    expense_category: str,
+) -> dict[str, int | str]:
+    return {
+        "approved_amount_cents": 0,
+        "approved_report_count": 0,
+        "currency": currency,
+        "expense_category": expense_category,
+        "rejected_amount_cents": 0,
+        "rejected_report_count": 0,
+        "report_count": 0,
+        "submitted_amount_cents": 0,
+        "submitted_report_count": 0,
+        "total_amount_cents": 0,
+    }
+
+
+def _treasury_expense_category_summaries(
+    db: Session,
+) -> list[TreasuryExpenseCategorySummaryResponse]:
+    summaries: dict[tuple[str, str], dict[str, int | str]] = {}
+    rows = db.execute(
+        select(
+            ContributionExpenseReport.expense_category,
+            ContributionExpenseReport.currency,
+            ContributionExpenseReport.status,
+            func.count(ContributionExpenseReport.id),
+            func.coalesce(func.sum(ContributionExpenseReport.amount_cents), 0),
+        ).group_by(
+            ContributionExpenseReport.expense_category,
+            ContributionExpenseReport.currency,
+            ContributionExpenseReport.status,
+        )
+    ).all()
+    for expense_category, currency, status_value, count, amount_cents in rows:
+        summary = summaries.setdefault(
+            (expense_category, currency),
+            _empty_expense_category_summary(
+                currency=currency,
+                expense_category=expense_category,
+            ),
+        )
+        summary["report_count"] = int(summary["report_count"]) + int(count)
+        summary["total_amount_cents"] = int(summary["total_amount_cents"]) + int(amount_cents)
+        if status_value == EXPENSE_APPROVED:
+            summary["approved_report_count"] = int(summary["approved_report_count"]) + int(count)
+            summary["approved_amount_cents"] = (
+                int(summary["approved_amount_cents"]) + int(amount_cents)
+            )
+        if status_value == EXPENSE_REJECTED:
+            summary["rejected_report_count"] = int(summary["rejected_report_count"]) + int(count)
+            summary["rejected_amount_cents"] = (
+                int(summary["rejected_amount_cents"]) + int(amount_cents)
+            )
+        if status_value == EXPENSE_SUBMITTED:
+            summary["submitted_report_count"] = int(summary["submitted_report_count"]) + int(count)
+            summary["submitted_amount_cents"] = (
+                int(summary["submitted_amount_cents"]) + int(amount_cents)
+            )
+    return [
+        TreasuryExpenseCategorySummaryResponse(**summaries[key])
+        for key in sorted(summaries)
     ]
 
 
@@ -1593,6 +1662,9 @@ def _build_treasury_audit_package(
                 "expense_report_id": str(entry.expense_report_id)
                 if entry.expense_report_id
                 else None,
+                "expense_category": entry.expense_report.expense_category
+                if entry.expense_report
+                else None,
                 "expense_summary": entry.expense_report.summary
                 if entry.expense_report
                 else None,
@@ -2207,10 +2279,12 @@ def get_treasury_summary(
         .limit(8)
     ).all()
     currency_summaries = _treasury_currency_summaries(db)
+    expense_category_summaries = _treasury_expense_category_summaries(db)
     return TreasurySummaryResponse(
         campaign_count=campaign_count,
         campaigns=[_serialize_campaign(db, campaign, current_user) for campaign in campaigns],
         currency_summaries=currency_summaries,
+        expense_category_summaries=expense_category_summaries,
         ledger_entries=[_serialize_ledger_entry(entry) for entry in ledger_entries],
         pending_amount_cents=int(pending),
         published_campaign_count=published_campaign_count,
@@ -2243,6 +2317,7 @@ def export_treasury_ledger(
             "memo",
             "contribution_id",
             "expense_report_id",
+            "expense_category",
             "campaign_id",
             "campaign_title",
             "receipt_number",
@@ -2262,6 +2337,7 @@ def export_treasury_ledger(
                 entry.memo,
                 entry.contribution_id,
                 entry.expense_report_id,
+                entry.expense_report.expense_category if entry.expense_report else None,
                 _ledger_entry_campaign_id(entry),
                 _ledger_entry_campaign(entry).title if _ledger_entry_campaign(entry) else None,
                 _ledger_entry_receipt_number(entry),
@@ -2328,6 +2404,59 @@ def export_treasury_currency_summary(
     db.commit()
     return _csv_response(
         f"yalumni-treasury-currency-summary-{utcnow().date().isoformat()}.csv",
+        rows,
+    )
+
+
+@router.get("/admin/treasury/expense-category-summary/export")
+@router.get("/admin/treasury/expense-category-summary/export/")
+def export_treasury_expense_category_summary(
+    request: Request,
+    current_user: Annotated[User, Depends(finance_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> Response:
+    category_summaries = _treasury_expense_category_summaries(db)
+    rows: list[list[object | None]] = [
+        [
+            "expense_category",
+            "currency",
+            "report_count",
+            "approved_report_count",
+            "rejected_report_count",
+            "submitted_report_count",
+            "approved_amount_cents",
+            "rejected_amount_cents",
+            "submitted_amount_cents",
+            "total_amount_cents",
+        ]
+    ]
+    rows.extend(
+        [
+            [
+                summary.expense_category,
+                summary.currency,
+                summary.report_count,
+                summary.approved_report_count,
+                summary.rejected_report_count,
+                summary.submitted_report_count,
+                summary.approved_amount_cents,
+                summary.rejected_amount_cents,
+                summary.submitted_amount_cents,
+                summary.total_amount_cents,
+            ]
+            for summary in category_summaries
+        ]
+    )
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "contributions.treasury_expense_category_summary_exported",
+        {"category_count": len(category_summaries)},
+    )
+    db.commit()
+    return _csv_response(
+        f"yalumni-treasury-expense-category-summary-{utcnow().date().isoformat()}.csv",
         rows,
     )
 

@@ -160,7 +160,8 @@
   negative expense ledger entries; rejected approved reports create positive
   reversal entries. Finance-admin reporting can filter expense reports by
   category, status, campaign, disbursement request, expense date range, and
-  vendor/summary/description text.
+  vendor/summary/description text. Treasury summaries and exports expose
+  expense category rollups and ledger expense category columns.
 - `contribution_expense_evidence` - implemented for structured expense report
   evidence rows including evidence type, title, reference URL, receipt number,
   optional amount, issued timestamp, notes, optional private file metadata,
