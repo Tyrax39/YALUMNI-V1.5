@@ -895,6 +895,8 @@ def test_contribution_expense_report_foundation(client: TestClient) -> None:
                 "title": "Book supplier receipt",
             }
         ],
+        "expense_at": "2026-05-10T10:00:00Z",
+        "expense_category": "learning materials",
         "note": "Submitted with supplier receipt.",
         "summary": "Purchased scholarship books",
         "vendor_name": "Book Supplier Ltd",
@@ -924,6 +926,7 @@ def test_contribution_expense_report_foundation(client: TestClient) -> None:
     assert expense_report["campaign_id"] == campaign["id"]
     assert expense_report["campaign_title"] == campaign["title"]
     assert expense_report["disbursement_request_id"] == disbursement["id"]
+    assert expense_report["expense_category"] == "LEARNING_MATERIALS"
     assert expense_report["status"] == "SUBMITTED"
     assert expense_report["submitted_by_email"] == "expense.finance@example.com"
     assert expense_report["evidence_items"][0]["evidence_type"] == "RECEIPT"
@@ -938,6 +941,45 @@ def test_contribution_expense_report_foundation(client: TestClient) -> None:
     )
     assert submitted_list.status_code == 200
     assert submitted_list.json()["total"] == 1
+
+    category_list = client.get(
+        "/api/v1/contributions/admin/expense-reports",
+        headers=admin_headers,
+        params={"expense_category": "learning-materials"},
+    )
+    assert category_list.status_code == 200
+    assert category_list.json()["total"] == 1
+    assert category_list.json()["expense_reports"][0]["id"] == expense_report["id"]
+
+    vendor_search = client.get(
+        "/api/v1/contributions/admin/expense-reports",
+        headers=admin_headers,
+        params={"q": "Book Supplier"},
+    )
+    assert vendor_search.status_code == 200
+    assert vendor_search.json()["total"] == 1
+    assert vendor_search.json()["expense_reports"][0]["expense_category"] == "LEARNING_MATERIALS"
+
+    date_filtered = client.get(
+        "/api/v1/contributions/admin/expense-reports",
+        headers=admin_headers,
+        params={
+            "expense_from": "2026-05-01T00:00:00Z",
+            "expense_to": "2026-05-31T23:59:59Z",
+        },
+    )
+    assert date_filtered.status_code == 200
+    assert date_filtered.json()["total"] == 1
+
+    invalid_date_range = client.get(
+        "/api/v1/contributions/admin/expense-reports",
+        headers=admin_headers,
+        params={
+            "expense_from": "2026-06-01T00:00:00Z",
+            "expense_to": "2026-05-01T00:00:00Z",
+        },
+    )
+    assert invalid_date_range.status_code == 400
 
     detail_response = client.get(
         f"/api/v1/contributions/admin/expense-reports/{expense_report['id']}",

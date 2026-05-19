@@ -1875,6 +1875,7 @@ def _serialize_expense_report(
             for evidence in expense_report.evidence_items
         ],
         expense_at=expense_report.expense_at,
+        expense_category=expense_report.expense_category,
         id=expense_report.id,
         note=expense_report.note,
         reviewed_at=expense_report.reviewed_at,
@@ -2739,6 +2740,7 @@ def create_expense_report(
         description=payload.description,
         disbursement_request_id=disbursement_request.id,
         expense_at=payload.expense_at,
+        expense_category=payload.expense_category,
         note=payload.note,
         status=EXPENSE_SUBMITTED,
         submitted_by_user_id=current_user.id,
@@ -2767,6 +2769,7 @@ def create_expense_report(
         {
             "amount_cents": expense_report.amount_cents,
             "disbursement_request_id": str(disbursement_request.id),
+            "expense_category": expense_report.expense_category,
             "expense_report_id": str(expense_report.id),
         },
     )
@@ -2788,12 +2791,23 @@ def list_expense_reports(
     db: Annotated[Session, Depends(get_db_session)],
     campaign_id: Annotated[uuid.UUID | None, Query()] = None,
     disbursement_request_id: Annotated[uuid.UUID | None, Query()] = None,
+    expense_category: Annotated[str | None, Query(max_length=80)] = None,
+    expense_from: Annotated[datetime | None, Query()] = None,
+    expense_to: Annotated[datetime | None, Query()] = None,
+    q: Annotated[str | None, Query(max_length=120)] = None,
     status_filter: Annotated[str | None, Query(alias="status", max_length=40)] = "ALL",
     limit: Annotated[int, Query(ge=1, le=100)] = 25,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> ContributionExpenseReportListResponse:
     _ = current_user
+    normalized_category = _normalize_enum(expense_category)
     normalized_status = _normalize_enum(status_filter)
+    search_query = q.strip() if q else None
+    if expense_from and expense_to and expense_to < expense_from:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="expense_to must be after expense_from",
+        )
     query = select(ContributionExpenseReport).options(
         joinedload(ContributionExpenseReport.campaign),
         joinedload(ContributionExpenseReport.disbursement_request),
@@ -2805,6 +2819,21 @@ def list_expense_reports(
     if disbursement_request_id:
         query = query.where(
             ContributionExpenseReport.disbursement_request_id == disbursement_request_id
+        )
+    if normalized_category and normalized_category != "ALL":
+        query = query.where(ContributionExpenseReport.expense_category == normalized_category)
+    if expense_from:
+        query = query.where(ContributionExpenseReport.expense_at >= expense_from)
+    if expense_to:
+        query = query.where(ContributionExpenseReport.expense_at <= expense_to)
+    if search_query:
+        search_term = f"%{search_query}%"
+        query = query.where(
+            or_(
+                ContributionExpenseReport.description.ilike(search_term),
+                ContributionExpenseReport.summary.ilike(search_term),
+                ContributionExpenseReport.vendor_name.ilike(search_term),
+            )
         )
     if normalized_status and normalized_status != "ALL":
         if normalized_status not in EXPENSE_STATUSES:

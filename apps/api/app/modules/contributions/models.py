@@ -386,6 +386,11 @@ class ContributionExpenseReport(Base, TimestampMixin):
             "status",
             "created_at",
         ),
+        Index(
+            "ix_contribution_expense_reports_category_status",
+            "expense_category",
+            "status",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -405,6 +410,12 @@ class ContributionExpenseReport(Base, TimestampMixin):
     )
     amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    expense_category: Mapped[str] = mapped_column(
+        String(80),
+        default="OTHER",
+        server_default="OTHER",
+        nullable=False,
+    )
     vendor_name: Mapped[str] = mapped_column(String(160), nullable=False)
     expense_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     summary: Mapped[str] = mapped_column(String(500), nullable=False)

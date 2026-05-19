@@ -176,6 +176,7 @@ class ContributionExpenseEvidenceCreate(BaseModel):
 class ContributionExpenseReportCreate(BaseModel):
     amount_cents: int = Field(ge=100, le=100_000_000_000)
     currency: str = Field(default="USD", min_length=3, max_length=3)
+    expense_category: str = Field(default="OTHER", min_length=2, max_length=80)
     vendor_name: str = Field(min_length=2, max_length=160)
     expense_at: datetime | None = None
     summary: str = Field(min_length=10, max_length=500)
@@ -190,6 +191,14 @@ class ContributionExpenseReportCreate(BaseModel):
     @classmethod
     def normalize_currency(cls, value: str) -> str:
         return value.strip().upper()
+
+    @field_validator("expense_category")
+    @classmethod
+    def normalize_expense_category(cls, value: str) -> str:
+        normalized = value.strip().upper().replace(" ", "_").replace("-", "_")
+        if not normalized:
+            raise ValueError("expense_category is required")
+        return normalized
 
     @field_validator("vendor_name", "summary")
     @classmethod
@@ -541,6 +550,7 @@ class ContributionExpenseReportResponse(BaseModel):
     disbursement_request_id: uuid.UUID
     evidence_items: list[ContributionExpenseEvidenceResponse]
     expense_at: datetime | None
+    expense_category: str
     id: uuid.UUID
     note: str | None
     reviewed_at: datetime | None

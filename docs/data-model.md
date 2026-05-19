@@ -153,11 +153,14 @@
   while in requested/approved/paid states, but they do not yet write treasury
   ledger expense entries.
 - `contribution_expense_reports` - implemented for finance-admin expense reports
-  tied to paid disbursement requests, with amount, currency, vendor, expense date,
-  summary, description, submitter, reviewer, submitted/approved/rejected status,
-  notes, and review timestamps. Submitted and approved reports reserve paid
-  disbursement funds. Approved reports create negative expense ledger entries;
-  rejected approved reports create positive reversal entries.
+  tied to paid disbursement requests, with amount, currency, expense category,
+  vendor, expense date, summary, description, submitter, reviewer,
+  submitted/approved/rejected status, notes, and review timestamps. Submitted
+  and approved reports reserve paid disbursement funds. Approved reports create
+  negative expense ledger entries; rejected approved reports create positive
+  reversal entries. Finance-admin reporting can filter expense reports by
+  category, status, campaign, disbursement request, expense date range, and
+  vendor/summary/description text.
 - `contribution_expense_evidence` - implemented for structured expense report
   evidence rows including evidence type, title, reference URL, receipt number,
   optional amount, issued timestamp, notes, optional private file metadata,

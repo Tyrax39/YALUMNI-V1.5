@@ -143,6 +143,8 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
   availability checks and request/approve/reject/mark-paid status transitions.
   Added finance-admin expense reports tied to paid disbursements, with structured
   receipt/evidence rows and submit/approve/reject status transitions.
+  Expense reports now carry normalized categories and finance-admin reporting
+  filters for category, expense date range, and vendor/summary/description text.
   Expense report approvals now write contribution-ledger expense entries without
   requiring a donor contribution row, and rejected approved reports write
   reversal entries.
