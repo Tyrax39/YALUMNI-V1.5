@@ -33,6 +33,14 @@ def _allowed_content_types(setting_value: str) -> set[str]:
     }
 
 
+def _blocked_signature_patterns(setting_value: str) -> list[bytes]:
+    return [
+        pattern.strip().encode("utf-8")
+        for pattern in setting_value.split(",")
+        if pattern.strip()
+    ]
+
+
 def _safe_file_name(file_name: str | None, extension: str) -> str:
     cleaned = Path(file_name or "contribution-expense-evidence").name
     cleaned = re.sub(r"[^A-Za-z0-9._ -]+", "-", cleaned).strip(" .-_")
@@ -73,6 +81,14 @@ async def store_contribution_expense_evidence_file(
         raise HTTPException(
             status_code=status.HTTP_413_CONTENT_TOO_LARGE,
             detail="Expense evidence file exceeds the configured size limit",
+        )
+    blocked_patterns = _blocked_signature_patterns(
+        settings.contribution_expense_evidence_blocked_signatures
+    )
+    if any(pattern in content for pattern in blocked_patterns):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Expense evidence file failed the configured safety signature check",
         )
 
     extension = CONTRIBUTION_EXPENSE_EVIDENCE_CONTENT_TYPE_EXTENSIONS[content_type]

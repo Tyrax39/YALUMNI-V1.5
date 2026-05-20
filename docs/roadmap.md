@@ -151,7 +151,9 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
   requiring a donor contribution row, and rejected approved reports write
   reversal entries.
   Expense report evidence now supports private finance-admin file upload and
-  download through the shared upload storage adapter.
+  download through the shared upload storage adapter, with finance-admin policy
+  visibility, configurable retention days, and blocked signature checks before
+  storage.
   Treasury summaries, audit packages, certified snapshots, and CSV exports now
   include per-currency accounting summaries without converting currencies.
   Signed provider webhook reconciliation now

@@ -1186,6 +1186,25 @@ def test_contribution_expense_evidence_file_upload_download(
         expense_report = expense_response.json()
         assert expense_report["evidence_items"] == []
 
+        denied_policy = client.get(
+            "/api/v1/contributions/admin/expense-evidence-policy",
+            headers=donor_headers,
+        )
+        assert denied_policy.status_code == 403
+
+        policy_response = client.get(
+            "/api/v1/contributions/admin/expense-evidence-policy",
+            headers=admin_headers,
+        )
+        assert policy_response.status_code == 200
+        assert policy_response.json() == {
+            "allowed_content_types": ["application/pdf", "image/png"],
+            "blocked_signature_count": 1,
+            "max_file_size_bytes": 64,
+            "retention_days": 2555,
+            "storage_provider": "LOCAL",
+        }
+
         denied_upload = client.post(
             f"/api/v1/contributions/admin/expense-reports/{expense_report['id']}/evidence-files",
             files={"file": ("denied.pdf", b"%PDF-denied", "application/pdf")},
@@ -1206,6 +1225,20 @@ def test_contribution_expense_evidence_file_upload_download(
             headers=admin_headers,
         )
         assert oversized_upload.status_code == 413
+
+        blocked_signature_upload = client.post(
+            f"/api/v1/contributions/admin/expense-reports/{expense_report['id']}/evidence-files",
+            files={
+                "file": (
+                    "eicar.pdf",
+                    b"%PDF EICAR-STANDARD-ANTIVIRUS-TEST-FILE",
+                    "application/pdf",
+                )
+            },
+            headers=admin_headers,
+        )
+        assert blocked_signature_upload.status_code == 422
+        assert "safety signature" in blocked_signature_upload.json()["detail"]
 
         receipt_bytes = b"%PDF-yalumni-expense-receipt"
         upload_response = client.post(

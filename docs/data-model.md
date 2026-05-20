@@ -165,7 +165,10 @@
 - `contribution_expense_evidence` - implemented for structured expense report
   evidence rows including evidence type, title, reference URL, receipt number,
   optional amount, issued timestamp, notes, optional private file metadata,
-  uploaded-by user, storage provider, and storage key.
+  uploaded-by user, storage provider, and storage key. Finance-admin upload
+  policy visibility now exposes allowed content types, max file size, retention
+  days, storage provider, and configured blocked signature count. File uploads
+  are blocked when they match configured denylist signatures before storage.
 - `pledges` - future split from confirmed local contribution recording.
 - Provider payment attempts still need real provider authorization details,
   external checkout sessions, and production-grade multi-attempt checkout

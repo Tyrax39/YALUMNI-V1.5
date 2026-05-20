@@ -69,6 +69,10 @@ class Settings(BaseSettings):
     contribution_expense_evidence_allowed_types: str = (
         "application/pdf,image/jpeg,image/png,image/webp"
     )
+    contribution_expense_evidence_blocked_signatures: str = (
+        "EICAR-STANDARD-ANTIVIRUS-TEST-FILE"
+    )
+    contribution_expense_evidence_retention_days: int = 2555
     notification_stream_poll_seconds: int = 8
     notification_digest_worker_interval_seconds: int = 3600
     notification_digest_worker_frequencies: str = "DAILY,WEEKLY"

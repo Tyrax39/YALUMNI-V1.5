@@ -56,6 +56,7 @@ from app.modules.contributions.schemas import (
     ContributionDisbursementRequestResponse,
     ContributionDisbursementStatusAction,
     ContributionExpenseEvidenceCreate,
+    ContributionExpenseEvidencePolicyResponse,
     ContributionExpenseEvidenceResponse,
     ContributionExpenseReportCreate,
     ContributionExpenseReportListResponse,
@@ -215,6 +216,10 @@ def _normalize_enum(value: str | None) -> str | None:
         return None
     normalized = value.strip().upper().replace(" ", "_").replace("-", "_")
     return normalized or None
+
+
+def _split_config_csv(value: str) -> list[str]:
+    return sorted({item.strip() for item in value.split(",") if item.strip()})
 
 
 def _user_role_names(user: User) -> set[str]:
@@ -3003,6 +3008,28 @@ def get_expense_report(
     return _serialize_expense_report(expense_report)
 
 
+@router.get(
+    "/admin/expense-evidence-policy",
+    response_model=ContributionExpenseEvidencePolicyResponse,
+)
+def get_expense_evidence_policy(
+    current_user: Annotated[User, Depends(finance_admin_dependency)],
+) -> ContributionExpenseEvidencePolicyResponse:
+    _ = current_user
+    settings = get_settings()
+    return ContributionExpenseEvidencePolicyResponse(
+        allowed_content_types=_split_config_csv(
+            settings.contribution_expense_evidence_allowed_types
+        ),
+        blocked_signature_count=len(
+            _split_config_csv(settings.contribution_expense_evidence_blocked_signatures)
+        ),
+        max_file_size_bytes=settings.contribution_expense_evidence_upload_max_bytes,
+        retention_days=settings.contribution_expense_evidence_retention_days,
+        storage_provider=settings.upload_storage_provider,
+    )
+
+
 @router.post(
     "/admin/expense-reports/{expense_report_id}/evidence-files",
     response_model=ContributionExpenseEvidenceResponse,
@@ -3069,6 +3096,7 @@ async def upload_expense_report_evidence_file(
         uploaded_by_user_id=current_user.id,
     )
     db.add(evidence)
+    settings = get_settings()
     _create_security_event(
         db,
         request,
@@ -3079,6 +3107,7 @@ async def upload_expense_report_evidence_file(
             "evidence_id": str(evidence.id),
             "expense_report_id": str(expense_report.id),
             "file_size_bytes": evidence.file_size_bytes,
+            "retention_days": settings.contribution_expense_evidence_retention_days,
         },
     )
     db.commit()

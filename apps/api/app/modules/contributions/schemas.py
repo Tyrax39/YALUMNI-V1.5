@@ -554,6 +554,14 @@ class ContributionExpenseEvidenceResponse(BaseModel):
     uploaded_by_user_id: uuid.UUID | None
 
 
+class ContributionExpenseEvidencePolicyResponse(BaseModel):
+    allowed_content_types: list[str]
+    blocked_signature_count: int
+    max_file_size_bytes: int
+    retention_days: int
+    storage_provider: str
+
+
 class ContributionExpenseReportResponse(BaseModel):
     amount_cents: int
     campaign_id: uuid.UUID

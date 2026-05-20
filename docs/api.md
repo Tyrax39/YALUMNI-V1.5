@@ -138,6 +138,7 @@ POST /api/v1/contributions/admin/disbursement-requests/{disbursement_request_id}
 POST /api/v1/contributions/admin/disbursement-requests/{disbursement_request_id}/expense-reports
 GET  /api/v1/contributions/admin/expense-reports
 GET  /api/v1/contributions/admin/expense-reports/{expense_report_id}
+GET  /api/v1/contributions/admin/expense-evidence-policy
 POST /api/v1/contributions/admin/expense-reports/{expense_report_id}/approve
 POST /api/v1/contributions/admin/expense-reports/{expense_report_id}/reject
 POST /api/v1/contributions/admin/contributions/{contribution_id}/refund
@@ -636,6 +637,7 @@ POST   /api/v1/contributions/admin/disbursement-requests/{disbursement_request_i
 POST   /api/v1/contributions/admin/disbursement-requests/{disbursement_request_id}/expense-reports # implemented expense report foundation
 GET    /api/v1/contributions/admin/expense-reports # implemented with status, category, expense date, and text filters
 GET    /api/v1/contributions/admin/expense-reports/{expense_report_id} # implemented
+GET    /api/v1/contributions/admin/expense-evidence-policy # implemented upload policy visibility
 POST   /api/v1/contributions/admin/expense-reports/{expense_report_id}/evidence-files # implemented private evidence upload
 GET    /api/v1/contributions/admin/expense-reports/{expense_report_id}/evidence/{evidence_id}/download # implemented private evidence download
 POST   /api/v1/contributions/admin/expense-reports/{expense_report_id}/approve # implemented
