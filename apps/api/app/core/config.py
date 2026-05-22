@@ -73,6 +73,16 @@ class Settings(BaseSettings):
         "EICAR-STANDARD-ANTIVIRUS-TEST-FILE"
     )
     contribution_expense_evidence_retention_days: int = 2555
+    contribution_expense_category_taxonomy: str = (
+        "LEARNING_MATERIALS:Learning materials,"
+        "TRAVEL:Travel,"
+        "VENUE:Venue,"
+        "TECHNOLOGY:Technology,"
+        "COMMUNICATIONS:Communications,"
+        "OTHER:Other"
+    )
+    contribution_expense_category_budget_policy: str = ""
+    contribution_expense_category_policy_default_currency: str = "USD"
     notification_stream_poll_seconds: int = 8
     notification_digest_worker_interval_seconds: int = 3600
     notification_digest_worker_frequencies: str = "DAILY,WEEKLY"

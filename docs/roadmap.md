@@ -147,6 +147,8 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
   filters for category, expense date range, and vendor/summary/description text.
   Treasury reporting now includes expense-category rollups, expense-category
   CSV export, and expense-category columns on ledger/audit rows.
+  Finance-admin category policy visibility now exposes the configured taxonomy,
+  optional category/currency budgets, current usage, and remaining budget.
   Expense report approvals now write contribution-ledger expense entries without
   requiring a donor contribution row, and rejected approved reports write
   reversal entries.

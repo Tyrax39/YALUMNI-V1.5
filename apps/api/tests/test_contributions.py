@@ -819,7 +819,10 @@ def test_contribution_disbursement_request_foundation(client: TestClient) -> Non
     assert all_disbursements.json()["total"] == 2
 
 
-def test_contribution_expense_report_foundation(client: TestClient) -> None:
+def test_contribution_expense_report_foundation(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     admin_headers = create_admin(client, "expense.finance@example.com")
     donor = register_user(client, "expense.donor@example.com", "Expense Donor")
     donor_headers = auth_headers(donor["access_token"])
@@ -1096,6 +1099,50 @@ def test_contribution_expense_report_foundation(client: TestClient) -> None:
         in expense_category_export.headers["content-disposition"]
     )
     assert "LEARNING_MATERIALS,USD,2,1,1,0,5500,500,0,6000" in expense_category_export.text
+
+    monkeypatch.setenv(
+        "CONTRIBUTION_EXPENSE_CATEGORY_BUDGET_POLICY",
+        "LEARNING_MATERIALS:USD:6000",
+    )
+    get_settings.cache_clear()
+    try:
+        denied_category_policy = client.get(
+            "/api/v1/contributions/admin/expense-category-policy",
+            headers=donor_headers,
+        )
+        assert denied_category_policy.status_code == 403
+
+        category_policy = client.get(
+            "/api/v1/contributions/admin/expense-category-policy",
+            headers=admin_headers,
+        )
+        assert category_policy.status_code == 200
+        category_policy_payload = category_policy.json()
+        assert category_policy_payload["default_currency"] == "USD"
+        category_items = {
+            (item["expense_category"], item["currency"]): item
+            for item in category_policy_payload["categories"]
+        }
+        learning_materials_policy = category_items[("LEARNING_MATERIALS", "USD")]
+        assert learning_materials_policy == {
+            "approved_amount_cents": 5500,
+            "approved_report_count": 1,
+            "budget_amount_cents": 6000,
+            "currency": "USD",
+            "expense_category": "LEARNING_MATERIALS",
+            "label": "Learning materials",
+            "managed": True,
+            "rejected_amount_cents": 500,
+            "rejected_report_count": 1,
+            "remaining_budget_cents": 500,
+            "report_count": 2,
+            "submitted_amount_cents": 0,
+            "submitted_report_count": 0,
+            "total_amount_cents": 6000,
+        }
+        assert category_items[("OTHER", "USD")]["managed"] is True
+    finally:
+        get_settings.cache_clear()
 
     audit_package_response = client.get(
         "/api/v1/contributions/admin/treasury/audit-package",

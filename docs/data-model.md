@@ -161,7 +161,10 @@
   reversal entries. Finance-admin reporting can filter expense reports by
   category, status, campaign, disbursement request, expense date range, and
   vendor/summary/description text. Treasury summaries and exports expose
-  expense category rollups and ledger expense category columns.
+  expense category rollups and ledger expense category columns. Finance-admin
+  policy visibility exposes the configured category taxonomy, optional per
+  category/currency budgets, current report counts, approved/submitted/rejected
+  spend, and remaining budget where a budget is configured.
 - `contribution_expense_evidence` - implemented for structured expense report
   evidence rows including evidence type, title, reference URL, receipt number,
   optional amount, issued timestamp, notes, optional private file metadata,

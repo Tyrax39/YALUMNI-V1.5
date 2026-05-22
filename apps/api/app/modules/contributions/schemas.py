@@ -562,6 +562,28 @@ class ContributionExpenseEvidencePolicyResponse(BaseModel):
     storage_provider: str
 
 
+class ContributionExpenseCategoryPolicyItemResponse(BaseModel):
+    approved_amount_cents: int
+    approved_report_count: int
+    budget_amount_cents: int | None
+    currency: str
+    expense_category: str
+    label: str
+    managed: bool
+    rejected_amount_cents: int
+    rejected_report_count: int
+    remaining_budget_cents: int | None
+    report_count: int
+    submitted_amount_cents: int
+    submitted_report_count: int
+    total_amount_cents: int
+
+
+class ContributionExpenseCategoryPolicyResponse(BaseModel):
+    categories: list[ContributionExpenseCategoryPolicyItemResponse]
+    default_currency: str
+
+
 class ContributionExpenseReportResponse(BaseModel):
     amount_cents: int
     campaign_id: uuid.UUID

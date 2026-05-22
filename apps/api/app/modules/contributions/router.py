@@ -55,6 +55,8 @@ from app.modules.contributions.schemas import (
     ContributionDisbursementRequestListResponse,
     ContributionDisbursementRequestResponse,
     ContributionDisbursementStatusAction,
+    ContributionExpenseCategoryPolicyItemResponse,
+    ContributionExpenseCategoryPolicyResponse,
     ContributionExpenseEvidenceCreate,
     ContributionExpenseEvidencePolicyResponse,
     ContributionExpenseEvidenceResponse,
@@ -220,6 +222,39 @@ def _normalize_enum(value: str | None) -> str | None:
 
 def _split_config_csv(value: str) -> list[str]:
     return sorted({item.strip() for item in value.split(",") if item.strip()})
+
+
+def _parse_expense_category_taxonomy(value: str) -> dict[str, str]:
+    taxonomy: dict[str, str] = {}
+    for entry in _split_config_csv(value):
+        raw_key, separator, raw_label = entry.partition(":")
+        category = _normalize_enum(raw_key)
+        if category is None:
+            continue
+        label = raw_label.strip() if separator else category.replace("_", " ").title()
+        taxonomy[category] = label or category.replace("_", " ").title()
+    return taxonomy
+
+
+def _parse_expense_category_budget_policy(value: str) -> dict[tuple[str, str], int]:
+    budgets: dict[tuple[str, str], int] = {}
+    for entry in _split_config_csv(value):
+        raw_category, raw_currency, raw_amount = entry.split(":", 2) if entry.count(":") >= 2 else (
+            "",
+            "",
+            "",
+        )
+        category = _normalize_enum(raw_category)
+        currency = raw_currency.strip().upper()
+        if category is None or len(currency) != 3:
+            continue
+        try:
+            amount_cents = int(raw_amount)
+        except ValueError:
+            continue
+        if amount_cents >= 0:
+            budgets[(category, currency)] = amount_cents
+    return budgets
 
 
 def _user_role_names(user: User) -> set[str]:
@@ -836,6 +871,109 @@ def _treasury_expense_category_summaries(
         TreasuryExpenseCategorySummaryResponse(**summaries[key])
         for key in sorted(summaries)
     ]
+
+
+def _empty_expense_category_policy_item(
+    *,
+    budget_amount_cents: int | None,
+    currency: str,
+    expense_category: str,
+    label: str,
+    managed: bool,
+) -> dict[str, int | str | bool | None]:
+    return {
+        "approved_amount_cents": 0,
+        "approved_report_count": 0,
+        "budget_amount_cents": budget_amount_cents,
+        "currency": currency,
+        "expense_category": expense_category,
+        "label": label,
+        "managed": managed,
+        "rejected_amount_cents": 0,
+        "rejected_report_count": 0,
+        "remaining_budget_cents": budget_amount_cents,
+        "report_count": 0,
+        "submitted_amount_cents": 0,
+        "submitted_report_count": 0,
+        "total_amount_cents": 0,
+    }
+
+
+def _expense_category_policy(
+    db: Session,
+) -> ContributionExpenseCategoryPolicyResponse:
+    settings = get_settings()
+    default_currency = settings.contribution_expense_category_policy_default_currency.upper()
+    taxonomy = _parse_expense_category_taxonomy(settings.contribution_expense_category_taxonomy)
+    budgets = _parse_expense_category_budget_policy(
+        settings.contribution_expense_category_budget_policy
+    )
+    rows: dict[tuple[str, str], dict[str, int | str | bool | None]] = {}
+
+    def ensure_row(
+        expense_category: str,
+        currency: str,
+        *,
+        budget_amount_cents: int | None = None,
+        managed: bool | None = None,
+    ) -> dict[str, int | str | bool | None]:
+        key = (expense_category, currency)
+        label = taxonomy.get(expense_category, expense_category.replace("_", " ").title())
+        row = rows.setdefault(
+            key,
+            _empty_expense_category_policy_item(
+                budget_amount_cents=budget_amount_cents,
+                currency=currency,
+                expense_category=expense_category,
+                label=label,
+                managed=expense_category in taxonomy,
+            ),
+        )
+        if budget_amount_cents is not None:
+            row["budget_amount_cents"] = budget_amount_cents
+            row["remaining_budget_cents"] = budget_amount_cents - int(
+                row["approved_amount_cents"]
+            )
+        if managed is not None:
+            row["managed"] = managed
+        row["label"] = label
+        return row
+
+    for expense_category in taxonomy:
+        ensure_row(expense_category, default_currency, managed=True)
+    for (expense_category, currency), budget_amount_cents in budgets.items():
+        ensure_row(
+            expense_category,
+            currency,
+            budget_amount_cents=budget_amount_cents,
+            managed=expense_category in taxonomy,
+        )
+    for summary in _treasury_expense_category_summaries(db):
+        row = ensure_row(
+            summary.expense_category,
+            summary.currency,
+            managed=summary.expense_category in taxonomy,
+        )
+        row["approved_amount_cents"] = summary.approved_amount_cents
+        row["approved_report_count"] = summary.approved_report_count
+        row["rejected_amount_cents"] = summary.rejected_amount_cents
+        row["rejected_report_count"] = summary.rejected_report_count
+        row["report_count"] = summary.report_count
+        row["submitted_amount_cents"] = summary.submitted_amount_cents
+        row["submitted_report_count"] = summary.submitted_report_count
+        row["total_amount_cents"] = summary.total_amount_cents
+        if row["budget_amount_cents"] is not None:
+            row["remaining_budget_cents"] = int(row["budget_amount_cents"]) - int(
+                row["approved_amount_cents"]
+            )
+
+    return ContributionExpenseCategoryPolicyResponse(
+        categories=[
+            ContributionExpenseCategoryPolicyItemResponse(**rows[key])
+            for key in sorted(rows)
+        ],
+        default_currency=default_currency,
+    )
 
 
 def _list_campaign_response(
@@ -3028,6 +3166,18 @@ def get_expense_evidence_policy(
         retention_days=settings.contribution_expense_evidence_retention_days,
         storage_provider=settings.upload_storage_provider,
     )
+
+
+@router.get(
+    "/admin/expense-category-policy",
+    response_model=ContributionExpenseCategoryPolicyResponse,
+)
+def get_expense_category_policy(
+    current_user: Annotated[User, Depends(finance_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> ContributionExpenseCategoryPolicyResponse:
+    _ = current_user
+    return _expense_category_policy(db)
 
 
 @router.post(
