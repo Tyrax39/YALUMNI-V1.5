@@ -1332,6 +1332,55 @@ def test_contribution_expense_evidence_file_upload_download(
         assert download_response.content == receipt_bytes
         assert download_response.headers["content-type"].startswith("application/pdf")
 
+        monkeypatch.setenv("CONTRIBUTION_EXPENSE_EVIDENCE_RETENTION_DAYS", "0")
+        get_settings.cache_clear()
+        try:
+            denied_retention_preview = client.get(
+                "/api/v1/contributions/admin/expense-evidence-retention",
+                headers=donor_headers,
+            )
+            assert denied_retention_preview.status_code == 403
+
+            retention_preview = client.get(
+                "/api/v1/contributions/admin/expense-evidence-retention",
+                headers=admin_headers,
+            )
+            assert retention_preview.status_code == 200
+            assert retention_preview.json()["dry_run"] is True
+            assert retention_preview.json()["deleted_count"] == 0
+            assert retention_preview.json()["retention_days"] == 0
+            assert evidence["id"] in {
+                candidate["id"] for candidate in retention_preview.json()["candidates"]
+            }
+
+            retention_dry_run = client.post(
+                "/api/v1/contributions/admin/expense-evidence-retention/run",
+                headers=admin_headers,
+                params={"dry_run": "true"},
+            )
+            assert retention_dry_run.status_code == 200
+            assert retention_dry_run.json()["deleted_count"] == 0
+            assert client.get(evidence["download_url"], headers=admin_headers).status_code == 200
+
+            retention_cleanup = client.post(
+                "/api/v1/contributions/admin/expense-evidence-retention/run",
+                headers=admin_headers,
+                params={"dry_run": "false"},
+            )
+            assert retention_cleanup.status_code == 200
+            assert retention_cleanup.json()["deleted_count"] == 1
+            assert not (tmp_path / expense_report["id"] / f"{evidence['id']}.pdf").exists()
+
+            retained_detail = client.get(
+                f"/api/v1/contributions/admin/expense-reports/{expense_report['id']}",
+                headers=admin_headers,
+            )
+            assert retained_detail.status_code == 200
+            assert retained_detail.json()["evidence_items"][0]["download_url"] is None
+            assert client.get(evidence["download_url"], headers=admin_headers).status_code == 404
+        finally:
+            get_settings.cache_clear()
+
         approve_expense = client.post(
             f"/api/v1/contributions/admin/expense-reports/{expense_report['id']}/approve",
             headers=admin_headers,

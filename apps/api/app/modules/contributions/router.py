@@ -7,7 +7,7 @@ import secrets
 import textwrap
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import (
@@ -30,7 +30,7 @@ from app.core.config import get_settings
 from app.core.database import get_db_session
 from app.core.permissions import ADMIN_ROLE_NAMES, GlobalRole, has_any_role
 from app.core.security import utcnow
-from app.core.storage import UploadCategory, upload_response
+from app.core.storage import UploadCategory, delete_upload, upload_response
 from app.modules.auth.dependencies import get_current_user, require_roles
 from app.modules.auth.models import SecurityEvent, User
 from app.modules.contributions.models import (
@@ -60,6 +60,8 @@ from app.modules.contributions.schemas import (
     ContributionExpenseEvidenceCreate,
     ContributionExpenseEvidencePolicyResponse,
     ContributionExpenseEvidenceResponse,
+    ContributionExpenseEvidenceRetentionCandidateResponse,
+    ContributionExpenseEvidenceRetentionResponse,
     ContributionExpenseReportCreate,
     ContributionExpenseReportListResponse,
     ContributionExpenseReportResponse,
@@ -2073,6 +2075,66 @@ def _serialize_expense_evidence(
     )
 
 
+def _serialize_expense_evidence_retention_candidate(
+    evidence: ContributionExpenseEvidence,
+) -> ContributionExpenseEvidenceRetentionCandidateResponse:
+    return ContributionExpenseEvidenceRetentionCandidateResponse(
+        created_at=evidence.created_at,
+        expense_report_id=evidence.expense_report_id,
+        file_name=evidence.file_name,
+        file_size_bytes=evidence.file_size_bytes,
+        id=evidence.id,
+        storage_provider=evidence.storage_provider,
+    )
+
+
+def _expense_evidence_retention_cutoff() -> tuple[int, datetime]:
+    retention_days = max(0, get_settings().contribution_expense_evidence_retention_days)
+    return retention_days, utcnow() - timedelta(days=retention_days)
+
+
+def _expense_evidence_retention_candidates(
+    db: Session,
+    cutoff_at: datetime,
+    *,
+    limit: int,
+) -> tuple[int, list[ContributionExpenseEvidence]]:
+    filters = (
+        ContributionExpenseEvidence.storage_key.is_not(None),
+        ContributionExpenseEvidence.created_at <= cutoff_at,
+    )
+    total = db.scalar(select(func.count()).where(*filters)) or 0
+    candidates = db.scalars(
+        select(ContributionExpenseEvidence)
+        .where(*filters)
+        .order_by(ContributionExpenseEvidence.created_at.asc())
+        .limit(limit)
+    ).all()
+    return int(total), list(candidates)
+
+
+def _expense_evidence_retention_response(
+    *,
+    candidates: list[ContributionExpenseEvidence],
+    cutoff_at: datetime,
+    deleted_count: int,
+    dry_run: bool,
+    retention_days: int,
+    scanned_count: int,
+) -> ContributionExpenseEvidenceRetentionResponse:
+    return ContributionExpenseEvidenceRetentionResponse(
+        candidates=[
+            _serialize_expense_evidence_retention_candidate(candidate)
+            for candidate in candidates
+        ],
+        cutoff_at=cutoff_at,
+        deleted_count=deleted_count,
+        dry_run=dry_run,
+        retention_days=retention_days,
+        scanned_count=scanned_count,
+    )
+
+
 def _serialize_expense_report(
     expense_report: ContributionExpenseReport,
 ) -> ContributionExpenseReportResponse:
@@ -3165,6 +3227,85 @@ def get_expense_evidence_policy(
         max_file_size_bytes=settings.contribution_expense_evidence_upload_max_bytes,
         retention_days=settings.contribution_expense_evidence_retention_days,
         storage_provider=settings.upload_storage_provider,
+    )
+
+
+@router.get(
+    "/admin/expense-evidence-retention",
+    response_model=ContributionExpenseEvidenceRetentionResponse,
+)
+def preview_expense_evidence_retention(
+    current_user: Annotated[User, Depends(finance_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+) -> ContributionExpenseEvidenceRetentionResponse:
+    _ = current_user
+    retention_days, cutoff_at = _expense_evidence_retention_cutoff()
+    scanned_count, candidates = _expense_evidence_retention_candidates(
+        db,
+        cutoff_at,
+        limit=limit,
+    )
+    return _expense_evidence_retention_response(
+        candidates=candidates,
+        cutoff_at=cutoff_at,
+        deleted_count=0,
+        dry_run=True,
+        retention_days=retention_days,
+        scanned_count=scanned_count,
+    )
+
+
+@router.post(
+    "/admin/expense-evidence-retention/run",
+    response_model=ContributionExpenseEvidenceRetentionResponse,
+)
+def run_expense_evidence_retention(
+    request: Request,
+    current_user: Annotated[User, Depends(finance_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+    dry_run: Annotated[bool, Query()] = True,
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+) -> ContributionExpenseEvidenceRetentionResponse:
+    retention_days, cutoff_at = _expense_evidence_retention_cutoff()
+    scanned_count, candidates = _expense_evidence_retention_candidates(
+        db,
+        cutoff_at,
+        limit=limit,
+    )
+    deleted_count = 0
+    if not dry_run:
+        for evidence in candidates:
+            delete_upload(
+                category=UploadCategory.CONTRIBUTION_EXPENSE_EVIDENCE,
+                storage_key=evidence.storage_key,
+                storage_provider=evidence.storage_provider,
+            )
+            evidence.storage_key = None
+            evidence.storage_provider = None
+            deleted_count += 1
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "contributions.expense_evidence_retention_run",
+        {
+            "candidate_count": len(candidates),
+            "cutoff_at": cutoff_at.isoformat(),
+            "deleted_count": deleted_count,
+            "dry_run": dry_run,
+            "retention_days": retention_days,
+            "scanned_count": scanned_count,
+        },
+    )
+    db.commit()
+    return _expense_evidence_retention_response(
+        candidates=candidates,
+        cutoff_at=cutoff_at,
+        deleted_count=deleted_count,
+        dry_run=dry_run,
+        retention_days=retention_days,
+        scanned_count=scanned_count,
     )
 
 

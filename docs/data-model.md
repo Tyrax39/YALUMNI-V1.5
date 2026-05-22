@@ -172,6 +172,9 @@
   policy visibility now exposes allowed content types, max file size, retention
   days, storage provider, and configured blocked signature count. File uploads
   are blocked when they match configured denylist signatures before storage.
+  Finance-admin retention cleanup can preview eligible files and delete stored
+  objects after the configured retention period while preserving evidence
+  metadata rows for audit history.
 - `pledges` - future split from confirmed local contribution recording.
 - Provider payment attempts still need real provider authorization details,
   external checkout sessions, and production-grade multi-attempt checkout

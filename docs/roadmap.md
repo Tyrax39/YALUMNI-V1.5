@@ -155,7 +155,9 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
   Expense report evidence now supports private finance-admin file upload and
   download through the shared upload storage adapter, with finance-admin policy
   visibility, configurable retention days, and blocked signature checks before
-  storage.
+  storage. Finance-admin retention preview and cleanup can remove stored
+  evidence files after the configured retention period while preserving audit
+  metadata.
   Treasury summaries, audit packages, certified snapshots, and CSV exports now
   include per-currency accounting summaries without converting currencies.
   Signed provider webhook reconciliation now

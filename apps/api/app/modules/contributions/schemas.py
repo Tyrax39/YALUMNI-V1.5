@@ -562,6 +562,24 @@ class ContributionExpenseEvidencePolicyResponse(BaseModel):
     storage_provider: str
 
 
+class ContributionExpenseEvidenceRetentionCandidateResponse(BaseModel):
+    created_at: datetime
+    expense_report_id: uuid.UUID
+    file_name: str | None
+    file_size_bytes: int | None
+    id: uuid.UUID
+    storage_provider: str | None
+
+
+class ContributionExpenseEvidenceRetentionResponse(BaseModel):
+    candidates: list[ContributionExpenseEvidenceRetentionCandidateResponse]
+    cutoff_at: datetime
+    deleted_count: int
+    dry_run: bool
+    retention_days: int
+    scanned_count: int
+
+
 class ContributionExpenseCategoryPolicyItemResponse(BaseModel):
     approved_amount_cents: int
     approved_report_count: int
