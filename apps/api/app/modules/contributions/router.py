@@ -7,7 +7,7 @@ import secrets
 import textwrap
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import (
@@ -30,7 +30,7 @@ from app.core.config import get_settings
 from app.core.database import get_db_session
 from app.core.permissions import ADMIN_ROLE_NAMES, GlobalRole, has_any_role
 from app.core.security import utcnow
-from app.core.storage import UploadCategory, delete_upload, upload_response
+from app.core.storage import UploadCategory, upload_response
 from app.modules.auth.dependencies import get_current_user, require_roles
 from app.modules.auth.models import SecurityEvent, User
 from app.modules.contributions.models import (
@@ -46,6 +46,7 @@ from app.modules.contributions.models import (
     ContributionTreasuryCertification,
     ContributionWebhookEvent,
 )
+from app.modules.contributions.retention import run_expense_evidence_retention_cleanup
 from app.modules.contributions.schemas import (
     ContributionCampaignCreate,
     ContributionCampaignListResponse,
@@ -2088,31 +2089,6 @@ def _serialize_expense_evidence_retention_candidate(
     )
 
 
-def _expense_evidence_retention_cutoff() -> tuple[int, datetime]:
-    retention_days = max(0, get_settings().contribution_expense_evidence_retention_days)
-    return retention_days, utcnow() - timedelta(days=retention_days)
-
-
-def _expense_evidence_retention_candidates(
-    db: Session,
-    cutoff_at: datetime,
-    *,
-    limit: int,
-) -> tuple[int, list[ContributionExpenseEvidence]]:
-    filters = (
-        ContributionExpenseEvidence.storage_key.is_not(None),
-        ContributionExpenseEvidence.created_at <= cutoff_at,
-    )
-    total = db.scalar(select(func.count()).where(*filters)) or 0
-    candidates = db.scalars(
-        select(ContributionExpenseEvidence)
-        .where(*filters)
-        .order_by(ContributionExpenseEvidence.created_at.asc())
-        .limit(limit)
-    ).all()
-    return int(total), list(candidates)
-
-
 def _expense_evidence_retention_response(
     *,
     candidates: list[ContributionExpenseEvidence],
@@ -3240,19 +3216,14 @@ def preview_expense_evidence_retention(
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
 ) -> ContributionExpenseEvidenceRetentionResponse:
     _ = current_user
-    retention_days, cutoff_at = _expense_evidence_retention_cutoff()
-    scanned_count, candidates = _expense_evidence_retention_candidates(
-        db,
-        cutoff_at,
-        limit=limit,
-    )
+    result = run_expense_evidence_retention_cleanup(db, dry_run=True, limit=limit)
     return _expense_evidence_retention_response(
-        candidates=candidates,
-        cutoff_at=cutoff_at,
+        candidates=result.candidates,
+        cutoff_at=result.cutoff_at,
         deleted_count=0,
         dry_run=True,
-        retention_days=retention_days,
-        scanned_count=scanned_count,
+        retention_days=result.retention_days,
+        scanned_count=result.scanned_count,
     )
 
 
@@ -3267,45 +3238,29 @@ def run_expense_evidence_retention(
     dry_run: Annotated[bool, Query()] = True,
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
 ) -> ContributionExpenseEvidenceRetentionResponse:
-    retention_days, cutoff_at = _expense_evidence_retention_cutoff()
-    scanned_count, candidates = _expense_evidence_retention_candidates(
-        db,
-        cutoff_at,
-        limit=limit,
-    )
-    deleted_count = 0
-    if not dry_run:
-        for evidence in candidates:
-            delete_upload(
-                category=UploadCategory.CONTRIBUTION_EXPENSE_EVIDENCE,
-                storage_key=evidence.storage_key,
-                storage_provider=evidence.storage_provider,
-            )
-            evidence.storage_key = None
-            evidence.storage_provider = None
-            deleted_count += 1
+    result = run_expense_evidence_retention_cleanup(db, dry_run=dry_run, limit=limit)
     _create_security_event(
         db,
         request,
         current_user,
         "contributions.expense_evidence_retention_run",
         {
-            "candidate_count": len(candidates),
-            "cutoff_at": cutoff_at.isoformat(),
-            "deleted_count": deleted_count,
+            "candidate_count": len(result.candidates),
+            "cutoff_at": result.cutoff_at.isoformat(),
+            "deleted_count": result.deleted_count,
             "dry_run": dry_run,
-            "retention_days": retention_days,
-            "scanned_count": scanned_count,
+            "retention_days": result.retention_days,
+            "scanned_count": result.scanned_count,
         },
     )
     db.commit()
     return _expense_evidence_retention_response(
-        candidates=candidates,
-        cutoff_at=cutoff_at,
-        deleted_count=deleted_count,
+        candidates=result.candidates,
+        cutoff_at=result.cutoff_at,
+        deleted_count=result.deleted_count,
         dry_run=dry_run,
-        retention_days=retention_days,
-        scanned_count=scanned_count,
+        retention_days=result.retention_days,
+        scanned_count=result.scanned_count,
     )
 
 

@@ -46,6 +46,16 @@ Remove `--once` to run the worker loop. The worker uses
 `NOTIFICATION_DIGEST_WORKER_*` settings and records digest worker events in the
 admin audit log.
 
+Contribution expense evidence retention worker:
+
+```bash
+npm run worker:api:contribution-expense-retention -- --once
+```
+
+Add `--dry-run` to preview cleanup candidates. Remove `--once` to run the
+worker loop. The worker uses `CONTRIBUTION_EXPENSE_EVIDENCE_RETENTION_WORKER_*`
+settings and records retention worker events in the admin audit log.
+
 Docker:
 
 ```bash

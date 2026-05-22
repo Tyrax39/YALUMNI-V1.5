@@ -212,6 +212,20 @@ Contribution checkout support:
 - Local/dev auth and invitation responses still include one-time `dev_*` tokens
   for QA. Production responses suppress those tokens and rely on email links.
 
+Contribution expense evidence retention support:
+
+- Finance admins can preview and manually run retained-file cleanup through
+  `GET /api/v1/contributions/admin/expense-evidence-retention` and
+  `POST /api/v1/contributions/admin/expense-evidence-retention/run`.
+- The same cleanup path can run as a backend worker from `apps/api` with
+  `python -m app.workers.contribution_expense_retention --once`, or from the
+  monorepo root with
+  `npm run worker:api:contribution-expense-retention -- --once`.
+- The worker supports `--dry-run`, `--interval-seconds`, and `--limit`, uses
+  `CONTRIBUTION_EXPENSE_EVIDENCE_RETENTION_WORKER_*` settings, deletes stored
+  evidence objects through the shared upload storage adapter, preserves evidence
+  metadata rows, and records system audit events in `security_events`.
+
 Directory search supports:
 
 - `q`

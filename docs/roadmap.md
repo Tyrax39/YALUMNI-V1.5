@@ -157,7 +157,8 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
   visibility, configurable retention days, and blocked signature checks before
   storage. Finance-admin retention preview and cleanup can remove stored
   evidence files after the configured retention period while preserving audit
-  metadata.
+  metadata, and the same cleanup can now run through a backend worker CLI with
+  dry-run, limit, and loop controls.
   Treasury summaries, audit packages, certified snapshots, and CSV exports now
   include per-currency accounting summaries without converting currencies.
   Signed provider webhook reconciliation now

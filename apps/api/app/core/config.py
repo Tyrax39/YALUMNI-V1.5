@@ -73,6 +73,8 @@ class Settings(BaseSettings):
         "EICAR-STANDARD-ANTIVIRUS-TEST-FILE"
     )
     contribution_expense_evidence_retention_days: int = 2555
+    contribution_expense_evidence_retention_worker_interval_seconds: int = 86400
+    contribution_expense_evidence_retention_worker_limit: int = 100
     contribution_expense_category_taxonomy: str = (
         "LEARNING_MATERIALS:Learning materials,"
         "TRAVEL:Travel,"
