@@ -165,6 +165,9 @@
   policy visibility exposes the configured category taxonomy, optional per
   category/currency budgets, current report counts, approved/submitted/rejected
   spend, and remaining budget where a budget is configured.
+  Deployments can optionally enable managed-only category enforcement to reject
+  new expense reports outside the configured taxonomy while preserving open
+  category behavior by default.
 - `contribution_expense_evidence` - implemented for structured expense report
   evidence rows including evidence type, title, reference URL, receipt number,
   optional amount, issued timestamp, notes, optional private file metadata,

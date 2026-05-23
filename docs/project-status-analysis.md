@@ -8,6 +8,47 @@ The current Yalumni project is a useful Laravel 9 alumni management platform, bu
 
 The V1.5 implementation is active in `D:\YALUMNI-V1.5`. The new repository now contains a platform foundation with a FastAPI backend, Next.js web shell, Docker Compose, CI workflow, shared packages, copied YALUMNI logo assets, and documentation.
 
+## Current V1.5 Implementation Update: 2026-05-23 Expense Category Managed Enforcement Slice
+
+Completed after the expense evidence malware scanner adapter slice:
+
+- Added optional contribution expense category enforcement for finance-admin
+  expense reports.
+- The default `OPEN` mode preserves existing custom category behavior and keeps
+  unmanaged-category visibility in the finance-admin policy endpoint.
+- The new `MANAGED_ONLY` mode rejects new expense reports when the normalized
+  category is not present in `CONTRIBUTION_EXPENSE_CATEGORY_TAXONOMY`.
+- The expense category policy endpoint now exposes the active enforcement mode
+  alongside the configured taxonomy, budgets, usage, and remaining budget.
+
+Current plan position:
+
+- Phase 1 remains functionally complete for local foundation.
+- Phase 2 remains roughly 91% complete.
+- Phase 3 remains roughly 52% complete.
+- Phase 4 remains roughly 38% complete.
+- Phase 5 remains roughly 81% complete.
+- Phase 6 feed/moderation remains roughly 55% complete.
+- Phase 7 messaging/notifications remains roughly 51% complete.
+- Phase 8 events remains roughly 28% complete.
+- Post-MVP initiatives remain roughly 24% complete.
+- Post-MVP mentorship remains roughly 18% complete.
+- Post-MVP elections remain roughly 24% complete.
+- Post-MVP contributions/treasury are now roughly 68% complete because expense
+  category visibility now has an opt-in managed-only enforcement path. Real
+  provider checkout/refund adapters, provider retry/session semantics,
+  mandatory multi-review approval policy if desired, production scanner
+  operations, and production worker supervision remain open.
+- Overall 24-week MVP-plus implementation remains roughly 75% complete as an
+  estimate.
+
+Frozen/protected behavior:
+
+- Existing expense report creation remains open-category by default.
+- Existing normalized category reporting, treasury rollups, exports, audit
+  packages, evidence uploads, malware scanning, and retention cleanup behavior
+  should not be changed in future slices unless explicitly requested.
+
 ## Current V1.5 Implementation Update: 2026-05-23 Expense Evidence Malware Scanner Adapter Slice
 
 Completed after the expense evidence retention worker slice:

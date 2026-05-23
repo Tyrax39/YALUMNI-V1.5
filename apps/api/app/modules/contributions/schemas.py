@@ -600,6 +600,7 @@ class ContributionExpenseCategoryPolicyItemResponse(BaseModel):
 class ContributionExpenseCategoryPolicyResponse(BaseModel):
     categories: list[ContributionExpenseCategoryPolicyItemResponse]
     default_currency: str
+    enforcement_mode: str
 
 
 class ContributionExpenseReportResponse(BaseModel):

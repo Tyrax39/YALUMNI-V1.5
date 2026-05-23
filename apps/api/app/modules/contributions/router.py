@@ -260,6 +260,29 @@ def _parse_expense_category_budget_policy(value: str) -> dict[tuple[str, str], i
     return budgets
 
 
+def _expense_category_enforcement_mode() -> str:
+    configured_mode = _normalize_enum(
+        get_settings().contribution_expense_category_enforcement_mode
+    )
+    if configured_mode == "MANAGED_ONLY":
+        return "MANAGED_ONLY"
+    return "OPEN"
+
+
+def _ensure_expense_category_allowed(expense_category: str) -> None:
+    if _expense_category_enforcement_mode() != "MANAGED_ONLY":
+        return
+    taxonomy = _parse_expense_category_taxonomy(
+        get_settings().contribution_expense_category_taxonomy
+    )
+    if expense_category in taxonomy:
+        return
+    raise HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        detail="Expense category is not managed by the configured taxonomy",
+    )
+
+
 def _user_role_names(user: User) -> set[str]:
     return {assignment.role.name for assignment in user.role_assignments}
 
@@ -976,6 +999,7 @@ def _expense_category_policy(
             for key in sorted(rows)
         ],
         default_currency=default_currency,
+        enforcement_mode=_expense_category_enforcement_mode(),
     )
 
 
@@ -3043,6 +3067,7 @@ def create_expense_report(
         amount_cents=payload.amount_cents,
         disbursement_request=disbursement_request,
     )
+    _ensure_expense_category_allowed(payload.expense_category)
     expense_report = ContributionExpenseReport(
         amount_cents=payload.amount_cents,
         campaign_id=disbursement_request.campaign_id,

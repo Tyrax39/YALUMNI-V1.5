@@ -1120,6 +1120,7 @@ def test_contribution_expense_report_foundation(
         assert category_policy.status_code == 200
         category_policy_payload = category_policy.json()
         assert category_policy_payload["default_currency"] == "USD"
+        assert category_policy_payload["enforcement_mode"] == "OPEN"
         category_items = {
             (item["expense_category"], item["currency"]): item
             for item in category_policy_payload["categories"]
@@ -1158,6 +1159,115 @@ def test_contribution_expense_report_foundation(
         and entry["expense_category"] == "LEARNING_MATERIALS"
         for entry in audit_ledger_entries
     )
+
+
+def test_contribution_expense_category_managed_only_enforcement(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CONTRIBUTION_EXPENSE_CATEGORY_ENFORCEMENT_MODE", "MANAGED_ONLY")
+    monkeypatch.setenv(
+        "CONTRIBUTION_EXPENSE_CATEGORY_TAXONOMY",
+        "TRAVEL:Travel,OTHER:Other",
+    )
+    get_settings.cache_clear()
+    try:
+        admin_headers = create_admin(client, "managed.category.finance@example.com")
+        donor = register_user(
+            client,
+            "managed.category.donor@example.com",
+            "Managed Category Donor",
+        )
+        donor_headers = auth_headers(donor["access_token"])
+        campaign = create_published_campaign(
+            client,
+            admin_headers,
+            "Managed category scholarship fund",
+        )
+        contribution_response = client.post(
+            f"/api/v1/contributions/{campaign['id']}/pay",
+            headers=donor_headers,
+            json={
+                "amount_cents": 10000,
+                "currency": "USD",
+                "payment_method": "CARD_TEST",
+                "payment_reference": "EXP-CAT-100",
+            },
+        )
+        assert contribution_response.status_code == 201
+
+        disbursement_response = client.post(
+            f"/api/v1/contributions/admin/campaigns/{campaign['id']}/disbursement-requests",
+            headers=admin_headers,
+            json={
+                "amount_cents": 4000,
+                "currency": "USD",
+                "payee_name": "Chapter Project Lead",
+                "payee_reference": "BANK-EXP-CAT-001",
+                "purpose": "Travel expense category enforcement validation.",
+            },
+        )
+        assert disbursement_response.status_code == 201
+        disbursement = disbursement_response.json()
+
+        approve_response = client.post(
+            f"/api/v1/contributions/admin/disbursement-requests/{disbursement['id']}/approve",
+            headers=admin_headers,
+            json={"note": "Approved for category enforcement testing."},
+        )
+        assert approve_response.status_code == 200
+        mark_paid_response = client.post(
+            f"/api/v1/contributions/admin/disbursement-requests/{disbursement['id']}/mark-paid",
+            headers=admin_headers,
+            json={"note": "Paid for category enforcement testing."},
+        )
+        assert mark_paid_response.status_code == 200
+
+        unmanaged_response = client.post(
+            f"/api/v1/contributions/admin/disbursement-requests/{disbursement['id']}/expense-reports",
+            headers=admin_headers,
+            json={
+                "amount_cents": 1000,
+                "currency": "USD",
+                "expense_category": "refreshments",
+                "summary": "Purchased refreshments for travel briefing",
+                "vendor_name": "Campus Cafe",
+            },
+        )
+        assert unmanaged_response.status_code == 422
+        assert (
+            unmanaged_response.json()["detail"]
+            == "Expense category is not managed by the configured taxonomy"
+        )
+
+        managed_response = client.post(
+            f"/api/v1/contributions/admin/disbursement-requests/{disbursement['id']}/expense-reports",
+            headers=admin_headers,
+            json={
+                "amount_cents": 1000,
+                "currency": "USD",
+                "expense_category": "travel",
+                "summary": "Purchased travel tickets for alumni training",
+                "vendor_name": "Regional Bus Co",
+            },
+        )
+        assert managed_response.status_code == 201
+        assert managed_response.json()["expense_category"] == "TRAVEL"
+
+        category_policy = client.get(
+            "/api/v1/contributions/admin/expense-category-policy",
+            headers=admin_headers,
+        )
+        assert category_policy.status_code == 200
+        category_policy_payload = category_policy.json()
+        assert category_policy_payload["enforcement_mode"] == "MANAGED_ONLY"
+        assert {
+            item["expense_category"]
+            for item in category_policy_payload["categories"]
+            if item["managed"]
+        } == {"OTHER", "TRAVEL"}
+    finally:
+        get_settings.cache_clear()
 
 
 def test_contribution_expense_evidence_file_upload_download(

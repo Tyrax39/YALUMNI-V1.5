@@ -87,6 +87,7 @@ class Settings(BaseSettings):
         "OTHER:Other"
     )
     contribution_expense_category_budget_policy: str = ""
+    contribution_expense_category_enforcement_mode: str = "OPEN"
     contribution_expense_category_policy_default_currency: str = "USD"
     notification_stream_poll_seconds: int = 8
     notification_digest_worker_interval_seconds: int = 3600

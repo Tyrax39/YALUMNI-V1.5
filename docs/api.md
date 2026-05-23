@@ -241,6 +241,18 @@ Contribution expense evidence retention support:
   evidence objects through the shared upload storage adapter, preserves evidence
   metadata rows, and records system audit events in `security_events`.
 
+Contribution expense category governance support:
+
+- Expense report categories remain open by default with
+  `CONTRIBUTION_EXPENSE_CATEGORY_ENFORCEMENT_MODE=OPEN`, preserving existing
+  custom category creation while policy visibility marks unmanaged categories.
+- `CONTRIBUTION_EXPENSE_CATEGORY_ENFORCEMENT_MODE=MANAGED_ONLY` rejects new
+  expense reports whose normalized category is not present in
+  `CONTRIBUTION_EXPENSE_CATEGORY_TAXONOMY`.
+- `GET /api/v1/contributions/admin/expense-category-policy` exposes
+  `enforcement_mode`, configured category labels, optional category/currency
+  budgets, current usage, and remaining budget where configured.
+
 Directory search supports:
 
 - `q`
