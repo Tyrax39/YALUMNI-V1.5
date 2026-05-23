@@ -212,6 +212,21 @@ Contribution checkout support:
 - Local/dev auth and invitation responses still include one-time `dev_*` tokens
   for QA. Production responses suppress those tokens and rely on email links.
 
+Contribution expense evidence malware scanning support:
+
+- Expense evidence upload uses
+  `CONTRIBUTION_EXPENSE_EVIDENCE_MALWARE_SCANNER_PROVIDER=SIGNATURE_ONLY` by
+  default, preserving the configured blocked-signature denylist behavior before
+  storage.
+- `CONTRIBUTION_EXPENSE_EVIDENCE_MALWARE_SCANNER_PROVIDER=HTTP` calls the
+  configured `CONTRIBUTION_EXPENSE_EVIDENCE_MALWARE_SCANNER_URL` before storage.
+  The HTTP scanner receives the uploaded file as multipart field `file` and must
+  return JSON with `verdict`, `status`, or `result`. Clean verdicts include
+  `CLEAN`, `OK`, `SAFE`, `PASS`, and `ALLOW`; blocked verdicts include
+  `INFECTED`, `MALICIOUS`, `UNSAFE`, `FOUND`, `FAIL`, and `BLOCK`.
+- Scanner errors, unknown verdicts, or missing HTTP scanner configuration fail
+  closed so unsafe or unscanned files are not stored.
+
 Contribution expense evidence retention support:
 
 - Finance admins can preview and manually run retained-file cleanup through

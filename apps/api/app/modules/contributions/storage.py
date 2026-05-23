@@ -7,6 +7,7 @@ from fastapi import HTTPException, UploadFile, status
 
 from app.core.config import get_settings
 from app.core.storage import UploadCategory, build_storage_key, put_upload_bytes
+from app.modules.contributions.malware import scan_contribution_expense_evidence_file
 
 CONTRIBUTION_EXPENSE_EVIDENCE_CONTENT_TYPE_EXTENSIONS = {
     "application/pdf": ".pdf",
@@ -31,14 +32,6 @@ def _allowed_content_types(setting_value: str) -> set[str]:
         for content_type in setting_value.split(",")
         if content_type.strip()
     }
-
-
-def _blocked_signature_patterns(setting_value: str) -> list[bytes]:
-    return [
-        pattern.strip().encode("utf-8")
-        for pattern in setting_value.split(",")
-        if pattern.strip()
-    ]
 
 
 def _safe_file_name(file_name: str | None, extension: str) -> str:
@@ -82,17 +75,14 @@ async def store_contribution_expense_evidence_file(
             status_code=status.HTTP_413_CONTENT_TOO_LARGE,
             detail="Expense evidence file exceeds the configured size limit",
         )
-    blocked_patterns = _blocked_signature_patterns(
-        settings.contribution_expense_evidence_blocked_signatures
-    )
-    if any(pattern in content for pattern in blocked_patterns):
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="Expense evidence file failed the configured safety signature check",
-        )
-
     extension = CONTRIBUTION_EXPENSE_EVIDENCE_CONTENT_TYPE_EXTENSIONS[content_type]
     file_name = _safe_file_name(upload.filename, extension)
+    await scan_contribution_expense_evidence_file(
+        content=content,
+        content_type=content_type,
+        file_name=file_name,
+    )
+
     storage_key = build_storage_key(
         UploadCategory.CONTRIBUTION_EXPENSE_EVIDENCE,
         f"{expense_report_id}/{evidence_id}{extension}",

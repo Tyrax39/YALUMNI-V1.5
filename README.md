@@ -56,6 +56,17 @@ Add `--dry-run` to preview cleanup candidates. Remove `--once` to run the
 worker loop. The worker uses `CONTRIBUTION_EXPENSE_EVIDENCE_RETENTION_WORKER_*`
 settings and records retention worker events in the admin audit log.
 
+Contribution expense evidence malware scanner:
+
+```bash
+CONTRIBUTION_EXPENSE_EVIDENCE_MALWARE_SCANNER_PROVIDER=HTTP
+CONTRIBUTION_EXPENSE_EVIDENCE_MALWARE_SCANNER_URL=https://scanner.example/scan
+```
+
+The default `SIGNATURE_ONLY` provider keeps local denylist checks. The `HTTP`
+provider scans expense evidence before storage and fails closed when the scanner
+is unavailable or returns an unknown verdict.
+
 Docker:
 
 ```bash

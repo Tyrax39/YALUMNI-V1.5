@@ -18,6 +18,7 @@ from app.main import app
 from app.modules.alumni import models as alumni_models
 from app.modules.auth import models as auth_models
 from app.modules.communities import models as community_models
+from app.modules.contributions import malware as contribution_malware
 from app.modules.contributions import models as contribution_models
 from app.modules.contributions.models import Contribution
 from app.modules.elections import models as election_models
@@ -1171,6 +1172,8 @@ def test_contribution_expense_evidence_file_upload_download(
         "CONTRIBUTION_EXPENSE_EVIDENCE_ALLOWED_TYPES",
         "application/pdf,image/png",
     )
+    monkeypatch.setenv("CONTRIBUTION_EXPENSE_EVIDENCE_MALWARE_SCANNER_PROVIDER", "SIGNATURE_ONLY")
+    monkeypatch.delenv("CONTRIBUTION_EXPENSE_EVIDENCE_MALWARE_SCANNER_URL", raising=False)
     get_settings.cache_clear()
     try:
         admin_headers = create_admin(client, "expense.files.finance@example.com")
@@ -1286,6 +1289,55 @@ def test_contribution_expense_evidence_file_upload_download(
         )
         assert blocked_signature_upload.status_code == 422
         assert "safety signature" in blocked_signature_upload.json()["detail"]
+
+        class FakeScannerResponse:
+            status_code = 200
+
+            def json(self) -> dict[str, str]:
+                return {"verdict": "infected"}
+
+        class FakeScannerClient:
+            def __init__(self, *, timeout: float) -> None:
+                assert timeout == 5.0
+
+            async def __aenter__(self) -> "FakeScannerClient":
+                return self
+
+            async def __aexit__(self, *args) -> None:
+                return None
+
+            async def post(self, url: str, *, files: dict, headers: dict) -> FakeScannerResponse:
+                assert url == "https://scanner.example.test/scan"
+                assert files["file"] == (
+                    "infected.pdf",
+                    b"%PDF-malware-sample",
+                    "application/pdf",
+                )
+                assert headers["User-Agent"] == "YALUMNI-V1.5/1.0"
+                return FakeScannerResponse()
+
+        monkeypatch.setenv("CONTRIBUTION_EXPENSE_EVIDENCE_MALWARE_SCANNER_PROVIDER", "HTTP")
+        monkeypatch.setenv(
+            "CONTRIBUTION_EXPENSE_EVIDENCE_MALWARE_SCANNER_URL",
+            "https://scanner.example.test/scan",
+        )
+        get_settings.cache_clear()
+        monkeypatch.setattr(contribution_malware.httpx, "AsyncClient", FakeScannerClient)
+        malware_upload = client.post(
+            f"/api/v1/contributions/admin/expense-reports/{expense_report['id']}/evidence-files",
+            files={"file": ("infected.pdf", b"%PDF-malware-sample", "application/pdf")},
+            headers=admin_headers,
+        )
+        assert malware_upload.status_code == 422
+        assert "malware scanning" in malware_upload.json()["detail"]
+        assert not any(tmp_path.rglob("*.pdf"))
+
+        monkeypatch.setenv(
+            "CONTRIBUTION_EXPENSE_EVIDENCE_MALWARE_SCANNER_PROVIDER",
+            "SIGNATURE_ONLY",
+        )
+        monkeypatch.delenv("CONTRIBUTION_EXPENSE_EVIDENCE_MALWARE_SCANNER_URL", raising=False)
+        get_settings.cache_clear()
 
         receipt_bytes = b"%PDF-yalumni-expense-receipt"
         upload_response = client.post(

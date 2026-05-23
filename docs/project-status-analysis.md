@@ -8,6 +8,103 @@ The current Yalumni project is a useful Laravel 9 alumni management platform, bu
 
 The V1.5 implementation is active in `D:\YALUMNI-V1.5`. The new repository now contains a platform foundation with a FastAPI backend, Next.js web shell, Docker Compose, CI workflow, shared packages, copied YALUMNI logo assets, and documentation.
 
+## Current V1.5 Implementation Update: 2026-05-23 Expense Evidence Malware Scanner Adapter Slice
+
+Completed after the expense evidence retention worker slice:
+
+- Added a configurable contribution expense evidence malware scanner boundary.
+- The default `SIGNATURE_ONLY` provider preserves existing blocked-signature
+  denylist behavior before storage.
+- Added optional `HTTP` scanner provider that posts the uploaded evidence file
+  to a configured scanner URL before storage and fails closed on scanner errors,
+  unknown verdicts, blocked verdicts, or missing scanner configuration.
+- Existing content-type validation, upload size validation, private
+  finance-admin upload/download behavior, retention cleanup, retention worker,
+  category policy visibility, treasury summaries, and exports are preserved.
+
+Current plan position:
+
+- Phase 1 remains functionally complete for local foundation.
+- Phase 2 remains roughly 91% complete.
+- Phase 3 remains roughly 52% complete.
+- Phase 4 remains roughly 38% complete.
+- Phase 5 remains roughly 81% complete.
+- Phase 6 feed/moderation remains roughly 55% complete.
+- Phase 7 messaging/notifications remains roughly 51% complete.
+- Phase 8 events remains roughly 28% complete.
+- Post-MVP initiatives remain roughly 24% complete.
+- Post-MVP mentorship remains roughly 18% complete.
+- Post-MVP elections remain roughly 24% complete.
+- Post-MVP contributions/treasury are now roughly 67% complete because expense
+  evidence now has signature denylist checks, an optional external HTTP malware
+  scanner adapter, retention preview/cleanup, and a retention worker. Real
+  provider checkout/refund adapters, provider retry/session semantics, category
+  enforcement workflows, and production scanner/worker operations remain open.
+- Overall 24-week MVP-plus implementation is roughly 75% complete as an
+  estimate.
+
+Implemented now:
+
+- Runtime split across public/member `3010`, admin RBAC `3011`, super-admin
+  `3012`, and FastAPI `8002`.
+- Auth, protected platform owner seed, web sessions, CSRF, 2FA enforcement, rate
+  limiting, verification, YALUMNI directory, MWF alumni cache directory plus
+  worker/history operations, communities, notifications, direct messages,
+  moderation, opportunities, resources, success stories, member events, member
+  initiatives, mentorship foundation, elections foundation, contributions
+  foundation, contribution campaign approval foundation, local payment intent
+  creation/confirmation/retry, provider-neutral checkout attempt persistence,
+  local checkout adapter boundary, finance-admin checkout attempt diagnostics,
+  signed contribution provider webhook reconciliation, webhook diagnostics
+  persistence, refund adapter boundary, local provider-refund fallback,
+  contribution finance exports, signed treasury audit packages, certified
+  treasury audit PDF reports, stored treasury certification snapshots,
+  per-currency treasury summaries and exports, local refund/void finance
+  adjustments, contribution disbursement request workflow, contribution expense
+  report workflow with categories/reporting filters/category rollups/category
+  policy visibility, uploaded expense evidence files with policy visibility,
+  signature denylist checks, optional HTTP malware scanner adapter, retention
+  preview, retention cleanup, retention worker execution, expense-backed
+  treasury ledger entries, and generated receipt PDFs.
+
+Main gaps now:
+
+- Contributions still need a selected real payment provider, provider secrets,
+  real provider checkout-session adapters, provider-side refund API calls inside
+  implemented adapters, provider retry/session semantics, mandatory approval
+  policy if desired, and category governance/enforcement workflows beyond
+  visibility.
+- Malware scanning now has an adapter boundary, but production still needs a
+  selected scanner service, scanner credentials/network policy if required,
+  scanner observability, and scanner result audit dashboards.
+- Retention cleanup now has a backend worker entrypoint, but production
+  scheduling, distributed locking, worker health monitoring, and deployment
+  supervision remain operational follow-ups.
+- Elections still need nomination workflows, candidate approval/rejection,
+  position-based multi-seat ballots, stronger anonymous ballot envelopes,
+  dispute handling, exportable certified audit reports, notification hooks,
+  voter-roll imports from chapters/cohorts, and admin detail subroutes beyond
+  the consolidated console panel.
+- Chapter analytics still needs a backend module.
+- Mentorship still needs matching recommendations, scheduling, mentor capacity
+  enforcement beyond counts, session notes, feedback, reporting/moderation,
+  notifications, and admin analytics.
+- MWF cache still needs admin diff review, source-field quality dashboards,
+  retention policy controls, and production worker supervision.
+
+Recommended next implementation slices:
+
+1. Real provider checkout adapter implementation once the payment provider and
+   provider credentials are selected.
+2. Real provider refund adapter implementation for the selected payment
+   provider, replacing the fail-closed placeholder with provider API calls.
+3. Production worker supervision and distributed lock controls for scheduled
+   backend jobs.
+4. Contribution expense category governance workflows, such as enforced managed
+   categories or approval thresholds, if the operating policy requires them.
+5. Scanner operations hardening: selected provider deployment, observability,
+   and finance/security admin scan-result reporting.
+
 ## Current V1.5 Implementation Update: 2026-05-22 Expense Evidence Retention Worker Slice
 
 Completed after the expense evidence retention enforcement slice:

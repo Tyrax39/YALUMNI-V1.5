@@ -72,6 +72,9 @@ class Settings(BaseSettings):
     contribution_expense_evidence_blocked_signatures: str = (
         "EICAR-STANDARD-ANTIVIRUS-TEST-FILE"
     )
+    contribution_expense_evidence_malware_scanner_provider: str = "SIGNATURE_ONLY"
+    contribution_expense_evidence_malware_scanner_url: str | None = None
+    contribution_expense_evidence_malware_scanner_timeout_seconds: float = 5.0
     contribution_expense_evidence_retention_days: int = 2555
     contribution_expense_evidence_retention_worker_interval_seconds: int = 86400
     contribution_expense_evidence_retention_worker_limit: int = 100
