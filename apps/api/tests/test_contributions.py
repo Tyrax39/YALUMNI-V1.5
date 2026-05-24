@@ -1360,6 +1360,9 @@ def test_contribution_expense_evidence_file_upload_download(
         assert policy_response.json() == {
             "allowed_content_types": ["application/pdf", "image/png"],
             "blocked_signature_count": 1,
+            "malware_scanner_provider": "SIGNATURE_ONLY",
+            "malware_scanner_timeout_seconds": 5.0,
+            "malware_scanner_url_configured": False,
             "max_file_size_bytes": 64,
             "retention_days": 2555,
             "storage_provider": "LOCAL",
@@ -1433,6 +1436,14 @@ def test_contribution_expense_evidence_file_upload_download(
         )
         get_settings.cache_clear()
         monkeypatch.setattr(contribution_malware.httpx, "AsyncClient", FakeScannerClient)
+        scanner_policy_response = client.get(
+            "/api/v1/contributions/admin/expense-evidence-policy",
+            headers=admin_headers,
+        )
+        assert scanner_policy_response.status_code == 200
+        assert scanner_policy_response.json()["malware_scanner_provider"] == "HTTP"
+        assert scanner_policy_response.json()["malware_scanner_url_configured"] is True
+        assert scanner_policy_response.json()["malware_scanner_timeout_seconds"] == 5.0
         malware_upload = client.post(
             f"/api/v1/contributions/admin/expense-reports/{expense_report['id']}/evidence-files",
             files={"file": ("infected.pdf", b"%PDF-malware-sample", "application/pdf")},

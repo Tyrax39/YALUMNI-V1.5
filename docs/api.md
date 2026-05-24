@@ -226,6 +226,9 @@ Contribution expense evidence malware scanning support:
   `INFECTED`, `MALICIOUS`, `UNSAFE`, `FOUND`, `FAIL`, and `BLOCK`.
 - Scanner errors, unknown verdicts, or missing HTTP scanner configuration fail
   closed so unsafe or unscanned files are not stored.
+- `GET /api/v1/contributions/admin/expense-evidence-policy` exposes the active
+  scanner provider, scanner timeout, and whether the HTTP scanner URL is
+  configured without returning the scanner URL itself.
 
 Contribution expense evidence retention support:
 

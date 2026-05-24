@@ -557,6 +557,9 @@ class ContributionExpenseEvidenceResponse(BaseModel):
 class ContributionExpenseEvidencePolicyResponse(BaseModel):
     allowed_content_types: list[str]
     blocked_signature_count: int
+    malware_scanner_provider: str
+    malware_scanner_timeout_seconds: float
+    malware_scanner_url_configured: bool
     max_file_size_bytes: int
     retention_days: int
     storage_provider: str

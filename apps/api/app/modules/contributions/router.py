@@ -3218,12 +3218,24 @@ def get_expense_evidence_policy(
 ) -> ContributionExpenseEvidencePolicyResponse:
     _ = current_user
     settings = get_settings()
+    scanner_provider = (
+        _normalize_enum(settings.contribution_expense_evidence_malware_scanner_provider)
+        or "SIGNATURE_ONLY"
+    )
     return ContributionExpenseEvidencePolicyResponse(
         allowed_content_types=_split_config_csv(
             settings.contribution_expense_evidence_allowed_types
         ),
         blocked_signature_count=len(
             _split_config_csv(settings.contribution_expense_evidence_blocked_signatures)
+        ),
+        malware_scanner_provider=scanner_provider,
+        malware_scanner_timeout_seconds=(
+            settings.contribution_expense_evidence_malware_scanner_timeout_seconds
+        ),
+        malware_scanner_url_configured=bool(
+            settings.contribution_expense_evidence_malware_scanner_url
+            and settings.contribution_expense_evidence_malware_scanner_url.strip()
         ),
         max_file_size_bytes=settings.contribution_expense_evidence_upload_max_bytes,
         retention_days=settings.contribution_expense_evidence_retention_days,

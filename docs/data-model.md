@@ -173,9 +173,11 @@
   optional amount, issued timestamp, notes, optional private file metadata,
   uploaded-by user, storage provider, and storage key. Finance-admin upload
   policy visibility now exposes allowed content types, max file size, retention
-  days, storage provider, and configured blocked signature count. File uploads
-  are blocked when they match configured denylist signatures before storage, and
-  can optionally be sent to a configured HTTP malware scanner before storage.
+  days, storage provider, configured blocked signature count, scanner provider,
+  scanner timeout, and scanner URL configured status without exposing the URL.
+  File uploads are blocked when they match configured denylist signatures before
+  storage, and can optionally be sent to a configured HTTP malware scanner before
+  storage.
   Finance-admin retention cleanup can preview eligible files and delete stored
   objects after the configured retention period while preserving evidence
   metadata rows for audit history. The same retention cleanup path can run from

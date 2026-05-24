@@ -156,7 +156,9 @@ Status: mostly implemented for MVP-local identity, with production hardening sti
   Expense report evidence now supports private finance-admin file upload and
   download through the shared upload storage adapter, with finance-admin policy
   visibility, configurable retention days, blocked signature checks, and an
-  optional fail-closed HTTP malware scanner adapter before storage.
+  optional fail-closed HTTP malware scanner adapter before storage. Evidence
+  policy visibility now also exposes scanner provider, timeout, and configured
+  URL status without exposing scanner secrets.
   Finance-admin retention preview and cleanup can remove stored
   evidence files after the configured retention period while preserving audit
   metadata, and the same cleanup can now run through a backend worker CLI with
