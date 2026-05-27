@@ -1,6 +1,6 @@
-import { PrototypeFeaturePage } from "@/components/platform/prototype-feature-page";
+import { OnboardingFlowPage } from "@/components/onboarding/onboarding-surfaces";
 
 export default function OnboardingPage() {
-  return <PrototypeFeaturePage screenKey="onboarding" />;
+  return <OnboardingFlowPage />;
 }
 

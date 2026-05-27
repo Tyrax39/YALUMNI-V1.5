@@ -1,6 +1,6 @@
-import { PrototypeFeaturePage } from "@/components/platform/prototype-feature-page";
+import { VerificationSubmittedPage } from "@/components/onboarding/onboarding-surfaces";
 
-export default function VerificationSubmittedPage() {
-  return <PrototypeFeaturePage screenKey="verificationSubmitted" />;
+export default function VerificationSubmittedRoute() {
+  return <VerificationSubmittedPage />;
 }
 

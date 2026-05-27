@@ -331,11 +331,11 @@ export const screenParityRecords: ScreenParityRecord[] = [
   },
   {
     backendDependencyStatus: "partially implemented",
-    dataSource: "fixture",
+    dataSource: "placeholder",
     exportFolder: "mobile_onboarding_flow",
-    notes: "Onboarding route links to profile, affiliation, verification, and discovery steps.",
+    notes: "Code-native onboarding flow mirrors the mobile export and links into live profile, affiliation, and verification routes.",
     route: "/onboarding",
-    status: "route-complete prototype"
+    status: "code-native route"
   },
   {
     backendDependencyStatus: "not implemented",
@@ -515,11 +515,11 @@ export const screenParityRecords: ScreenParityRecord[] = [
   },
   {
     backendDependencyStatus: "implemented",
-    dataSource: "live API",
+    dataSource: "placeholder",
     exportFolder: "welcome_to_the_network",
-    notes: "Post-verification welcome route provides next-step navigation.",
+    notes: "Code-native verification submitted screen with first-action links into member routes.",
     route: "/verification/submitted",
-    status: "route-complete prototype"
+    status: "code-native route"
   }
 ];
 

@@ -51,7 +51,7 @@ Audit date: 2026-05-08
 | `mentor_settings_profile` | `/mentorship/settings` | route-complete prototype | fixture | not implemented | Mentor settings route. |
 | `messages_inbox` | `/messages` | live route | live API | implemented | Wraps live messaging APIs. |
 | `messages_mobile` | `/messages` | responsive reference | live API | implemented | Mobile messaging reference. |
-| `mobile_onboarding_flow` | `/onboarding` | route-complete prototype | fixture | partially implemented | Links into live profile and verification steps. |
+| `mobile_onboarding_flow` | `/onboarding` | code-native route | placeholder | partially implemented | Mirrors the mobile onboarding export and links into live profile, affiliation, and verification routes. |
 | `my_mentorships` | `/mentorship` | route-complete prototype | fixture | not implemented | Mentorship hub. |
 | `new_message` | `/messages/new` | live route | live API | implemented | Live member search and conversation composer. |
 | `opportunities_marketplace` | `/opportunities` | route-complete prototype | fixture | not implemented | Opportunities marketplace. |
@@ -74,7 +74,7 @@ Audit date: 2026-05-08
 | `success_story_moderation_queue` | `/admin/success-stories` | route-complete prototype | fixture | not implemented | Admin story moderation. |
 | `treasurer_dashboard` | `/admin/treasury` | route-complete prototype | fixture | not implemented | Treasurer dashboard. |
 | `voter_roll_management` | `/admin/elections/[electionId]/voter-roll` | route-complete prototype | fixture | not implemented | Voter roll management. |
-| `welcome_to_the_network` | `/verification/submitted` | route-complete prototype | fixture | implemented | Post-verification welcome and next actions. |
+| `welcome_to_the_network` | `/verification/submitted` | code-native route | placeholder | implemented | Verification submitted screen with first-action links into member routes. |
 
 ## Added Routes Beyond The Original List
 
