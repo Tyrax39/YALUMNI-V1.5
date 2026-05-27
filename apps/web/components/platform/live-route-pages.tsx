@@ -4,7 +4,7 @@ import { AdminMessageModerationConsole } from "@/components/admin/admin-message-
 import { AdminModerationConsole } from "@/components/admin/admin-moderation-console";
 import { VerificationQueuePanel } from "@/components/admin/admin-console";
 import { DirectorySearchPanel } from "@/components/alumni/directory-search-panel";
-import { ProfilePanel, ProgramAffiliationPanel } from "@/components/alumni/profile-panel";
+import { ProfileSetupPanel, ProgramAffiliationPanel } from "@/components/alumni/profile-panel";
 import { VerificationRequestPanel } from "@/components/alumni/verification-request-panel";
 import { CommunitiesPanel } from "@/components/communities/communities-panel";
 import { MessagingPanel } from "@/components/messages/messaging-panel";
@@ -27,15 +27,14 @@ export function DirectoryRoutePage() {
 
 export function ProfileSetupRoutePage() {
   return (
-    <AppShell
+    <ProtectedRoute
       description="Complete your public profile, visibility-ready career details, photo, skills, and core alumni identity."
-      eyebrow="Profile"
       title="Complete your profile"
     >
       {({ accessToken, user }) => (
-        <ProfilePanel accessToken={accessToken} displayName={user.display_name} />
+        <ProfileSetupPanel accessToken={accessToken} displayName={user.display_name} />
       )}
-    </AppShell>
+    </ProtectedRoute>
   );
 }
 

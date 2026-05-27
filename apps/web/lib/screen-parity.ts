@@ -149,7 +149,7 @@ export const screenParityRecords: ScreenParityRecord[] = [
     backendDependencyStatus: "implemented",
     dataSource: "live API",
     exportFolder: "complete_your_profile",
-    notes: "Profile setup route uses current profile and affiliation APIs.",
+    notes: "Focused Step 4 setup screen uses current profile and photo APIs.",
     route: "/profile/setup",
     status: "live route"
   },

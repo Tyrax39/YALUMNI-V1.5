@@ -119,6 +119,530 @@ const programChoices: ProgramChoice[] = [
   }
 ];
 
+const availabilityOptions = [
+  {
+    body: "Available to guide emerging alumni leaders.",
+    checked: true,
+    label: "Open to mentorship"
+  },
+  {
+    body: "Interested in chapter and sector collaborations.",
+    checked: true,
+    label: "Open to collaboration"
+  },
+  {
+    body: "Can support events, panels, and community sessions.",
+    checked: false,
+    label: "Open to speaking"
+  }
+];
+
+export function ProfileSetupPanel({ accessToken, displayName }: ProfilePanelProps) {
+  const router = useRouter();
+  const [loadState, setLoadState] = useState<LoadState>({ status: "loading" });
+  const [profileForm, setProfileForm] = useState<ProfileFormState>(emptyProfileForm);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoInputKey, setPhotoInputKey] = useState(0);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [isDeletingPhoto, setIsDeletingPhoto] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [photoMessage, setPhotoMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    getMyAlumniProfile(accessToken)
+      .then((profile) => {
+        if (!isMounted) {
+          return;
+        }
+
+        setLoadState({ status: "ready", profile });
+        setProfileForm(profileToForm(profile));
+      })
+      .catch((caught) => {
+        if (!isMounted) {
+          return;
+        }
+
+        setLoadState({
+          status: "error",
+          message:
+            caught instanceof ApiError ? caught.message : "Profile could not be loaded."
+        });
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [accessToken]);
+
+  const completion = loadState.status === "ready" ? loadState.profile.completion_percentage : 0;
+  const skillChips = splitSkills(profileForm.skills).slice(0, 8);
+  const completionItems = useMemo(() => {
+    if (loadState.status !== "ready") {
+      return [];
+    }
+
+    const profile = loadState.profile;
+    return [
+      ["Professional title", Boolean(profile.job_title)],
+      ["Organization", Boolean(profile.organization)],
+      ["Bio", Boolean(profile.bio)],
+      ["Skills", profile.skills.length > 0],
+      ["Program affiliation", profile.program_affiliations.length > 0]
+    ] as const;
+  }, [loadState]);
+
+  function updateProfileField(field: keyof ProfileFormState, value: string) {
+    setProfileForm((current) => ({ ...current, [field]: value }));
+  }
+
+  async function saveProfile() {
+    if (loadState.status !== "ready") {
+      return false;
+    }
+
+    setSuccessMessage(null);
+    setIsSavingProfile(true);
+
+    try {
+      const profile = await updateMyAlumniProfile(accessToken, {
+        bio: valueOrNull(profileForm.bio),
+        city: valueOrNull(profileForm.city),
+        country: valueOrNull(profileForm.country),
+        headline: valueOrNull(profileForm.headline),
+        job_title: valueOrNull(profileForm.job_title),
+        linkedin_url: valueOrNull(profileForm.linkedin_url),
+        organization: valueOrNull(profileForm.organization),
+        sector: valueOrNull(profileForm.sector),
+        skills: splitSkills(profileForm.skills),
+        visibility: {
+          email: false,
+          location: true,
+          organization: true,
+          program: true,
+          skills: true
+        },
+        website_url: valueOrNull(profileForm.website_url)
+      });
+      setLoadState({ status: "ready", profile });
+      setProfileForm(profileToForm(profile));
+      setSuccessMessage("Profile saved.");
+      return true;
+    } catch (caught) {
+      setLoadState({
+        status: "error",
+        message: caught instanceof ApiError ? caught.message : "Profile could not be saved."
+      });
+      return false;
+    } finally {
+      setIsSavingProfile(false);
+    }
+  }
+
+  async function handleProfileSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await saveProfile();
+  }
+
+  async function handleContinue() {
+    const saved = await saveProfile();
+
+    if (saved) {
+      router.push("/verification");
+    }
+  }
+
+  async function handlePhotoSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!photoFile) {
+      setPhotoMessage("Choose a JPEG, PNG, or WebP photo first.");
+      return;
+    }
+
+    setPhotoMessage(null);
+    setIsUploadingPhoto(true);
+
+    try {
+      const profile = await uploadProfilePhoto(accessToken, photoFile);
+      setLoadState({ status: "ready", profile });
+      setProfileForm(profileToForm(profile));
+      setPhotoFile(null);
+      setPhotoInputKey((current) => current + 1);
+      setPhotoMessage("Profile photo updated.");
+    } catch (caught) {
+      setPhotoMessage(
+        caught instanceof ApiError ? caught.message : "Profile photo could not be uploaded."
+      );
+    } finally {
+      setIsUploadingPhoto(false);
+    }
+  }
+
+  async function handlePhotoDelete() {
+    setPhotoMessage(null);
+    setIsDeletingPhoto(true);
+
+    try {
+      const profile = await deleteProfilePhoto(accessToken);
+      setLoadState({ status: "ready", profile });
+      setProfileForm(profileToForm(profile));
+      setPhotoFile(null);
+      setPhotoInputKey((current) => current + 1);
+      setPhotoMessage("Profile photo removed.");
+    } catch (caught) {
+      setPhotoMessage(
+        caught instanceof ApiError ? caught.message : "Profile photo could not be removed."
+      );
+    } finally {
+      setIsDeletingPhoto(false);
+    }
+  }
+
+  return (
+    <main className="min-h-screen bg-[#f9f9ff] px-5 py-10 text-[#191c21] sm:px-8 lg:py-12">
+      <div className="mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-6xl flex-col">
+        <header className="text-center">
+          <Link className="focus-ring inline-block rounded-lg" href="/dashboard">
+            <span className="font-display text-4xl font-black tracking-tight text-primary">
+              YALI Alumni
+            </span>
+            <span className="mt-3 block text-sm font-bold uppercase tracking-[0.22em] text-[#737783]">
+              Civic Leadership Network
+            </span>
+          </Link>
+        </header>
+
+        <section className="mt-12">
+          <div className="mb-4 flex items-center justify-between gap-4">
+            <span className="text-xs font-bold uppercase tracking-[0.16em] text-primary">
+              Step 4 of 5
+            </span>
+            <span className="text-xs font-bold uppercase tracking-[0.16em] text-[#737783]">
+              Profile details
+            </span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-[#e2e2e9]">
+            <div className="h-full w-4/5 rounded-full bg-primary" />
+          </div>
+        </section>
+
+        <section className="mt-12 text-center">
+          <h1 className="font-display text-3xl font-semibold text-[#191c21]">
+            Complete Your Profile
+          </h1>
+          <p className="mx-auto mt-5 max-w-3xl text-base leading-8 text-[#424751]">
+            Add the professional details, skills, and photo that help verified alumni find
+            the right collaborators across the network.
+          </p>
+        </section>
+
+        {loadState.status === "loading" ? (
+          <p className="mt-10 rounded-xl border border-[#c2c6d3] bg-white p-6 text-center text-sm font-semibold text-[#424751]">
+            Loading your profile...
+          </p>
+        ) : null}
+
+        {loadState.status === "error" ? (
+          <p className="mt-10 rounded-xl border border-red-200 bg-red-50 p-6 text-center text-sm font-semibold text-red-700">
+            {loadState.message}
+          </p>
+        ) : null}
+
+        {loadState.status === "ready" ? (
+          <>
+            <section className="mt-12 grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+              <form
+                className="grid gap-6 rounded-xl border border-[#c2c6d3] bg-white p-5 shadow-sm sm:p-7"
+                id="profile-setup-form"
+                onSubmit={handleProfileSubmit}
+              >
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-primary">
+                    Profile basics
+                  </p>
+                  <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                    <TextInput
+                      label="Professional title"
+                      onChange={(value) => updateProfileField("job_title", value)}
+                      placeholder="Program Lead"
+                      value={profileForm.job_title}
+                    />
+                    <TextInput
+                      label="Organization"
+                      onChange={(value) => updateProfileField("organization", value)}
+                      placeholder="Open Chapter Lab"
+                      value={profileForm.organization}
+                    />
+                    <TextInput
+                      label="Headline"
+                      onChange={(value) => updateProfileField("headline", value)}
+                      placeholder="Civic technology organizer"
+                      value={profileForm.headline}
+                    />
+                    <TextInput
+                      label="Sector"
+                      onChange={(value) => updateProfileField("sector", value)}
+                      placeholder="Civic technology"
+                      value={profileForm.sector}
+                    />
+                    <TextInput
+                      label="Country"
+                      onChange={(value) => updateProfileField("country", value)}
+                      placeholder="Ghana"
+                      value={profileForm.country}
+                    />
+                    <TextInput
+                      label="City"
+                      onChange={(value) => updateProfileField("city", value)}
+                      placeholder="Accra"
+                      value={profileForm.city}
+                    />
+                  </div>
+                  <label className="mt-4 grid gap-2 text-sm font-semibold text-ink">
+                    Bio
+                    <textarea
+                      className="min-h-32 rounded-lg border border-border bg-white px-4 py-3 text-sm font-normal leading-6 text-ink outline-none transition focus:border-primary"
+                      onChange={(event) => updateProfileField("bio", event.target.value)}
+                      placeholder="Share your leadership focus, chapter work, impact areas, and the kinds of collaborations you are open to."
+                      value={profileForm.bio}
+                    />
+                  </label>
+                </div>
+
+                <div className="border-t border-[#e1e3ea] pt-6">
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-primary">
+                    Top skills
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {skillChips.length ? (
+                      skillChips.map((skill) => (
+                        <span
+                          className="rounded-full bg-[#edf6ff] px-3 py-1.5 text-sm font-semibold text-primary"
+                          key={skill}
+                        >
+                          {skill}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="rounded-full bg-[#f1f2f7] px-3 py-1.5 text-sm font-semibold text-[#737783]">
+                        Add skills to improve discovery
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-4">
+                    <TextInput
+                      label="Skills"
+                      onChange={(value) => updateProfileField("skills", value)}
+                      placeholder="Governance, data, community"
+                      value={profileForm.skills}
+                    />
+                  </div>
+                </div>
+
+                <div className="border-t border-[#e1e3ea] pt-6">
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-primary">
+                    Links
+                  </p>
+                  <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                    <TextInput
+                      label="LinkedIn"
+                      onChange={(value) => updateProfileField("linkedin_url", value)}
+                      placeholder="https://linkedin.com/in/..."
+                      value={profileForm.linkedin_url}
+                    />
+                    <TextInput
+                      label="Website"
+                      onChange={(value) => updateProfileField("website_url", value)}
+                      placeholder="https://..."
+                      value={profileForm.website_url}
+                    />
+                  </div>
+                </div>
+              </form>
+
+              <aside className="grid gap-6">
+                <section className="overflow-hidden rounded-xl border border-[#c2c6d3] bg-white shadow-sm">
+                  <div className="relative h-32 bg-[#d9d9e1]">
+                    <Image
+                      alt="YALI alumni leadership cohort"
+                      className="object-cover opacity-45 grayscale"
+                      fill
+                      sizes="360px"
+                      src="/brand/landing-hero.png"
+                    />
+                  </div>
+                  <div className="px-6 pb-6">
+                    <div className="-mt-10 flex justify-center">
+                      <ProfilePhoto
+                        accessToken={accessToken}
+                        displayName={displayName}
+                        hasPhoto={Boolean(loadState.profile.profile_photo_url)}
+                        sizeClassName="h-20 w-20"
+                        updatedAt={loadState.profile.profile_photo_updated_at}
+                        userId={loadState.profile.user_id}
+                      />
+                    </div>
+                    <div className="mt-4 text-center">
+                      <h2 className="font-display text-xl font-semibold text-[#191c21]">
+                        {displayName}
+                      </h2>
+                      <p className="mt-2 text-sm leading-6 text-[#424751]">
+                        {profileForm.job_title || "Professional title"} at{" "}
+                        {profileForm.organization || "Organization"}
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-primary">
+                        {profileForm.country || "Country"}
+                      </p>
+                    </div>
+
+                    <form className="mt-5 grid gap-3" onSubmit={handlePhotoSubmit}>
+                      <label className="grid gap-2 text-sm font-semibold text-ink">
+                        Profile photo
+                        <input
+                          accept="image/jpeg,image/png,image/webp"
+                          className="rounded-lg border border-border bg-white px-3 py-2 text-sm font-normal text-ink file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white"
+                          key={photoInputKey}
+                          onChange={(event) => setPhotoFile(event.target.files?.[0] ?? null)}
+                          type="file"
+                        />
+                      </label>
+                      <div className="flex flex-wrap justify-center gap-2">
+                        <button
+                          className="focus-ring rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#003d7d] disabled:cursor-not-allowed disabled:opacity-65"
+                          disabled={isUploadingPhoto}
+                          type="submit"
+                        >
+                          {isUploadingPhoto ? "Uploading..." : "Upload photo"}
+                        </button>
+                        {loadState.profile.profile_photo_url ? (
+                          <button
+                            className="focus-ring rounded-lg border border-border bg-white px-4 py-2 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+                            disabled={isDeletingPhoto}
+                            onClick={handlePhotoDelete}
+                            type="button"
+                          >
+                            {isDeletingPhoto ? "Removing..." : "Remove"}
+                          </button>
+                        ) : null}
+                      </div>
+                      {photoMessage ? (
+                        <p className="text-center text-sm font-semibold text-muted">
+                          {photoMessage}
+                        </p>
+                      ) : null}
+                    </form>
+                  </div>
+                </section>
+
+                <section className="rounded-xl border border-[#c2c6d3] bg-white p-6 shadow-sm">
+                  <div className="flex items-center justify-between gap-4">
+                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-primary">
+                      Completion
+                    </p>
+                    <p className="font-display text-3xl font-semibold text-primary">
+                      {completion}%
+                    </p>
+                  </div>
+                  <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#e2e2e9]">
+                    <div
+                      className="h-full rounded-full bg-secondary transition-all"
+                      style={{ width: `${completion}%` }}
+                    />
+                  </div>
+                  <div className="mt-5 grid gap-2">
+                    {completionItems.map(([label, done]) => (
+                      <div className="flex items-center justify-between gap-3 text-sm" key={label}>
+                        <span className="font-semibold text-[#424751]">{label}</span>
+                        <span
+                          className={`rounded-md px-2.5 py-1 text-xs font-bold ${
+                            done ? "bg-emerald-50 text-secondary" : "bg-[#f1f2f7] text-[#737783]"
+                          }`}
+                        >
+                          {done ? "Done" : "Missing"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+
+                <section className="rounded-xl border border-[#c2c6d3] bg-white p-6 shadow-sm">
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-primary">
+                    Interests & availability
+                  </p>
+                  <div className="mt-4 grid gap-3">
+                    {availabilityOptions.map((option) => (
+                      <label
+                        className="flex gap-3 rounded-lg border border-[#e1e3ea] p-3"
+                        key={option.label}
+                      >
+                        <input
+                          className="mt-1 h-4 w-4 accent-primary"
+                          defaultChecked={option.checked}
+                          disabled
+                          type="checkbox"
+                        />
+                        <span>
+                          <span className="block text-sm font-semibold text-[#191c21]">
+                            {option.label}
+                          </span>
+                          <span className="mt-1 block text-sm leading-6 text-[#424751]">
+                            {option.body}
+                          </span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </section>
+              </aside>
+            </section>
+
+            {successMessage ? (
+              <p className="mt-5 flex items-center justify-center gap-2 text-sm font-semibold text-secondary">
+                <CheckCircle2 aria-hidden="true" className="h-5 w-5" />
+                {successMessage}
+              </p>
+            ) : null}
+          </>
+        ) : null}
+
+        <footer className="mt-14 border-t border-[#c2c6d3] py-10">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <Link
+              className="focus-ring inline-flex min-h-12 items-center justify-center gap-2 rounded-lg px-5 text-sm font-bold uppercase tracking-[0.12em] text-[#424751] transition hover:bg-white hover:text-primary"
+              href="/profile/program-affiliation"
+            >
+              <ArrowLeft aria-hidden="true" className="h-5 w-5" />
+              Previous step
+            </Link>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <button
+                className="focus-ring inline-flex min-h-12 items-center justify-center rounded-lg border border-[#c2c6d3] bg-white px-6 text-sm font-bold uppercase tracking-[0.12em] text-[#424751] transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={isSavingProfile || loadState.status !== "ready"}
+                form="profile-setup-form"
+                type="submit"
+              >
+                {isSavingProfile ? "Saving..." : "Save draft"}
+              </button>
+              <button
+                className="focus-ring inline-flex min-h-14 items-center justify-center gap-3 rounded-lg bg-primary px-8 text-sm font-bold uppercase tracking-[0.12em] text-white shadow-md transition hover:bg-[#003d7d] disabled:cursor-not-allowed disabled:bg-[#7da5d2]"
+                disabled={isSavingProfile || loadState.status !== "ready"}
+                onClick={handleContinue}
+                type="button"
+              >
+                {isSavingProfile ? "Saving..." : "Continue to verification"}
+                <ChevronRight aria-hidden="true" className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+        </footer>
+      </div>
+    </main>
+  );
+}
+
 export function ProfilePanel({ accessToken, displayName }: ProfilePanelProps) {
   const [loadState, setLoadState] = useState<LoadState>({ status: "loading" });
   const [profileForm, setProfileForm] = useState<ProfileFormState>(emptyProfileForm);

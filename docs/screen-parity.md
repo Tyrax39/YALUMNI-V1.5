@@ -28,7 +28,7 @@ Audit date: 2026-05-08
 | `candidate_review_queue` | `/admin/elections/[electionId]/candidates` | route-complete prototype | fixture | not implemented | Candidate review queue. |
 | `chapter_analytics_dashboard` | `/admin/chapters/[chapterId]/analytics` | route-complete prototype | fixture | not implemented | Chapter analytics shell. |
 | `chapter_leader_dashboard` | `/communities/[communityId]/dashboard` | route-complete prototype | fixture | partially implemented | Community backend exists; leader dashboard is fixture-enhanced. |
-| `complete_your_profile` | `/profile/setup` | live route | live API | implemented | Uses profile APIs. |
+| `complete_your_profile` | `/profile/setup` | live route | live API | implemented | Focused Step 4 setup screen uses current profile and photo APIs. |
 | `contribute_a_resource` | `/resources/new` | route-complete prototype | fixture | not implemented | Resource contribution form. |
 | `contribute_to_campaign` | `/contributions/[campaignId]/pay` | route-complete prototype | fixture | not implemented | Contribution checkout shell, no real payments. |
 | `contribution_campaign_detail` | `/contributions/[campaignId]` | route-complete prototype | fixture | not implemented | Contribution campaign detail. |
