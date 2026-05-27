@@ -54,7 +54,9 @@ npm run worker:api:contribution-expense-retention -- --once
 
 Add `--dry-run` to preview cleanup candidates. Remove `--once` to run the
 worker loop. The worker uses `CONTRIBUTION_EXPENSE_EVIDENCE_RETENTION_WORKER_*`
-settings and records retention worker events in the admin audit log.
+settings and records retention worker events in the admin audit log. Set
+`CONTRIBUTION_EXPENSE_EVIDENCE_RETENTION_WORKER_LOCK_PROVIDER=REDIS` to enable
+the opt-in Redis non-overlap lock for production-style deployments.
 
 Contribution expense evidence malware scanner:
 

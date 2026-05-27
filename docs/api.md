@@ -239,10 +239,15 @@ Contribution expense evidence retention support:
   `python -m app.workers.contribution_expense_retention --once`, or from the
   monorepo root with
   `npm run worker:api:contribution-expense-retention -- --once`.
-- The worker supports `--dry-run`, `--interval-seconds`, and `--limit`, uses
+- The worker supports `--dry-run`, `--interval-seconds`, `--limit`,
+  `--lock-provider`, and `--lock-ttl-seconds`, uses
   `CONTRIBUTION_EXPENSE_EVIDENCE_RETENTION_WORKER_*` settings, deletes stored
   evidence objects through the shared upload storage adapter, preserves evidence
   metadata rows, and records system audit events in `security_events`.
+- `CONTRIBUTION_EXPENSE_EVIDENCE_RETENTION_WORKER_LOCK_PROVIDER=REDIS` enables
+  a Redis-backed non-overlap lock for production deployments. The default
+  `NONE` mode preserves local/dev behavior. When the lock is already held, the
+  worker returns `skipped_locked` and records the skip in `security_events`.
 
 Contribution expense category governance support:
 

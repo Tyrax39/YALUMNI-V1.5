@@ -78,6 +78,8 @@ class Settings(BaseSettings):
     contribution_expense_evidence_retention_days: int = 2555
     contribution_expense_evidence_retention_worker_interval_seconds: int = 86400
     contribution_expense_evidence_retention_worker_limit: int = 100
+    contribution_expense_evidence_retention_worker_lock_provider: str = "NONE"
+    contribution_expense_evidence_retention_worker_lock_ttl_seconds: int = 900
     contribution_expense_category_taxonomy: str = (
         "LEARNING_MATERIALS:Learning materials,"
         "TRAVEL:Travel,"

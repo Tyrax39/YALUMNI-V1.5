@@ -20,6 +20,7 @@ from app.modules.contributions.models import (
     ContributionExpenseEvidence,
     ContributionExpenseReport,
 )
+from app.workers import contribution_expense_retention as retention_worker
 from app.workers.contribution_expense_retention import (
     run_expense_evidence_retention_worker_cycle,
 )
@@ -134,6 +135,8 @@ def test_expense_evidence_retention_worker_deletes_files_and_records_audit_event
         assert dry_run["candidate_count"] == 1
         assert dry_run["deleted_count"] == 0
         assert dry_run["dry_run"] is True
+        assert dry_run["lock_acquired"] is True
+        assert dry_run["lock_provider"] == "NONE"
         assert str(evidence.id) in dry_run["candidate_ids"]
         assert file_path.exists()
         db_session.refresh(evidence)
@@ -149,6 +152,8 @@ def test_expense_evidence_retention_worker_deletes_files_and_records_audit_event
         assert cleanup["candidate_count"] == 1
         assert cleanup["deleted_count"] == 1
         assert cleanup["dry_run"] is False
+        assert cleanup["lock_acquired"] is True
+        assert cleanup["lock_provider"] == "NONE"
         assert not file_path.exists()
         db_session.refresh(evidence)
         assert evidence.storage_key is None
@@ -165,10 +170,61 @@ def test_expense_evidence_retention_worker_deletes_files_and_records_audit_event
         assert len(events) == 2
         assert events[0].metadata_json["dry_run"] is True
         assert events[0].metadata_json["deleted_count"] == 0
+        assert events[0].metadata_json["lock_acquired"] is True
+        assert events[0].metadata_json["lock_provider"] == "NONE"
         assert events[1].metadata_json["dry_run"] is False
         assert events[1].metadata_json["deleted_count"] == 1
+        assert events[1].metadata_json["lock_acquired"] is True
+        assert events[1].metadata_json["lock_provider"] == "NONE"
     finally:
         settings.contribution_expense_evidence_retention_days = previous_days
         settings.contribution_expense_evidence_retention_worker_limit = previous_limit
         settings.contribution_expense_evidence_upload_dir = previous_dir
         settings.upload_storage_provider = previous_provider
+
+
+def test_expense_evidence_retention_worker_skips_when_lock_is_held(
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    evidence, file_path = create_retention_candidate(db_session, tmp_path)
+
+    def fake_acquire_worker_lock(**kwargs) -> retention_worker.WorkerLockHandle:
+        return retention_worker.WorkerLockHandle(
+            acquired=False,
+            name="yalumni:worker:contribution-expense-evidence-retention",
+            provider="REDIS",
+        )
+
+    monkeypatch.setattr(
+        retention_worker,
+        "acquire_expense_evidence_retention_worker_lock",
+        fake_acquire_worker_lock,
+    )
+
+    result = retention_worker.run_expense_evidence_retention_worker_cycle(
+        db_session,
+        dry_run=False,
+        lock_provider="REDIS",
+    )
+
+    assert result["status"] == "skipped_locked"
+    assert result["candidate_count"] == 0
+    assert result["deleted_count"] == 0
+    assert result["lock_acquired"] is False
+    assert result["lock_provider"] == "REDIS"
+    assert file_path.exists()
+    db_session.refresh(evidence)
+    assert evidence.storage_key is not None
+
+    events = db_session.scalars(
+        select(SecurityEvent).where(
+            SecurityEvent.event_type
+            == "contributions.expense_evidence_retention_worker_run"
+        )
+    ).all()
+    assert len(events) == 1
+    assert events[0].metadata_json["status"] == "skipped_locked"
+    assert events[0].metadata_json["lock_acquired"] is False
+    assert events[0].metadata_json["lock_provider"] == "REDIS"
