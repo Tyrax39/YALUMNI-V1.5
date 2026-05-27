@@ -331,9 +331,9 @@ export const screenParityRecords: ScreenParityRecord[] = [
   },
   {
     backendDependencyStatus: "partially implemented",
-    dataSource: "placeholder",
+    dataSource: "live API",
     exportFolder: "mobile_onboarding_flow",
-    notes: "Code-native onboarding flow mirrors the mobile export and links into live profile, affiliation, and verification routes.",
+    notes: "Code-native onboarding flow mirrors the mobile export, reads live profile and verification status, and links into live profile, affiliation, and verification routes.",
     route: "/onboarding",
     status: "code-native route"
   },
@@ -515,9 +515,9 @@ export const screenParityRecords: ScreenParityRecord[] = [
   },
   {
     backendDependencyStatus: "implemented",
-    dataSource: "placeholder",
+    dataSource: "live API",
     exportFolder: "welcome_to_the_network",
-    notes: "Code-native verification submitted screen with first-action links into member routes.",
+    notes: "Code-native verification submitted screen reads live profile and verification status with first-action links into member routes.",
     route: "/verification/submitted",
     status: "code-native route"
   }
@@ -526,7 +526,7 @@ export const screenParityRecords: ScreenParityRecord[] = [
 export const featureScreens = {
   onboarding: {
     backendDependencyStatus: "partially implemented",
-    dataSource: "fixture",
+    dataSource: "live API",
     description:
       "A guided first-run flow that moves a member from account creation into profile completion, program affiliation, verification, and first community action.",
     eyebrow: "Member onboarding",
@@ -575,7 +575,7 @@ export const featureScreens = {
   },
   verificationSubmitted: {
     backendDependencyStatus: "implemented",
-    dataSource: "fixture",
+    dataSource: "live API",
     description:
       "A confirmation and next-action page for members who have submitted their alumni verification request.",
     eyebrow: "Verification submitted",

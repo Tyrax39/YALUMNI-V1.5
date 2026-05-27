@@ -8,6 +8,49 @@ The current Yalumni project is a useful Laravel 9 alumni management platform, bu
 
 The V1.5 implementation is active in `D:\YALUMNI-V1.5`. The new repository now contains a platform foundation with a FastAPI backend, Next.js web shell, Docker Compose, CI workflow, shared packages, copied YALUMNI logo assets, and documentation.
 
+## Current V1.5 Implementation Update: 2026-05-27 UI Phase 2 Onboarding Live Context Slice
+
+Completed after the Phase 2 onboarding screen slice:
+
+- Added live member profile and verification request context to the
+  code-native `/onboarding` screen.
+- Added live verification request, submission date, evidence count, and profile
+  completion context to the code-native `/verification/submitted` screen.
+- Both screens continue to use the existing authenticated route guard and the
+  existing profile/verification APIs. No backend contracts, route paths,
+  verification submission behavior, or broader app-shell navigation changed.
+- Updated the screen parity tracker so both onboarding export rows now report
+  live API data instead of placeholder/fixture-only state.
+
+Current plan position:
+
+- Phase 1 remains functionally complete for local foundation.
+- Phase 2 is now roughly 93% complete because the remaining onboarding
+  confirmation surfaces now have live profile and verification context while
+  preserving their export-aligned layouts.
+- Phase 3 remains roughly 52% complete.
+- Phase 4 remains roughly 38% complete.
+- Phase 5 remains roughly 81% complete.
+- Phase 6 feed/moderation remains roughly 55% complete.
+- Phase 7 messaging/notifications remains roughly 51% complete.
+- Phase 8 events remains roughly 28% complete.
+- Post-MVP initiatives remain roughly 24% complete.
+- Post-MVP mentorship remains roughly 18% complete.
+- Post-MVP elections remain roughly 24% complete.
+- Post-MVP contributions/treasury remains roughly 70% complete.
+- Overall 24-week MVP-plus implementation remains roughly 75% complete as an
+  estimate.
+
+Frozen/protected behavior:
+
+- `/onboarding` and `/verification/submitted` remain authenticated-only routes.
+- Existing `/profile/setup`, `/profile/program-affiliation`, `/verification`,
+  `/dashboard`, directory, messaging, and community route behavior remain
+  unchanged.
+- The live onboarding context must continue using the existing
+  `getMyAlumniProfile` and `getMyVerificationRequests` client helpers unless a
+  future slice explicitly changes the profile or verification API contract.
+
 ## Current V1.5 Implementation Update: 2026-05-27 UI Phase 2 Onboarding Screen Slice
 
 Completed after the expense evidence retention worker lock slice:
