@@ -8,6 +8,48 @@ The current Yalumni project is a useful Laravel 9 alumni management platform, bu
 
 The V1.5 implementation is active in `D:\YALUMNI-V1.5`. The new repository now contains a platform foundation with a FastAPI backend, Next.js web shell, Docker Compose, CI workflow, shared packages, copied YALUMNI logo assets, and documentation.
 
+## Current V1.5 Implementation Update: 2026-05-27 UI Phase 2 Program Affiliation Screen Slice
+
+Completed after the onboarding live context slice:
+
+- Replaced the `/profile/program-affiliation` shared profile-editor surface
+  with a focused Step 2 program affiliation selection screen based on the
+  `program_affiliation` export.
+- The screen now lets authenticated members select RLC, Mandela Washington
+  Fellowship, or both programs, records missing affiliations through the
+  existing profile affiliation API, and continues to `/verification`.
+- Existing `/profile/setup` profile editing, profile photo upload/removal,
+  verification submission, route paths, auth guard behavior, and backend API
+  contracts were not changed.
+- Updated the screen parity tracker so `program_affiliation` now reflects the
+  dedicated focused UI instead of a shared profile panel.
+
+Current plan position:
+
+- Phase 1 remains functionally complete for local foundation.
+- Phase 2 is now roughly 94% complete because the dedicated program
+  affiliation export is implemented as a focused, live API-backed screen.
+- Phase 3 remains roughly 52% complete.
+- Phase 4 remains roughly 38% complete.
+- Phase 5 remains roughly 81% complete.
+- Phase 6 feed/moderation remains roughly 55% complete.
+- Phase 7 messaging/notifications remains roughly 51% complete.
+- Phase 8 events remains roughly 28% complete.
+- Post-MVP initiatives remain roughly 24% complete.
+- Post-MVP mentorship remains roughly 18% complete.
+- Post-MVP elections remain roughly 24% complete.
+- Post-MVP contributions/treasury remains roughly 70% complete.
+- Overall 24-week MVP-plus implementation remains roughly 75% complete as an
+  estimate.
+
+Frozen/protected behavior:
+
+- `/profile/program-affiliation` remains authenticated-only and uses existing
+  `getMyAlumniProfile` and `addProgramAffiliation` client helpers.
+- `/profile/setup` remains the full profile editor and should not be modified
+  by future program-affiliation-only slices unless explicitly requested.
+- Existing verification and onboarding routes remain unchanged.
+
 ## Current V1.5 Implementation Update: 2026-05-27 UI Phase 2 Onboarding Live Context Slice
 
 Completed after the Phase 2 onboarding screen slice:

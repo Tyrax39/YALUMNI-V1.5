@@ -389,7 +389,7 @@ export const screenParityRecords: ScreenParityRecord[] = [
     backendDependencyStatus: "implemented",
     dataSource: "live API",
     exportFolder: "program_affiliation",
-    notes: "Program affiliation route uses the existing profile affiliation API.",
+    notes: "Focused Step 2 program selection route uses the existing profile affiliation API.",
     route: "/profile/program-affiliation",
     status: "live route"
   },

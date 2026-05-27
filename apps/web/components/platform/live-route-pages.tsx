@@ -4,11 +4,12 @@ import { AdminMessageModerationConsole } from "@/components/admin/admin-message-
 import { AdminModerationConsole } from "@/components/admin/admin-moderation-console";
 import { VerificationQueuePanel } from "@/components/admin/admin-console";
 import { DirectorySearchPanel } from "@/components/alumni/directory-search-panel";
-import { ProfilePanel } from "@/components/alumni/profile-panel";
+import { ProfilePanel, ProgramAffiliationPanel } from "@/components/alumni/profile-panel";
 import { VerificationRequestPanel } from "@/components/alumni/verification-request-panel";
 import { CommunitiesPanel } from "@/components/communities/communities-panel";
 import { MessagingPanel } from "@/components/messages/messaging-panel";
 import { AppShell } from "@/components/platform/app-shell";
+import { ProtectedRoute } from "@/components/auth/protected-route";
 import { ADMIN_ROLES, MEMBER_ACCESS_ROLES, isAdminRole } from "@yalumni/frontend-shared";
 
 export function DirectoryRoutePage() {
@@ -40,15 +41,14 @@ export function ProfileSetupRoutePage() {
 
 export function ProgramAffiliationRoutePage() {
   return (
-    <AppShell
+    <ProtectedRoute
       description="Add and maintain YALI program affiliation records that support verification and directory trust."
-      eyebrow="Program affiliation"
       title="Program affiliation"
     >
       {({ accessToken, user }) => (
-        <ProfilePanel accessToken={accessToken} displayName={user.display_name} />
+        <ProgramAffiliationPanel accessToken={accessToken} displayName={user.display_name} />
       )}
-    </AppShell>
+    </ProtectedRoute>
   );
 }
 

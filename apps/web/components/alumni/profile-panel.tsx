@@ -2,6 +2,20 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
+import Image from "next/image";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import {
+  ArrowLeft,
+  CheckCircle2,
+  ChevronRight,
+  Globe2,
+  GraduationCap,
+  ShieldCheck,
+  Users,
+  type LucideIcon
+} from "lucide-react";
+
 import {
   addProgramAffiliation,
   AlumniProfile,
@@ -38,6 +52,18 @@ type ProgramFormState = {
   city: string;
 };
 
+type ProgramChoiceId = "BOTH" | "MWF" | "RLC";
+
+type ProgramChoice = {
+  body: string;
+  icon: LucideIcon;
+  iconClassName: string;
+  id: ProgramChoiceId;
+  programNames: string[];
+  selectedClassName: string;
+  title: string;
+};
+
 type LoadState =
   | { status: "loading" }
   | { status: "ready"; profile: AlumniProfile }
@@ -62,6 +88,36 @@ const emptyProgramForm: ProgramFormState = {
   country: "",
   city: ""
 };
+
+const programChoices: ProgramChoice[] = [
+  {
+    body: "Graduates of the Regional Leadership Centers across Africa, focused on business, civic leadership, or public management.",
+    icon: GraduationCap,
+    iconClassName: "bg-[#d7e2ff] text-primary",
+    id: "RLC",
+    programNames: ["YALI Regional Leadership Center"],
+    selectedClassName: "border-primary bg-[#f0f7ff]",
+    title: "RLC Alumnus"
+  },
+  {
+    body: "Participants of the flagship exchange program who completed academic and leadership training at U.S. higher education institutions.",
+    icon: Globe2,
+    iconClassName: "bg-[#dff8ec] text-secondary",
+    id: "MWF",
+    programNames: ["Mandela Washington Fellowship"],
+    selectedClassName: "border-secondary bg-[#f1fff8]",
+    title: "Mandela Washington Fellow"
+  },
+  {
+    body: "Distinguished leaders who have successfully completed both the Regional Leadership Center training and the Mandela Washington Fellowship.",
+    icon: Users,
+    iconClassName: "bg-[#fff2db] text-accent",
+    id: "BOTH",
+    programNames: ["YALI Regional Leadership Center", "Mandela Washington Fellowship"],
+    selectedClassName: "border-accent bg-[#fff8ed]",
+    title: "Both Programs"
+  }
+];
 
 export function ProfilePanel({ accessToken, displayName }: ProfilePanelProps) {
   const [loadState, setLoadState] = useState<LoadState>({ status: "loading" });
@@ -497,6 +553,295 @@ export function ProfilePanel({ accessToken, displayName }: ProfilePanelProps) {
         </div>
       </div>
     </section>
+  );
+}
+
+export function ProgramAffiliationPanel({ accessToken, displayName }: ProfilePanelProps) {
+  const router = useRouter();
+  const [loadState, setLoadState] = useState<LoadState>({ status: "loading" });
+  const [selectedChoiceId, setSelectedChoiceId] = useState<ProgramChoiceId | null>(null);
+  const [programForm, setProgramForm] = useState<ProgramFormState>(emptyProgramForm);
+  const [isSaving, setIsSaving] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    getMyAlumniProfile(accessToken)
+      .then((profile) => {
+        if (!isMounted) {
+          return;
+        }
+
+        setLoadState({ status: "ready", profile });
+        setProgramForm((current) => ({
+          ...current,
+          city: current.city || profile.city || "",
+          country: current.country || profile.country || ""
+        }));
+      })
+      .catch((caught) => {
+        if (!isMounted) {
+          return;
+        }
+
+        setLoadState({
+          status: "error",
+          message:
+            caught instanceof ApiError
+              ? caught.message
+              : "Program affiliation could not be loaded."
+        });
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [accessToken]);
+
+  const selectedChoice = useMemo(
+    () => programChoices.find((choice) => choice.id === selectedChoiceId) ?? null,
+    [selectedChoiceId]
+  );
+  const existingProgramNames = useMemo(() => {
+    if (loadState.status !== "ready") {
+      return new Set<string>();
+    }
+
+    return new Set(
+      loadState.profile.program_affiliations.map((affiliation) =>
+        affiliation.program_name.toLowerCase()
+      )
+    );
+  }, [loadState]);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (loadState.status !== "ready" || !selectedChoice) {
+      return;
+    }
+
+    setIsSaving(true);
+    setMessage(null);
+
+    try {
+      let profile = loadState.profile;
+      const missingPrograms = selectedChoice.programNames.filter(
+        (programName) => !existingProgramNames.has(programName.toLowerCase())
+      );
+
+      for (const programName of missingPrograms) {
+        profile = await addProgramAffiliation(accessToken, {
+          city: valueOrNull(programForm.city),
+          cohort_year: programForm.cohort_year ? Number(programForm.cohort_year) : null,
+          country: valueOrNull(programForm.country),
+          program_name: programName,
+          status: "COMPLETED"
+        });
+      }
+
+      setLoadState({ status: "ready", profile });
+      setMessage(
+        missingPrograms.length
+          ? "Program affiliation recorded."
+          : "That program affiliation is already recorded."
+      );
+      router.push("/verification");
+    } catch (caught) {
+      setLoadState({
+        status: "error",
+        message:
+          caught instanceof ApiError
+            ? caught.message
+            : "Program affiliation could not be saved."
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  function updateProgramField(field: keyof ProgramFormState, value: string) {
+    setProgramForm((current) => ({ ...current, [field]: value }));
+  }
+
+  return (
+    <main className="min-h-screen bg-[#f9f9ff] px-5 py-10 text-[#191c21] sm:px-8 lg:py-12">
+      <form className="mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-6xl flex-col" onSubmit={handleSubmit}>
+        <header className="text-center">
+          <Link className="focus-ring inline-block rounded-lg" href="/dashboard">
+            <span className="font-display text-4xl font-black tracking-tight text-primary">
+              YALI Alumni
+            </span>
+            <span className="mt-3 block text-sm font-bold uppercase tracking-[0.22em] text-[#737783]">
+              Civic Leadership Network
+            </span>
+          </Link>
+        </header>
+
+        <section className="mt-12">
+          <div className="mb-4 flex items-center justify-between gap-4">
+            <span className="text-xs font-bold uppercase tracking-[0.16em] text-primary">
+              Step 2 of 5
+            </span>
+            <span className="text-xs font-bold uppercase tracking-[0.16em] text-[#737783]">
+              Program affiliation
+            </span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-[#e2e2e9]">
+            <div className="h-full w-2/5 rounded-full bg-primary" />
+          </div>
+        </section>
+
+        <section className="mt-14 text-center">
+          <h1 className="font-display text-3xl font-semibold text-[#191c21]">
+            Select Your Program Affiliation
+          </h1>
+          <p className="mx-auto mt-5 max-w-3xl text-base leading-8 text-[#424751]">
+            To provide the most relevant opportunities and community access, please confirm which YALI program(s) you have successfully completed.
+          </p>
+        </section>
+
+        {loadState.status === "loading" ? (
+          <p className="mt-10 rounded-xl border border-[#c2c6d3] bg-white p-6 text-center text-sm font-semibold text-[#424751]">
+            Loading your current program affiliations...
+          </p>
+        ) : null}
+
+        {loadState.status === "error" ? (
+          <p className="mt-10 rounded-xl border border-red-200 bg-red-50 p-6 text-center text-sm font-semibold text-red-700">
+            {loadState.message}
+          </p>
+        ) : null}
+
+        {loadState.status === "ready" ? (
+          <>
+            <div className="mt-12 grid gap-6 lg:grid-cols-3">
+              {programChoices.map((choice) => (
+                <ProgramChoiceCard
+                  choice={choice}
+                  isRecorded={choice.programNames.every((programName) =>
+                    existingProgramNames.has(programName.toLowerCase())
+                  )}
+                  isSelected={choice.id === selectedChoiceId}
+                  key={choice.id}
+                  onSelect={() => setSelectedChoiceId(choice.id)}
+                />
+              ))}
+            </div>
+
+            <div className="mt-8 grid gap-4 rounded-xl border border-[#c2c6d3] bg-white p-5 shadow-sm md:grid-cols-3">
+              <TextInput
+                label="Cohort year"
+                onChange={(value) => updateProgramField("cohort_year", value)}
+                placeholder="2024"
+                type="number"
+                value={programForm.cohort_year}
+              />
+              <TextInput
+                label="Country"
+                onChange={(value) => updateProgramField("country", value)}
+                placeholder="Ghana"
+                value={programForm.country}
+              />
+              <TextInput
+                label="City"
+                onChange={(value) => updateProgramField("city", value)}
+                placeholder="Accra"
+                value={programForm.city}
+              />
+            </div>
+
+            <div className="mt-8 flex flex-col gap-3 rounded-xl border border-[#d9d9e1] bg-[#f3f3fa] p-6 sm:flex-row sm:items-start">
+              <ShieldCheck aria-hidden="true" className="h-7 w-7 shrink-0 text-primary" />
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#191c21]">
+                  Secure verification
+                </p>
+                <p className="mt-2 text-sm leading-6 text-[#424751]">
+                  Your affiliation will be cross-referenced with the official YALI database. Verified members receive a <span className="font-bold text-primary">Verification Badge</span> on their profile, unlocking exclusive mentorship and funding opportunities.
+                </p>
+                <p className="mt-2 text-sm font-semibold text-secondary">
+                  Signed in as {displayName}
+                </p>
+              </div>
+            </div>
+
+            {message ? (
+              <p className="mt-5 flex items-center justify-center gap-2 text-sm font-semibold text-secondary">
+                <CheckCircle2 aria-hidden="true" className="h-5 w-5" />
+                {message}
+              </p>
+            ) : null}
+          </>
+        ) : null}
+
+        <footer className="mt-14 border-t border-[#c2c6d3] py-10">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <Link
+              className="focus-ring inline-flex min-h-12 items-center justify-center gap-2 rounded-lg px-5 text-sm font-bold uppercase tracking-[0.12em] text-[#424751] transition hover:bg-white hover:text-primary"
+              href="/profile/setup"
+            >
+              <ArrowLeft aria-hidden="true" className="h-5 w-5" />
+              Go back
+            </Link>
+            <button
+              className="focus-ring inline-flex min-h-14 items-center justify-center gap-3 rounded-lg bg-primary px-8 text-sm font-bold uppercase tracking-[0.12em] text-white shadow-md transition hover:bg-[#003d7d] disabled:cursor-not-allowed disabled:bg-[#7da5d2]"
+              disabled={loadState.status !== "ready" || !selectedChoice || isSaving}
+              type="submit"
+            >
+              {isSaving ? "Recording..." : "Continue to step 3"}
+              <ChevronRight aria-hidden="true" className="h-5 w-5" />
+            </button>
+          </div>
+        </footer>
+
+        <div className="relative mt-auto h-48 overflow-hidden rounded-2xl bg-[#d9d9e1] md:h-56">
+          <Image
+            alt="YALI alumni leadership cohort"
+            className="object-cover opacity-55 grayscale"
+            fill
+            sizes="(max-width: 768px) 100vw, 1080px"
+            src="/brand/landing-hero.png"
+          />
+        </div>
+      </form>
+    </main>
+  );
+}
+
+function ProgramChoiceCard({
+  choice,
+  isRecorded,
+  isSelected,
+  onSelect
+}: {
+  choice: ProgramChoice;
+  isRecorded: boolean;
+  isSelected: boolean;
+  onSelect: () => void;
+}) {
+  const Icon = choice.icon;
+
+  return (
+    <button
+      className={`focus-ring group flex min-h-80 flex-col rounded-xl border bg-white p-8 text-left transition hover:border-primary ${
+        isSelected ? choice.selectedClassName : "border-[#c2c6d3]"
+      }`}
+      onClick={onSelect}
+      type="button"
+    >
+      <span className={`flex h-12 w-12 items-center justify-center rounded-lg ${choice.iconClassName}`}>
+        <Icon aria-hidden="true" className="h-7 w-7" />
+      </span>
+      <span className="mt-8 block font-display text-2xl font-semibold leading-tight text-[#191c21]">
+        {choice.title}
+      </span>
+      <span className="mt-5 block text-base leading-7 text-[#424751]">{choice.body}</span>
+      <span className="mt-auto flex items-center gap-2 pt-8 text-xs font-bold uppercase tracking-[0.14em] text-primary">
+        {isRecorded ? "Already recorded" : isSelected ? "Selected" : "Select program"}
+        {isRecorded || isSelected ? <CheckCircle2 aria-hidden="true" className="h-4 w-4" /> : null}
+      </span>
+    </button>
   );
 }
 

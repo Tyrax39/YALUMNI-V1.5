@@ -58,7 +58,7 @@ Audit date: 2026-05-08
 | `opportunity_details` | `/opportunities/[opportunityId]` | route-complete prototype | fixture | not implemented | Opportunity detail. |
 | `opportunity_moderation_queue` | `/admin/opportunities` | route-complete prototype | fixture | not implemented | Admin opportunity moderation. |
 | `post_new_opportunity` | `/opportunities/new` | route-complete prototype | fixture | not implemented | Opportunity posting form. |
-| `program_affiliation` | `/profile/program-affiliation` | live route | live API | implemented | Uses profile affiliation APIs. |
+| `program_affiliation` | `/profile/program-affiliation` | live route | live API | implemented | Focused Step 2 program selection route uses the existing profile affiliation API. |
 | `propose_new_initiative` | `/initiatives/new` | live route | live API | implemented | Initiative proposal form creates live member initiatives with optional first milestone. |
 | `public_landing_page` | `/` | live route | live API | implemented | Existing code-native public landing. |
 | `public_landing_page_mobile` | `/` | responsive reference | live API | implemented | Mobile landing reference. |
