@@ -376,7 +376,7 @@ function Shell({
   return (
     <main className="min-h-screen bg-surface text-ink">
       <header className="sticky top-0 z-40 border-b border-border bg-white/95 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-[1500px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+        <div className="flex h-16 w-full items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
           <Link className="focus-ring rounded-lg text-sm font-black text-primary" href="/">
             YALUMNI Admin
           </Link>
@@ -411,7 +411,7 @@ function Shell({
         </div>
       </header>
 
-      <div className="mx-auto grid max-w-[1500px] lg:grid-cols-[272px_1fr]">
+      <div className="grid w-full lg:grid-cols-[272px_1fr]">
         <aside className="sticky top-16 hidden h-[calc(100vh-64px)] overflow-y-auto border-r border-border bg-[#f3f3fa] px-4 py-5 lg:block">
           <div className="mb-6 rounded-lg border border-border bg-white p-4">
             <p className="text-sm font-bold text-ink">Role scope</p>

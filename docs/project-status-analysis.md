@@ -8,6 +8,33 @@ The current Yalumni project is a useful Laravel 9 alumni management platform, bu
 
 The V1.5 implementation is active in `D:\YALUMNI-V1.5`. The new repository now contains a platform foundation with a FastAPI backend, Next.js web shell, Docker Compose, CI workflow, shared packages, copied YALUMNI logo assets, and documentation.
 
+## Current V1.5 Implementation Update: 2026-05-28 Full-Width Dashboard Shell Slice
+
+Completed after the local auth runtime fix:
+
+- Removed the fixed centered `max-w-[1500px]` dashboard shell wrappers from the
+  authenticated member app, admin console, and super-admin console.
+- The shared dashboard chrome now uses full-width header and content grid
+  containers so wide screens no longer show large empty side gutters around the
+  dashboard surface.
+- Public landing/auth pages and individual feature screen internals were not
+  changed in this slice.
+
+Current plan position:
+
+- This improves UI shell fidelity and responsive dashboard behavior but does
+  not change backend feature completion.
+- Phase 2 remains roughly 96% complete.
+- Overall 24-week MVP-plus implementation remains roughly 76% complete as an
+  estimate.
+
+Frozen/protected behavior:
+
+- Auth routing, RBAC gating, dashboard data loading, dashboard cards, public
+  navigation, and all API contracts remain unchanged.
+- Future layout-only slices should avoid restyling individual dashboard cards
+  unless a specific screen or breakpoint requires it.
+
 ## Current V1.5 Implementation Update: 2026-05-28 Local Auth Runtime Fix
 
 Completed after the verification screen slice:
