@@ -3,6 +3,13 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import {
+  type EventListResponse,
+  type InitiativeListResponse,
+  fetchEvents,
+  fetchInitiatives
+} from "@yalumni/frontend-shared";
+
 import { AppShell } from "@/components/platform/app-shell";
 import {
   AlumniProfile,
@@ -24,6 +31,8 @@ import {
 type DashboardSnapshot = {
   communities: CommunityListResponse | null;
   conversations: ConversationListResponse | null;
+  events: EventListResponse | null;
+  initiatives: InitiativeListResponse | null;
   notifications: NotificationListResponse | null;
   profile: AlumniProfile | null;
   security: TwoFactorStatus | null;
@@ -34,6 +43,8 @@ type DashboardSnapshot = {
 const initialSnapshot: DashboardSnapshot = {
   communities: null,
   conversations: null,
+  events: null,
+  initiatives: null,
   notifications: null,
   profile: null,
   security: null,
@@ -118,7 +129,9 @@ function DashboardContent({
         communitiesResult,
         conversationsResult,
         sessionsResult,
-        securityResult
+        securityResult,
+        eventsResult,
+        initiativesResult
       ] = await Promise.allSettled([
         getMyAlumniProfile(accessToken),
         getMyVerificationRequests(accessToken),
@@ -126,7 +139,9 @@ function DashboardContent({
         listCommunities(accessToken, { limit: 5 }),
         listConversations(accessToken, { limit: 5 }),
         getSessions(accessToken, refreshToken),
-        getTwoFactorStatus(accessToken)
+        getTwoFactorStatus(accessToken),
+        fetchEvents({ limit: 3 }),
+        fetchInitiatives({ limit: 3 })
       ]);
 
       if (!isMounted) {
@@ -136,6 +151,8 @@ function DashboardContent({
       setSnapshot({
         communities: communitiesResult.status === "fulfilled" ? communitiesResult.value : null,
         conversations: conversationsResult.status === "fulfilled" ? conversationsResult.value : null,
+        events: eventsResult.status === "fulfilled" ? eventsResult.value : null,
+        initiatives: initiativesResult.status === "fulfilled" ? initiativesResult.value : null,
         notifications: notificationsResult.status === "fulfilled" ? notificationsResult.value : null,
         profile: profileResult.status === "fulfilled" ? profileResult.value : null,
         security: securityResult.status === "fulfilled" ? securityResult.value : null,
@@ -157,6 +174,20 @@ function DashboardContent({
   const unreadMessages =
     snapshot.conversations?.conversations.reduce((total, conversation) => total + conversation.unread_count, 0) ??
     0;
+  const upcomingEvents =
+    snapshot.events?.events.slice(0, 3).map((event) => ({
+      detail: formatPlace(event.city, event.country) || event.summary,
+      href: `/events/${event.id}`,
+      meta: formatDateTime(event.starts_at),
+      title: event.title
+    })) ?? [];
+  const activeInitiatives =
+    snapshot.initiatives?.initiatives.slice(0, 3).map((initiative) => ({
+      detail: formatPlace(initiative.city, initiative.country) || initiative.summary,
+      href: `/initiatives/${initiative.id}`,
+      meta: formatEnumValue(initiative.stage),
+      title: initiative.title
+    })) ?? [];
 
   return (
     <div className="grid gap-6">
@@ -237,6 +268,23 @@ function DashboardContent({
         />
       </section>
 
+      <section className="grid gap-5 xl:grid-cols-2">
+        <LivePreviewPanel
+          actionLabel="View events"
+          emptyText="No upcoming event data is available for this workspace yet."
+          href="/events"
+          items={upcomingEvents}
+          title="Upcoming events"
+        />
+        <LivePreviewPanel
+          actionLabel="View initiatives"
+          emptyText="No active initiative data is available for this workspace yet."
+          href="/initiatives"
+          items={activeInitiatives}
+          title="Active initiatives"
+        />
+      </section>
+
       <section className="grid gap-5 xl:grid-cols-[0.8fr_1.2fr]">
         <div className="rounded-lg border border-border bg-white p-5 shadow-soft sm:p-6">
           <h2 className="font-display text-2xl font-semibold text-ink">Recent notifications</h2>
@@ -294,6 +342,54 @@ function DashboardContent({
           </div>
         </div>
       </section>
+    </div>
+  );
+}
+
+function LivePreviewPanel({
+  actionLabel,
+  emptyText,
+  href,
+  items,
+  title
+}: {
+  actionLabel: string;
+  emptyText: string;
+  href: string;
+  items: Array<{ detail: string; href: string; meta: string; title: string }>;
+  title: string;
+}) {
+  return (
+    <div className="rounded-lg border border-border bg-white p-5 shadow-soft sm:p-6">
+      <div className="flex items-center justify-between gap-4">
+        <h2 className="font-display text-2xl font-semibold text-ink">{title}</h2>
+        <Link className="focus-ring rounded-lg text-sm font-bold text-primary" href={href}>
+          {actionLabel}
+        </Link>
+      </div>
+      <div className="mt-5 grid gap-3">
+        {items.length ? (
+          items.map((item) => (
+            <Link
+              className="focus-ring rounded-lg border border-border bg-surface p-4 transition hover:border-primary hover:bg-white"
+              href={item.href}
+              key={item.href}
+            >
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <p className="text-sm font-bold text-ink">{item.title}</p>
+                <span className="text-xs font-bold uppercase tracking-[0.12em] text-secondary">
+                  {item.meta}
+                </span>
+              </div>
+              <p className="mt-2 text-sm leading-6 text-muted">{item.detail}</p>
+            </Link>
+          ))
+        ) : (
+          <p className="rounded-lg border border-border bg-surface p-4 text-sm leading-6 text-muted">
+            {emptyText}
+          </p>
+        )}
+      </div>
     </div>
   );
 }
@@ -367,4 +463,28 @@ function formatNumber(value: number | undefined) {
 
 function formatPercent(value: number | undefined) {
   return typeof value === "number" ? `${Math.round(value)}%` : "n/a";
+}
+
+function formatDateTime(value: string | undefined) {
+  if (!value) {
+    return "date pending";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "date pending";
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    day: "numeric",
+    month: "short"
+  }).format(date);
+}
+
+function formatEnumValue(value: string | undefined) {
+  return value ? value.replaceAll("_", " ").toLowerCase() : "status pending";
+}
+
+function formatPlace(city?: string | null, country?: string | null) {
+  return [city, country].filter(Boolean).join(", ");
 }

@@ -8,6 +8,34 @@ The current Yalumni project is a useful Laravel 9 alumni management platform, bu
 
 The V1.5 implementation is active in `D:\YALUMNI-V1.5`. The new repository now contains a platform foundation with a FastAPI backend, Next.js web shell, Docker Compose, CI workflow, shared packages, copied YALUMNI logo assets, and documentation.
 
+## Current V1.5 Implementation Update: 2026-05-28 Member Dashboard Live Bento Slice
+
+Completed after the full-width dashboard shell slice:
+
+- Added member-dashboard panels for upcoming events and active initiatives,
+  matching the `member_dashboard` export's bento-style dashboard intent without
+  using screenshots or exported HTML.
+- Reused the existing live event and initiative client APIs, so the dashboard
+  now surfaces current member workspace activity alongside profile,
+  verification, notifications, communities, messages, sessions, and 2FA status.
+- Existing dashboard routes, app shell, auth/RBAC behavior, public navigation,
+  and backend contracts were not changed.
+
+Current plan position:
+
+- Phase 2 is now roughly 97% complete because the primary member dashboard
+  route has stronger design parity and live workspace context.
+- Overall 24-week MVP-plus implementation remains roughly 76% complete as an
+  estimate because this was a frontend live-context alignment slice, not a new
+  backend feature module.
+
+Frozen/protected behavior:
+
+- Existing profile, verification, notification, community, message, session,
+  2FA, event, and initiative API client contracts remain unchanged.
+- Future dashboard slices should preserve the live summary cards and avoid
+  replacing them with static fixture-only dashboard data.
+
 ## Current V1.5 Implementation Update: 2026-05-28 Full-Width Dashboard Shell Slice
 
 Completed after the local auth runtime fix:

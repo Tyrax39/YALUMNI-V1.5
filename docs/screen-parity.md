@@ -47,7 +47,7 @@ Audit date: 2026-05-08
 | `initiative_hub` | `/initiatives` | live route | live API | implemented | Initiative hub backed by live initiative search and current-user initiatives. |
 | `introduction_requests` | `/messages/introductions` | route-complete prototype | fixture | not implemented | Introduction request center. |
 | `introduction_requests_desktop` | `/messages/introductions` | responsive reference | fixture | not implemented | Desktop reference for the same route. |
-| `member_dashboard` | `/dashboard` | live route | live API | partially implemented | Existing dashboard remains the high-level hub. |
+| `member_dashboard` | `/dashboard` | live route | live API | implemented | High-level member hub now includes live profile, verification, notifications, communities, messages, events, initiatives, sessions, and 2FA context. |
 | `mentor_settings_profile` | `/mentorship/settings` | route-complete prototype | fixture | not implemented | Mentor settings route. |
 | `messages_inbox` | `/messages` | live route | live API | implemented | Wraps live messaging APIs. |
 | `messages_mobile` | `/messages` | responsive reference | live API | implemented | Mobile messaging reference. |
