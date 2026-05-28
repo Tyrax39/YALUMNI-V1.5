@@ -8,6 +8,38 @@ The current Yalumni project is a useful Laravel 9 alumni management platform, bu
 
 The V1.5 implementation is active in `D:\YALUMNI-V1.5`. The new repository now contains a platform foundation with a FastAPI backend, Next.js web shell, Docker Compose, CI workflow, shared packages, copied YALUMNI logo assets, and documentation.
 
+## Current V1.5 Implementation Update: 2026-05-28 Local Auth Runtime Fix
+
+Completed after the verification screen slice:
+
+- Diagnosed the member/admin login "Internal Server Error" as a local API
+  runtime database configuration issue, not a frontend auth-form regression.
+- The running API had fallen back to the default PostgreSQL URL
+  `postgresql+psycopg://postgres:postgres@localhost:5432/yali_alumni`, but the
+  local PostgreSQL listener rejected that password. Login failed before user
+  lookup or password verification.
+- Restarted the local API on `127.0.0.1:8002` with the existing local SQLite
+  development database at `.local/yalumni.sqlite3`, then re-seeded the protected
+  platform owner and test accounts into that local database.
+- Verified the platform owner login through the API, member session proxy,
+  admin session proxy, and super-admin session proxy.
+
+Current plan position:
+
+- No product feature percentage changed; this was an operational local runtime
+  repair.
+- Overall 24-week MVP-plus implementation remains roughly 76% complete as an
+  estimate.
+
+Frozen/protected behavior:
+
+- No auth code, schemas, routes, password rules, session cookies, CSRF checks,
+  RBAC rules, or frontend login UI were changed.
+- The protected platform owner account remains active with all member and admin
+  roles in the local development database.
+- The API must be started with a valid `DATABASE_URL`; for current local QA that
+  is the ignored SQLite database under `.local/yalumni.sqlite3`.
+
 ## Current V1.5 Implementation Update: 2026-05-28 UI Phase 2 Verification Screen Slice
 
 Completed after the profile setup screen slice:
