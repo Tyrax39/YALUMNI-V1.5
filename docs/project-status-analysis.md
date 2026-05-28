@@ -8,6 +8,31 @@ The current Yalumni project is a useful Laravel 9 alumni management platform, bu
 
 The V1.5 implementation is active in `D:\YALUMNI-V1.5`. The new repository now contains a platform foundation with a FastAPI backend, Next.js web shell, Docker Compose, CI workflow, shared packages, copied YALUMNI logo assets, and documentation.
 
+## Current V1.5 Implementation Update: 2026-05-28 Member Dashboard Community Feed Slice
+
+Completed after the member dashboard live bento slice:
+
+- Added `Community feed highlights` to `/dashboard`, using existing
+  membership-scoped community reads and existing community post APIs.
+- The feed only pulls from communities returned by `membership=mine`, then
+  requests active posts for those communities. It does not expose public or
+  non-member community posts through the dashboard.
+- Existing dashboard metrics, event panels, initiative panels, auth/RBAC
+  behavior, routes, and backend contracts were not changed.
+
+Current plan position:
+
+- Phase 2 remains roughly 97% complete because this was a focused dashboard
+  parity improvement inside an already-live route.
+- Overall 24-week MVP-plus implementation remains roughly 76% complete as an
+  estimate.
+
+Frozen/protected behavior:
+
+- Dashboard community counts still use the existing visible-community API call.
+- Feed highlights are read-only links back to community detail pages; no post
+  creation, reaction, comment, moderation, or media behavior changed.
+
 ## Current V1.5 Implementation Update: 2026-05-28 Member Dashboard Live Bento Slice
 
 Completed after the full-width dashboard shell slice:

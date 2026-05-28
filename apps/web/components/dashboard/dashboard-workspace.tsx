@@ -24,12 +24,25 @@ import {
   getSessions,
   getTwoFactorStatus,
   listCommunities,
+  listCommunityPosts,
   listConversations,
   listNotifications
 } from "@/lib/api";
 
+type DashboardFeedItem = {
+  author: string;
+  body: string;
+  commentCount: number;
+  communityName: string;
+  createdAt: string;
+  href: string;
+  id: string;
+  reactionCount: number;
+};
+
 type DashboardSnapshot = {
   communities: CommunityListResponse | null;
+  communityFeed: DashboardFeedItem[] | null;
   conversations: ConversationListResponse | null;
   events: EventListResponse | null;
   initiatives: InitiativeListResponse | null;
@@ -42,6 +55,7 @@ type DashboardSnapshot = {
 
 const initialSnapshot: DashboardSnapshot = {
   communities: null,
+  communityFeed: null,
   conversations: null,
   events: null,
   initiatives: null,
@@ -131,7 +145,8 @@ function DashboardContent({
         sessionsResult,
         securityResult,
         eventsResult,
-        initiativesResult
+        initiativesResult,
+        memberCommunitiesResult
       ] = await Promise.allSettled([
         getMyAlumniProfile(accessToken),
         getMyVerificationRequests(accessToken),
@@ -141,8 +156,13 @@ function DashboardContent({
         getSessions(accessToken, refreshToken),
         getTwoFactorStatus(accessToken),
         fetchEvents({ limit: 3 }),
-        fetchInitiatives({ limit: 3 })
+        fetchInitiatives({ limit: 3 }),
+        listCommunities(accessToken, { limit: 3, membership: "mine" })
       ]);
+      const communityFeed =
+        memberCommunitiesResult.status === "fulfilled"
+          ? await loadCommunityFeedHighlights(accessToken, memberCommunitiesResult.value.communities)
+          : null;
 
       if (!isMounted) {
         return;
@@ -150,6 +170,7 @@ function DashboardContent({
 
       setSnapshot({
         communities: communitiesResult.status === "fulfilled" ? communitiesResult.value : null,
+        communityFeed,
         conversations: conversationsResult.status === "fulfilled" ? conversationsResult.value : null,
         events: eventsResult.status === "fulfilled" ? eventsResult.value : null,
         initiatives: initiativesResult.status === "fulfilled" ? initiativesResult.value : null,
@@ -268,6 +289,46 @@ function DashboardContent({
         />
       </section>
 
+      <section className="rounded-lg border border-border bg-white p-5 shadow-soft sm:p-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="font-display text-2xl font-semibold text-ink">Community feed highlights</h2>
+            <p className="mt-2 text-sm leading-6 text-muted">
+              Recent posts from communities where your membership is active.
+            </p>
+          </div>
+          <Link className="focus-ring rounded-lg text-sm font-bold text-primary" href="/communities">
+            View communities
+          </Link>
+        </div>
+        <div className="mt-5 grid gap-3 lg:grid-cols-3">
+          {snapshot.communityFeed?.length ? (
+            snapshot.communityFeed.slice(0, 3).map((post) => (
+              <Link
+                className="focus-ring rounded-lg border border-border bg-surface p-4 transition hover:border-primary hover:bg-white"
+                href={post.href}
+                key={post.id}
+              >
+                <p className="text-xs font-bold uppercase tracking-[0.12em] text-secondary">
+                  {post.communityName}
+                </p>
+                <p className="mt-3 max-h-24 overflow-hidden text-sm leading-6 text-ink">{post.body}</p>
+                <div className="mt-4 flex flex-wrap items-center gap-3 text-xs font-semibold text-muted">
+                  <span>{post.author}</span>
+                  <span>{formatDateTime(post.createdAt)}</span>
+                  <span>{post.commentCount} comments</span>
+                  <span>{post.reactionCount} reactions</span>
+                </div>
+              </Link>
+            ))
+          ) : (
+            <p className="rounded-lg border border-border bg-surface p-4 text-sm leading-6 text-muted lg:col-span-3">
+              No recent posts are available from your active communities yet.
+            </p>
+          )}
+        </div>
+      </section>
+
       <section className="grid gap-5 xl:grid-cols-2">
         <LivePreviewPanel
           actionLabel="View events"
@@ -344,6 +405,36 @@ function DashboardContent({
       </section>
     </div>
   );
+}
+
+async function loadCommunityFeedHighlights(
+  accessToken: string,
+  communities: CommunityListResponse["communities"]
+): Promise<DashboardFeedItem[]> {
+  const postResults = await Promise.allSettled(
+    communities.map(async (community) => {
+      const response = await listCommunityPosts(accessToken, community.id, {
+        limit: 2,
+        status: "ACTIVE"
+      });
+
+      return response.posts.map((post) => ({
+        author: post.author_display_name,
+        body: post.body,
+        commentCount: post.comment_count,
+        communityName: community.name,
+        createdAt: post.created_at,
+        href: `/communities/${community.id}`,
+        id: post.id,
+        reactionCount: post.reaction_count
+      }));
+    })
+  );
+
+  return postResults
+    .flatMap((result) => (result.status === "fulfilled" ? result.value : []))
+    .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
+    .slice(0, 3);
 }
 
 function LivePreviewPanel({
