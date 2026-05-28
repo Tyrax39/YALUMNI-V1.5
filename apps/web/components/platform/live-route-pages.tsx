@@ -53,13 +53,18 @@ export function ProgramAffiliationRoutePage() {
 
 export function VerificationRoutePage() {
   return (
-    <AppShell
+    <ProtectedRoute
       description="Submit alumni verification, upload evidence, and track the latest request status from the live verification API."
-      eyebrow="Verification"
       title="Alumni verification"
     >
-      {({ accessToken }) => <VerificationRequestPanel accessToken={accessToken} />}
-    </AppShell>
+      {({ accessToken, user }) => (
+        <VerificationRequestPanel
+          accessToken={accessToken}
+          displayName={user.display_name}
+          email={user.email}
+        />
+      )}
+    </ProtectedRoute>
   );
 }
 

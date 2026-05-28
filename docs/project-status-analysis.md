@@ -8,6 +8,51 @@ The current Yalumni project is a useful Laravel 9 alumni management platform, bu
 
 The V1.5 implementation is active in `D:\YALUMNI-V1.5`. The new repository now contains a platform foundation with a FastAPI backend, Next.js web shell, Docker Compose, CI workflow, shared packages, copied YALUMNI logo assets, and documentation.
 
+## Current V1.5 Implementation Update: 2026-05-28 UI Phase 2 Verification Screen Slice
+
+Completed after the profile setup screen slice:
+
+- Replaced the `/verification` generic app-shell panel with a focused Step 3
+  credentials submission screen based on the `alumni_verification` export.
+- The screen now presents the verification workflow, current profile/program
+  snapshot, existing request status, evidence attachments, evidence upload, and
+  trust context while preserving the existing live verification APIs.
+- Existing request submission rules, evidence upload rules, route paths,
+  authenticated access, admin verification queues, profile setup, and program
+  affiliation behavior were not changed.
+- Updated the screen parity tracker so `alumni_verification` now reflects the
+  dedicated focused UI instead of a generic verification panel.
+
+Current plan position:
+
+- Phase 1 remains functionally complete for local foundation.
+- Phase 2 is now roughly 96% complete because the verification request,
+  profile setup, program affiliation, onboarding, and submitted confirmation
+  surfaces now have focused code-native implementations using live APIs where
+  available.
+- Phase 3 remains roughly 52% complete.
+- Phase 4 remains roughly 38% complete.
+- Phase 5 remains roughly 81% complete.
+- Phase 6 feed/moderation remains roughly 55% complete.
+- Phase 7 messaging/notifications remains roughly 51% complete.
+- Phase 8 events remains roughly 28% complete.
+- Post-MVP initiatives remain roughly 24% complete.
+- Post-MVP mentorship remains roughly 18% complete.
+- Post-MVP elections remain roughly 24% complete.
+- Post-MVP contributions/treasury remains roughly 70% complete.
+- Overall 24-week MVP-plus implementation remains roughly 76% complete as an
+  estimate.
+
+Frozen/protected behavior:
+
+- `/verification` remains authenticated-only and uses existing
+  `getMyAlumniProfile`, `getMyVerificationRequests`,
+  `submitVerificationRequest`, and `uploadVerificationEvidence` client helpers.
+- Existing verification submission eligibility remains unchanged: profile
+  completion must be 100% and there must not already be a pending review.
+- Evidence upload availability remains tied to the existing request status
+  rules.
+
 ## Current V1.5 Implementation Update: 2026-05-28 UI Phase 2 Profile Setup Screen Slice
 
 Completed after the program affiliation screen slice:

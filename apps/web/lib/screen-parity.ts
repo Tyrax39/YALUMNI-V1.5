@@ -101,7 +101,7 @@ export const screenParityRecords: ScreenParityRecord[] = [
     backendDependencyStatus: "implemented",
     dataSource: "live API",
     exportFolder: "alumni_verification",
-    notes: "Member verification route uses current verification request APIs.",
+    notes: "Focused Step 3 credentials submission screen uses current verification request and evidence APIs.",
     route: "/verification",
     status: "live route"
   },

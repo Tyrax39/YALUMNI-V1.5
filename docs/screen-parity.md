@@ -22,7 +22,7 @@ Audit date: 2026-05-08
 | `agenda_speaker_planner` | `/events/[eventId]/agenda` | live route | live API | implemented | Agenda and speaker planner route backed by event agenda records. |
 | `alumni_directory` | `/directory` | live route | live API | implemented | Uses current member directory API plus the member-only MWF Alumni cache tab. |
 | `alumni_directory_mobile` | `/directory` | responsive reference | live API | implemented | Mobile behavior folded into canonical directory including YALUMNI/MWF tabs. |
-| `alumni_verification` | `/verification` | live route | live API | implemented | Uses current member verification APIs. |
+| `alumni_verification` | `/verification` | live route | live API | implemented | Focused Step 3 credentials submission screen uses current verification request and evidence APIs. |
 | `annual_gathering_hub` | `/events/[eventId]` | live route | live API | implemented | Event detail and gathering hub backed by live event records. |
 | `ballot_privacy_integrity_controls` | `/admin/elections/[electionId]/privacy` | route-complete prototype | fixture | not implemented | Ballot privacy and integrity controls. |
 | `candidate_review_queue` | `/admin/elections/[electionId]/candidates` | route-complete prototype | fixture | not implemented | Candidate review queue. |
