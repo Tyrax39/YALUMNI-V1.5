@@ -8,6 +8,32 @@ The current Yalumni project is a useful Laravel 9 alumni management platform, bu
 
 The V1.5 implementation is active in `D:\YALUMNI-V1.5`. The new repository now contains a platform foundation with a FastAPI backend, Next.js web shell, Docker Compose, CI workflow, shared packages, copied YALUMNI logo assets, and documentation.
 
+## Current V1.5 Implementation Update: 2026-05-29 Introduction Requests Live Messaging Slice
+
+Completed after the member dashboard community feed slice:
+
+- Replaced the `/messages/introductions` fixture prototype with a live
+  member-only introduction center.
+- The route now uses existing verified alumni directory search and direct
+  conversation APIs to start and continue introduction handoff threads.
+- No new backend request-state schema was added; accept, decline, brokered
+  handoff, and mentorship-linked introduction states remain future backend
+  work.
+
+Current plan position:
+
+- Phase 7 messaging/notifications moves from roughly 51% to roughly 54%
+  complete because another exported messaging surface now uses live APIs.
+- Overall 24-week MVP-plus implementation moves from roughly 76% to roughly
+  77% complete as an estimate.
+
+Frozen/protected behavior:
+
+- Existing `/messages`, `/messages/new`, and `/messages/[conversationId]`
+  direct messaging behavior remains unchanged.
+- The route uses existing `listConversations`, `searchAlumniDirectory`, and
+  `createDirectConversation` client helpers; no API contract changed.
+
 ## Current V1.5 Implementation Update: 2026-05-28 Member Dashboard Community Feed Slice
 
 Completed after the member dashboard live bento slice:

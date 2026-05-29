@@ -7,6 +7,7 @@ import { DirectorySearchPanel } from "@/components/alumni/directory-search-panel
 import { ProfileSetupPanel, ProgramAffiliationPanel } from "@/components/alumni/profile-panel";
 import { VerificationRequestPanel } from "@/components/alumni/verification-request-panel";
 import { CommunitiesPanel } from "@/components/communities/communities-panel";
+import { IntroductionRequestsPanel } from "@/components/messages/introduction-requests-panel";
 import { MessagingPanel } from "@/components/messages/messaging-panel";
 import { AppShell } from "@/components/platform/app-shell";
 import { ProtectedRoute } from "@/components/auth/protected-route";
@@ -101,6 +102,21 @@ export function MessagesRoutePage({ mode = "inbox" }: { mode?: "conversation" | 
     >
       {({ accessToken, user }) => (
         <MessagingPanel accessToken={accessToken} currentUserId={user.id} />
+      )}
+    </AppShell>
+  );
+}
+
+export function IntroductionRequestsRoutePage() {
+  return (
+    <AppShell
+      description="Start verified alumni handoffs through live member search and direct-message threads."
+      eyebrow="Introductions"
+      requiredRoles={MEMBER_ACCESS_ROLES}
+      title="Introduction requests"
+    >
+      {({ accessToken, user }) => (
+        <IntroductionRequestsPanel accessToken={accessToken} currentUserId={user.id} />
       )}
     </AppShell>
   );

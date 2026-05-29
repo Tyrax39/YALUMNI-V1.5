@@ -282,18 +282,18 @@ export const screenParityRecords: ScreenParityRecord[] = [
     status: "route-complete prototype"
   },
   {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "partially implemented",
+    dataSource: "live API",
     exportFolder: "introduction_requests",
-    notes: "Introduction request center uses fixture request state.",
+    notes: "Introduction center uses live member search and direct-message threads; dedicated request approval workflow remains future backend work.",
     route: "/messages/introductions",
-    status: "route-complete prototype"
+    status: "live route"
   },
   {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "partially implemented",
+    dataSource: "live API",
     exportFolder: "introduction_requests_desktop",
-    notes: "Desktop introduction export maps to the same responsive route.",
+    notes: "Desktop introduction export maps to the same live responsive route.",
     route: "/messages/introductions",
     status: "responsive reference"
   },
@@ -1333,42 +1333,42 @@ export const featureScreens = {
     workflow: ["Set availability", "Add focus areas", "Preview card", "Save"]
   },
   introductionRequests: {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "partially implemented",
+    dataSource: "live API",
     description:
       "A request center for warm introductions, mentor handoffs, and direct-message follow-ups.",
     eyebrow: "Introductions",
     highlights: [
       {
-        body: "Organizes pending, accepted, and declined introduction requests.",
-        meta: "Queue",
-        title: "Request workflow"
+        body: "Uses the live member directory and direct-message APIs to start verified handoff conversations.",
+        meta: "Live API",
+        title: "Directory handoff"
       },
       {
-        body: "Designed to connect mentorship, opportunities, and direct messaging.",
+        body: "Connects the future introduction request workflow to the already-live messaging module.",
         meta: "Cross-module",
         title: "Network handoffs"
       },
       {
-        body: "Actions are disabled until introduction request APIs land.",
-        meta: "Backend needed",
-        title: "Safe review"
+        body: "Accept, decline, and brokered introduction states remain future backend work.",
+        meta: "Partial backend",
+        title: "Request workflow"
       }
     ],
     metrics: [
-      { label: "Pending", value: "7" },
-      { label: "Accepted", value: "13" },
-      { label: "Declined", value: "2" }
+      { label: "Member search", value: "live" },
+      { label: "Direct threads", value: "live" },
+      { label: "Request states", value: "future" }
     ],
-    primaryAction: { disabled: true, label: "Create request" },
+    primaryAction: { href: "/messages/introductions", label: "Open introductions" },
     route: "/messages/introductions",
     sourceExports: ["introduction_requests", "introduction_requests_desktop"],
     table: {
-      headers: ["Request", "Reason", "Status"],
+      headers: ["Capability", "Source", "Status"],
       rows: [
-        ["Amina to Kofi", "Climate grant advice", "pending"],
-        ["Jean to Sarah", "Public health mentor", "accepted"],
-        ["Fatou to Grace", "Founder intro", "pending"]
+        ["Verified alumni search", "Directory API", "live"],
+        ["Introduction thread", "Messages API", "live"],
+        ["Accept or decline workflow", "Future introduction API", "not implemented"]
       ]
     },
     title: "Introduction requests",
@@ -2569,4 +2569,3 @@ export const featureScreens = {
 } satisfies Record<string, FeatureScreenConfig>;
 
 export type FeatureScreenKey = keyof typeof featureScreens;
-

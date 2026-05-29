@@ -1,6 +1,5 @@
-import { PrototypeFeaturePage } from "@/components/platform/prototype-feature-page";
+import { IntroductionRequestsRoutePage } from "@/components/platform/live-route-pages";
 
 export default function IntroductionRequestsPage() {
-  return <PrototypeFeaturePage screenKey="introductionRequests" />;
+  return <IntroductionRequestsRoutePage />;
 }
-
