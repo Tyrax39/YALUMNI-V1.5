@@ -42,17 +42,17 @@ Audit date: 2026-05-08
 | `election_hub` | `/elections` | route-complete prototype | fixture | not implemented | Member election hub. |
 | `election_results_audit` | `/elections/[electionId]/results` | route-complete prototype | fixture | not implemented | Member results audit. |
 | `election_voting_details` | `/elections/[electionId]/vote` | route-complete prototype | fixture | not implemented | Voting detail route with disabled cast action. |
-| `find_a_mentor` | `/mentorship/find` | route-complete prototype | fixture | not implemented | Mentor discovery route. |
+| `find_a_mentor` | `/mentorship/find` | live route | live API | implemented | Mentor discovery route uses live mentor profiles, filters, and paginated load-more behavior. |
 | `initiative_details` | `/initiatives/[initiativeId]` | live route | live API | implemented | Initiative detail route backed by live initiative and milestone records. |
 | `initiative_hub` | `/initiatives` | live route | live API | implemented | Initiative hub backed by live initiative search and current-user initiatives. |
 | `introduction_requests` | `/messages/introductions` | live route | live API | partially implemented | Introduction center now uses live member search and direct-message threads; dedicated request approval workflow remains future backend work. |
 | `introduction_requests_desktop` | `/messages/introductions` | responsive reference | live API | partially implemented | Desktop reference folded into the same live introduction route. |
 | `member_dashboard` | `/dashboard` | live route | live API | implemented | High-level member hub now includes live profile, verification, notifications, communities, community feed highlights, messages, events, initiatives, sessions, and 2FA context. |
-| `mentor_settings_profile` | `/mentorship/settings` | route-complete prototype | fixture | not implemented | Mentor settings route. |
+| `mentor_settings_profile` | `/mentorship/settings` | live route | live API | implemented | Mentor settings route saves live mentor availability profiles. |
 | `messages_inbox` | `/messages` | live route | live API | implemented | Wraps live messaging APIs. |
 | `messages_mobile` | `/messages` | responsive reference | live API | implemented | Mobile messaging reference. |
 | `mobile_onboarding_flow` | `/onboarding` | code-native route | live API | partially implemented | Mirrors the mobile onboarding export, reads live profile and verification status, and links into live profile, affiliation, and verification routes. |
-| `my_mentorships` | `/mentorship` | route-complete prototype | fixture | not implemented | Mentorship hub. |
+| `my_mentorships` | `/mentorship` | live route | live API | implemented | Mentorship hub uses live mentor summary, incoming requests, outgoing requests, and recommended mentors. |
 | `new_message` | `/messages/new` | live route | live API | implemented | Live member search and conversation composer. |
 | `opportunities_marketplace` | `/opportunities` | route-complete prototype | fixture | not implemented | Opportunities marketplace. |
 | `opportunity_details` | `/opportunities/[opportunityId]` | route-complete prototype | fixture | not implemented | Opportunity detail. |
@@ -62,7 +62,7 @@ Audit date: 2026-05-08
 | `propose_new_initiative` | `/initiatives/new` | live route | live API | implemented | Initiative proposal form creates live member initiatives with optional first milestone. |
 | `public_landing_page` | `/` | live route | live API | implemented | Existing code-native public landing. |
 | `public_landing_page_mobile` | `/` | responsive reference | live API | implemented | Mobile landing reference. |
-| `request_mentorship` | `/mentorship/request` | route-complete prototype | fixture | not implemented | Mentorship request form. |
+| `request_mentorship` | `/mentorship/request` | live route | live API | implemented | Mentorship request form creates live pending mentorship requests. |
 | `resource_detail_view` | `/resources/[resourceId]` | route-complete prototype | fixture | not implemented | Resource detail. |
 | `resource_library_hub` | `/resources` | route-complete prototype | fixture | not implemented | Resource library. |
 | `resource_management_console` | `/admin/resources` | route-complete prototype | fixture | not implemented | Admin resource management. |
@@ -89,6 +89,6 @@ These routes were necessary to map every export cleanly:
 
 ## Current Backend Gap Summary
 
-- Implemented live modules: auth, profile, program affiliation, verification, directory, MWF alumni directory cache, communities, direct messages, notifications, admin overview, admin verification, admin moderation, audit log, notification digests, opportunities, resources, success stories, events, initiatives.
-- Missing backend modules: mentorship, contributions/payments/receipts, elections/voter rolls/ballots/audits, chapter analytics, treasury.
+- Implemented live modules: auth, profile, program affiliation, verification, directory, MWF alumni directory cache, communities, direct messages, notifications, admin overview, admin verification, admin moderation, audit log, notification digests, opportunities, resources, success stories, events, initiatives, mentorship.
+- Missing backend modules: contributions/payments/receipts, elections/voter rolls/ballots/audits, chapter analytics, treasury.
 - Current route parity status: frontend routes exist for all exported screens; data is live only where the backend already exists.

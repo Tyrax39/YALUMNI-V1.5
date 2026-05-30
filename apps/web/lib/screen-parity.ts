@@ -258,12 +258,12 @@ export const screenParityRecords: ScreenParityRecord[] = [
     status: "route-complete prototype"
   },
   {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     exportFolder: "find_a_mentor",
-    notes: "Mentor discovery surface with fixture mentor cards.",
+    notes: "Mentor discovery route uses live mentor profiles, filters, and paginated load-more behavior.",
     route: "/mentorship/find",
-    status: "route-complete prototype"
+    status: "live route"
   },
   {
     backendDependencyStatus: "not implemented",
@@ -306,12 +306,12 @@ export const screenParityRecords: ScreenParityRecord[] = [
     status: "live route"
   },
   {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     exportFolder: "mentor_settings_profile",
-    notes: "Mentor settings profile is route-complete with disabled save.",
+    notes: "Mentor settings profile saves live mentor availability records.",
     route: "/mentorship/settings",
-    status: "route-complete prototype"
+    status: "live route"
   },
   {
     backendDependencyStatus: "implemented",
@@ -338,12 +338,12 @@ export const screenParityRecords: ScreenParityRecord[] = [
     status: "code-native route"
   },
   {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     exportFolder: "my_mentorships",
-    notes: "Mentorship hub with fixture active relationships.",
+    notes: "Mentorship hub uses live mentor summary, requests, reviews, and recommendations.",
     route: "/mentorship",
-    status: "route-complete prototype"
+    status: "live route"
   },
   {
     backendDependencyStatus: "implemented",
@@ -418,12 +418,12 @@ export const screenParityRecords: ScreenParityRecord[] = [
     status: "responsive reference"
   },
   {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     exportFolder: "request_mentorship",
-    notes: "Mentorship request flow is present with disabled submit.",
+    notes: "Mentorship request flow creates live pending mentorship requests.",
     route: "/mentorship/request",
-    status: "route-complete prototype"
+    status: "live route"
   },
   {
     backendDependencyStatus: "not implemented",
@@ -1164,148 +1164,148 @@ export const featureScreens = {
     workflow: ["Add details", "Set eligibility", "Preview listing", "Submit for moderation"]
   },
   mentorshipHub: {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     description:
       "The mentorship workspace for active mentorships, requests, introductions, and mentor availability.",
     eyebrow: "Mentorship",
     highlights: [
       {
-        body: "Track active matches, pending requests, and introduction follow-ups.",
-        meta: "Relationships",
+        body: "Track live incoming and outgoing requests plus recommended mentor profiles.",
+        meta: "Live API",
         title: "Mentorship pipeline"
       },
       {
-        body: "Discovery, request, and settings routes are all available for design review.",
-        meta: "Route parity",
+        body: "Discovery, request, and settings routes are wired to the mentorship API.",
+        meta: "Member workflow",
         title: "Complete surface"
       },
       {
-        body: "Matching, request state, and messaging handoffs need backend implementation.",
+        body: "Deeper matching, notifications, analytics, and admin oversight remain future work.",
         meta: "Future",
-        title: "Backend required"
+        title: "Enhancement backlog"
       }
     ],
     metrics: [
-      { label: "Active", value: "3" },
-      { label: "Pending", value: "5" },
-      { label: "Open mentors", value: "42" }
+      { label: "Summary", value: "live" },
+      { label: "Requests", value: "live" },
+      { label: "Mentors", value: "live" }
     ],
     primaryAction: { href: "/mentorship/find", label: "Find a mentor" },
     route: "/mentorship",
     secondaryAction: { href: "/mentorship/settings", label: "Mentor settings" },
     sourceExports: ["my_mentorships"],
     table: {
-      headers: ["Match", "Focus", "Status"],
+      headers: ["Capability", "Source", "Status"],
       rows: [
-        ["Amina and Chidi", "Social enterprise", "active"],
-        ["Jean and Fatou", "Public health", "pending"],
-        ["Lebo and Grace", "Civic data", "active"]
+        ["Mentor summary", "Mentorship API", "live"],
+        ["Request review", "Mentorship API", "live"],
+        ["Mentorship analytics", "Future reporting API", "not implemented"]
       ]
     },
     title: "My mentorships",
     workflow: ["Find mentor", "Request introduction", "Confirm match", "Track sessions"]
   },
   mentorshipFind: {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     description:
       "Mentor discovery surface with availability, sectors, languages, and mentoring strengths.",
     eyebrow: "Find a mentor",
     highlights: [
       {
-        body: "Search and filter mentors by sector, region, language, and support type.",
+        body: "Search and filter live mentor profiles by sector, country, expertise, and availability.",
         meta: "Discovery",
         title: "Mentor marketplace"
       },
       {
-        body: "Request actions are disabled until matching APIs are built.",
-        meta: "Safe",
-        title: "No fake requests"
+        body: "Load additional mentor pages using the API's pagination metadata.",
+        meta: "Pagination",
+        title: "Load more"
       },
       {
-        body: "Profile cards mirror the exported mentor finder structure.",
-        meta: "Parity",
-        title: "Responsive cards"
+        body: "Request actions route into the live mentorship request form.",
+        meta: "Request",
+        title: "Live handoff"
       }
     ],
     metrics: [
-      { label: "Mentors", value: "42" },
-      { label: "Sectors", value: "9" },
-      { label: "Languages", value: "6" }
+      { label: "Mentors", value: "live" },
+      { label: "Filters", value: "live" },
+      { label: "Pagination", value: "live" }
     ],
     primaryAction: { href: "/mentorship/request", label: "Request mentorship" },
     route: "/mentorship/find",
     sourceExports: ["find_a_mentor"],
     table: {
-      headers: ["Mentor", "Sector", "Availability"],
+      headers: ["Capability", "Source", "Status"],
       rows: [
-        ["Nadia Okeke", "Agritech", "2 slots"],
-        ["Samuel Mensah", "Governance", "1 slot"],
-        ["Aline Uwase", "Entrepreneurship", "waitlist"]
+        ["Mentor profile search", "Mentorship API", "live"],
+        ["Availability filters", "Mentorship API", "live"],
+        ["Load more mentors", "Mentorship API", "live"]
       ]
     },
     title: "Find a mentor",
     workflow: ["Filter mentors", "Review profile", "Request introduction", "Confirm terms"]
   },
   mentorshipRequest: {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     description:
       "Mentorship request form for goals, expectations, availability, and preferred mentor attributes.",
     eyebrow: "Request mentorship",
     highlights: [
       {
-        body: "Captures goals, timeline, focus area, and communication preferences.",
+        body: "Captures goals, focus area, and message for a live pending request.",
         meta: "Form",
         title: "Request intake"
       },
       {
-        body: "Submit is disabled until request persistence and notification workflows exist.",
-        meta: "Backend needed",
-        title: "Safe prototype"
+        body: "Submission persists through the mentorship request API.",
+        meta: "Live API",
+        title: "Request persistence"
       },
       {
-        body: "Designed to hand off into direct messaging once a request is accepted.",
-        meta: "Messaging",
-        title: "Future handoff"
+        body: "Notification and direct-message automation remain future enhancements.",
+        meta: "Future",
+        title: "Handoff backlog"
       }
     ],
     metrics: [
-      { label: "Fields", value: "8" },
-      { label: "Matching", value: "planned" },
-      { label: "Submit", value: "disabled" }
+      { label: "Mentor list", value: "live" },
+      { label: "Submit", value: "live" },
+      { label: "Review", value: "live" }
     ],
-    primaryAction: { disabled: true, label: "Send request" },
+    primaryAction: { href: "/mentorship/request", label: "Send request" },
     route: "/mentorship/request",
     sourceExports: ["request_mentorship"],
     table: {
-      headers: ["Section", "Purpose", "Status"],
+      headers: ["Capability", "Source", "Status"],
       rows: [
-        ["Goals", "Define outcomes", "ready"],
-        ["Availability", "Session cadence", "ready"],
-        ["Matching", "Preferred mentor", "backend needed"]
+        ["Mentor selector", "Mentorship API", "live"],
+        ["Request creation", "Mentorship API", "live"],
+        ["Accepted handoff automation", "Future messaging workflow", "not implemented"]
       ]
     },
     title: "Request mentorship",
     workflow: ["Describe goals", "Set cadence", "Pick mentor fit", "Submit"]
   },
   mentorshipSettings: {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     description:
       "Mentor availability and profile settings for members who want to support others.",
     eyebrow: "Mentor settings",
     highlights: [
       {
-        body: "Control mentor availability, preferred sectors, language, and capacity.",
+        body: "Control mentor availability, preferred sectors, countries, and capacity.",
         meta: "Settings",
         title: "Availability controls"
       },
       {
-        body: "Settings stay local to the prototype until mentorship profile APIs land.",
-        meta: "Backend needed",
-        title: "Persistence pending"
+        body: "Settings save through the live mentor profile API.",
+        meta: "Live API",
+        title: "Profile persistence"
       },
       {
         body: "Designed for future discovery ranking and request matching.",
@@ -1314,19 +1314,19 @@ export const featureScreens = {
       }
     ],
     metrics: [
-      { label: "Capacity", value: "2 slots" },
-      { label: "Visibility", value: "members" },
-      { label: "Save", value: "disabled" }
+      { label: "Capacity", value: "live" },
+      { label: "Visibility", value: "live" },
+      { label: "Save", value: "live" }
     ],
-    primaryAction: { disabled: true, label: "Save mentor profile" },
+    primaryAction: { href: "/mentorship/settings", label: "Save mentor profile" },
     route: "/mentorship/settings",
     sourceExports: ["mentor_settings_profile"],
     table: {
-      headers: ["Setting", "Current", "Status"],
+      headers: ["Capability", "Source", "Status"],
       rows: [
-        ["Accepting requests", "yes", "prototype"],
-        ["Focus sectors", "Agritech, governance", "prototype"],
-        ["Monthly capacity", "2 mentees", "prototype"]
+        ["Accepting requests", "Mentorship API", "live"],
+        ["Focus sectors", "Mentorship API", "live"],
+        ["Capacity", "Mentorship API", "live"]
       ]
     },
     title: "Mentor settings profile",

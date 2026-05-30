@@ -45,7 +45,7 @@ type SummaryState =
 
 type MentorListState =
   | { status: "loading" }
-  | { mentors: MentorProfile[]; status: "ready"; total: number }
+  | { hasMore: boolean; mentors: MentorProfile[]; status: "ready"; total: number }
   | { message: string; status: "error" };
 
 type MentorSettingsState =
@@ -101,6 +101,7 @@ const MEETING_OPTIONS: [string, string][] = [
   ["IN_PERSON", "In person"],
   ["PHONE", "Phone"]
 ];
+const MENTOR_PAGE_SIZE = 12;
 
 export function MentorshipHub() {
   const [state, setState] = useState<SummaryState>({ status: "loading" });
@@ -317,16 +318,20 @@ export function MentorDiscovery() {
     q: "",
     sector: ""
   });
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [offset, setOffset] = useState(0);
 
   const apiFilters = useMemo<MentorFilters>(
     () => ({
       availabilityStatus: filters.availabilityStatus || undefined,
       country: filters.country.trim() || undefined,
       expertise: filters.expertise.trim() || undefined,
+      limit: MENTOR_PAGE_SIZE,
+      offset,
       q: filters.q.trim() || undefined,
       sector: filters.sector.trim() || undefined
     }),
-    [filters]
+    [filters, offset]
   );
 
   useEffect(() => {
@@ -334,11 +339,21 @@ export function MentorDiscovery() {
     fetchMentors(apiFilters)
       .then((response) => {
         if (isMounted) {
-          setState({ mentors: response.mentors, status: "ready", total: response.total });
+          setState((current) => ({
+            hasMore: response.has_more,
+            mentors:
+              offset > 0 && current.status === "ready"
+                ? [...current.mentors, ...response.mentors]
+                : response.mentors,
+            status: "ready",
+            total: response.total
+          }));
+          setIsLoadingMore(false);
         }
       })
       .catch((caught) => {
         if (isMounted) {
+          setIsLoadingMore(false);
           setState({
             message: caught instanceof Error ? caught.message : "Mentors could not be loaded.",
             status: "error"
@@ -348,11 +363,18 @@ export function MentorDiscovery() {
     return () => {
       isMounted = false;
     };
-  }, [apiFilters]);
+  }, [apiFilters, offset]);
 
   function updateFilter(patch: Partial<typeof filters>) {
     setState({ status: "loading" });
+    setIsLoadingMore(false);
+    setOffset(0);
     setFilters((current) => ({ ...current, ...patch }));
+  }
+
+  function loadMoreMentors(currentCount: number) {
+    setIsLoadingMore(true);
+    setOffset(currentCount);
   }
 
   return (
@@ -421,6 +443,19 @@ export function MentorDiscovery() {
               ) : (
                 <EmptyPanel label="No mentors match the current filters." />
               )}
+              {state.hasMore ? (
+                <button
+                  className="focus-ring inline-flex min-h-11 w-fit items-center justify-center gap-2 rounded-lg border border-border bg-white px-4 text-sm font-bold text-ink transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={isLoadingMore}
+                  onClick={() => loadMoreMentors(state.mentors.length)}
+                  type="button"
+                >
+                  {isLoadingMore ? (
+                    <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
+                  ) : null}
+                  {isLoadingMore ? "Loading more mentors" : "Load more mentors"}
+                </button>
+              ) : null}
             </section>
           ) : null}
         </div>
