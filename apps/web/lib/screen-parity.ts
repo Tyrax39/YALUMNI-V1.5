@@ -234,28 +234,28 @@ export const screenParityRecords: ScreenParityRecord[] = [
     status: "route-complete prototype"
   },
   {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     exportFolder: "election_hub",
-    notes: "Member elections hub is route-complete with fixture election data.",
+    notes: "Member elections hub uses live election API data with paginated load-more behavior.",
     route: "/elections",
-    status: "route-complete prototype"
+    status: "live route"
   },
   {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     exportFolder: "election_results_audit",
-    notes: "Member-facing results and audit trail preview.",
+    notes: "Member-facing results route uses live election results and quorum data.",
     route: "/elections/[electionId]/results",
-    status: "route-complete prototype"
+    status: "live route"
   },
   {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     exportFolder: "election_voting_details",
-    notes: "Voting detail route is present with ballot actions disabled.",
+    notes: "Voting route submits live eligible-voter ballots through the election API.",
     route: "/elections/[electionId]/vote",
-    status: "route-complete prototype"
+    status: "live route"
   },
   {
     backendDependencyStatus: "implemented",
@@ -1796,85 +1796,85 @@ export const featureScreens = {
     workflow: ["Payment success", "Receipt created", "Ledger updated", "Treasury review"]
   },
   electionsHub: {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     description:
-      "Member election hub for active ballots, candidate information, voting details, and results/audit reports.",
+      "Member election hub for active ballots, candidate information, voting details, and results/audit reports backed by the live election API.",
     eyebrow: "Elections",
     highlights: [
       {
-        body: "Members can see active, upcoming, and closed elections.",
+        body: "Members can see live active, closed, and archived elections with load-more pagination.",
         meta: "Governance",
         title: "Election discovery"
       },
       {
-        body: "Voting and results routes exist for design and route QA.",
-        meta: "Route parity",
+        body: "Voting and results routes now use the same backend election records.",
+        meta: "Live API",
         title: "Full member surface"
       },
       {
-        body: "Ballot casting, voter rolls, and audit ledgers require backend work.",
-        meta: "Backend needed",
-        title: "Fixture election data"
+        body: "Nomination workflows, certified exports, and dedicated admin detail routes remain follow-up work.",
+        meta: "Future hardening",
+        title: "Advanced governance gaps"
       }
     ],
     metrics: [
-      { label: "Active elections", value: "2" },
-      { label: "Eligible voters", value: "3.8k" },
-      { label: "Turnout", value: "61%" }
+      { label: "Data", value: "live" },
+      { label: "Page size", value: "12" },
+      { label: "Voting", value: "API" }
     ],
-    primaryAction: { href: "/elections/chapter-council-2026/vote", label: "View ballot" },
+    primaryAction: { href: "/elections", label: "Browse elections" },
     route: "/elections",
     sourceExports: ["election_hub"],
     table: {
       headers: ["Election", "Window", "Status"],
       rows: [
-        ["Chapter council 2026", "May 18-22", "active"],
-        ["Treasurer by-election", "June 4-5", "upcoming"],
-        ["Programs committee", "closed", "results ready"]
+        ["Election list", "GET /api/v1/elections", "live"],
+        ["Ballot route", "POST /api/v1/elections/{id}/vote", "live"],
+        ["Results route", "GET /api/v1/elections/{id}/results", "live"]
       ]
     },
     title: "Election hub",
     workflow: ["Check eligibility", "Review candidates", "Vote", "Review results"]
   },
   electionDetail: {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     description:
-      "Election overview with eligibility, candidate summary, voting window, and governance rules.",
+      "Election overview with live eligibility, candidate summary, voting window, and governance rules.",
     eyebrow: "Election detail",
     highlights: [
       {
-        body: "Central route links members to voting and results once each phase opens.",
+        body: "Central route links members to live voting and results once each phase opens.",
         meta: "Governance",
         title: "Election overview"
       },
       {
-        body: "Eligibility and privacy copy are visible now for policy review.",
+        body: "Eligibility, vote state, and candidate counts are returned from the election API.",
         meta: "Trust",
         title: "Rules surfaced"
       },
       {
-        body: "Backend election state and ballots are pending.",
-        meta: "Backend needed",
-        title: "Prototype data"
+        body: "Admin detail subroutes and certified audit exports are still future hardening.",
+        meta: "Future hardening",
+        title: "Advanced admin gaps"
       }
     ],
     metrics: [
-      { label: "Candidates", value: "8" },
-      { label: "Window", value: "5 days" },
-      { label: "Status", value: "active" }
+      { label: "Candidates", value: "live" },
+      { label: "Window", value: "live" },
+      { label: "Eligibility", value: "live" }
     ],
-    primaryAction: { href: "/elections/chapter-council-2026/vote", label: "Open voting details" },
+    primaryAction: { href: "/elections", label: "Open elections hub" },
     route: "/elections/[electionId]",
     secondaryAction: { href: "/elections/chapter-council-2026/results", label: "Results audit" },
     sourceExports: ["election_hub"],
     table: {
       headers: ["Rule", "Detail", "Status"],
       rows: [
-        ["Eligibility", "Verified members only", "planned"],
-        ["Ballot privacy", "Anonymous ballot ledger", "planned"],
-        ["Audit", "Results report after close", "prototype"]
+        ["Eligibility", "Verified members on voter roll", "live"],
+        ["Ballot privacy", "One vote per eligible voter", "live"],
+        ["Audit", "Admin audit trail endpoint", "live foundation"]
       ]
     },
     title: "Chapter council election 2026",
@@ -1923,84 +1923,84 @@ export const featureScreens = {
     workflow: ["Review governance", "Request admin support", "Create in admin", "Publish election"]
   },
   electionVote: {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     description:
-      "Voting details route with ballot instructions, candidates, integrity copy, and disabled cast-vote action.",
+      "Voting details route with ballot instructions, candidates, integrity copy, and live cast-vote action.",
     eyebrow: "Voting",
     highlights: [
       {
-        body: "Candidate choices and privacy assurances are shown as code-native UI.",
+        body: "Candidate choices are loaded from the election API.",
         meta: "Ballot",
         title: "Vote detail"
       },
       {
-        body: "Vote submission is disabled until secure ballot APIs are built.",
+        body: "Vote submission uses the live eligible-voter ballot endpoint.",
         meta: "Security",
-        title: "No fake voting"
+        title: "Live vote casting"
       },
       {
-        body: "Designed to connect to admin privacy and voter roll controls.",
+        body: "The route respects voter-roll eligibility and duplicate-vote protection.",
         meta: "Audit",
         title: "Integrity-aware"
       }
     ],
     metrics: [
-      { label: "Candidates", value: "8" },
-      { label: "Eligible", value: "3.8k" },
-      { label: "Vote", value: "disabled" }
+      { label: "Candidates", value: "live" },
+      { label: "Eligible", value: "live" },
+      { label: "Vote", value: "enabled" }
     ],
-    primaryAction: { disabled: true, label: "Cast vote" },
+    primaryAction: { href: "/elections", label: "Find eligible ballots" },
     route: "/elections/[electionId]/vote",
     sourceExports: ["election_voting_details"],
     table: {
       headers: ["Candidate", "Region", "Status"],
       rows: [
-        ["Amina Mensah", "West Africa", "approved"],
-        ["Jean Niyonzima", "East Africa", "approved"],
-        ["Thandi Dlamini", "Southern Africa", "approved"]
+        ["Candidate list", "Election candidates API", "live"],
+        ["Eligibility", "Election voter-roll API", "live"],
+        ["Vote record", "Election vote API", "live"]
       ]
     },
     title: "Election voting details",
     workflow: ["Confirm eligibility", "Review candidates", "Select candidate", "Cast secure vote"]
   },
   electionResults: {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     description:
-      "Member-facing election results and audit route with turnout, winner summary, and audit notes.",
+      "Member-facing election results route with live vote totals, candidate percentages, and quorum status.",
     eyebrow: "Results audit",
     highlights: [
       {
-        body: "Results are separated from vote casting and include integrity context.",
+        body: "Results are separated from vote casting and use the live results endpoint.",
         meta: "Transparency",
         title: "Audit-first results"
       },
       {
-        body: "Designed to connect with admin audit report and ballot controls.",
+        body: "Results include eligible-voter counts, total votes, candidate shares, and quorum status.",
         meta: "Governance",
         title: "Cross-linked"
       },
       {
-        body: "Numbers are fixture-only until election ledger APIs exist.",
-        meta: "Fixture",
-        title: "No real tally"
+        body: "Certified report exports and dispute handling remain later governance hardening.",
+        meta: "Future hardening",
+        title: "Audit exports pending"
       }
     ],
     metrics: [
-      { label: "Turnout", value: "61%" },
-      { label: "Ballots", value: "2,318" },
-      { label: "Audit status", value: "clean" }
+      { label: "Turnout", value: "live" },
+      { label: "Ballots", value: "live" },
+      { label: "Quorum", value: "live" }
     ],
-    primaryAction: { href: "/admin/elections/chapter-council-2026/audit", label: "Admin audit report" },
+    primaryAction: { href: "/elections", label: "Open elections hub" },
     route: "/elections/[electionId]/results",
     sourceExports: ["election_results_audit"],
     table: {
       headers: ["Candidate", "Votes", "Share"],
       rows: [
-        ["Amina Mensah", "1,046", "45.1%"],
-        ["Jean Niyonzima", "876", "37.8%"],
-        ["Thandi Dlamini", "396", "17.1%"]
+        ["Candidate totals", "Election results API", "live"],
+        ["Quorum", "Election results API", "live"],
+        ["Admin audit", "Election audit API", "live foundation"]
       ]
     },
     title: "Election results audit",

@@ -30,7 +30,7 @@ import { AppShell } from "@/components/platform/app-shell";
 
 type ElectionListState =
   | { status: "loading" }
-  | { elections: ElectionItem[]; status: "ready"; total: number }
+  | { elections: ElectionItem[]; hasMore: boolean; status: "ready"; total: number }
   | { message: string; status: "error" };
 
 type ElectionDetailState =
@@ -71,21 +71,35 @@ const INITIAL_ELECTION_FORM: ElectionForm = {
   title: ""
 };
 
+const ELECTION_PAGE_SIZE = 12;
+
 export function ElectionsHub() {
   const [state, setState] = useState<ElectionListState>({ status: "loading" });
   const [statusFilter, setStatusFilter] = useState("");
+  const [offset, setOffset] = useState(0);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
-    fetchElections({ status: statusFilter || undefined })
+    fetchElections({ limit: ELECTION_PAGE_SIZE, offset, status: statusFilter || undefined })
       .then((response) => {
         if (isMounted) {
-          setState({ elections: response.elections, status: "ready", total: response.total });
+          setState((current) => ({
+            elections:
+              offset > 0 && current.status === "ready"
+                ? [...current.elections, ...response.elections]
+                : response.elections,
+            hasMore: response.has_more,
+            status: "ready",
+            total: response.total
+          }));
+          setIsLoadingMore(false);
         }
       })
       .catch((caught) => {
         if (isMounted) {
+          setIsLoadingMore(false);
           setState({
             message: caught instanceof Error ? caught.message : "Elections could not be loaded.",
             status: "error"
@@ -95,7 +109,7 @@ export function ElectionsHub() {
     return () => {
       isMounted = false;
     };
-  }, [reloadKey, statusFilter]);
+  }, [offset, reloadKey, statusFilter]);
 
   return (
     <AppShell
@@ -105,6 +119,8 @@ export function ElectionsHub() {
             className="focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-border bg-white px-4 text-sm font-bold text-ink transition hover:border-primary hover:text-primary"
             onClick={() => {
               setState({ status: "loading" });
+              setIsLoadingMore(false);
+              setOffset(0);
               setReloadKey((current) => current + 1);
             }}
             type="button"
@@ -139,6 +155,8 @@ export function ElectionsHub() {
                 className="min-h-11 rounded-lg border border-border bg-white px-3 text-sm font-bold text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
                 onChange={(event) => {
                   setState({ status: "loading" });
+                  setIsLoadingMore(false);
+                  setOffset(0);
                   setStatusFilter(event.target.value);
                 }}
                 value={statusFilter}
@@ -163,6 +181,20 @@ export function ElectionsHub() {
               ) : (
                 <EmptyPanel label="No elections are visible yet." />
               )}
+              {state.hasMore ? (
+                <button
+                  className="focus-ring mx-auto inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-border bg-white px-4 text-sm font-bold text-ink transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={isLoadingMore}
+                  onClick={() => {
+                    setIsLoadingMore(true);
+                    setOffset(state.elections.length);
+                  }}
+                  type="button"
+                >
+                  {isLoadingMore ? <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" /> : null}
+                  {isLoadingMore ? "Loading more elections" : "Load more elections"}
+                </button>
+              ) : null}
             </section>
           ) : null}
         </div>

@@ -39,9 +39,9 @@ Audit date: 2026-05-08
 | `direct_message_detail_desktop` | `/messages/[conversationId]` | responsive reference | live API | implemented | Desktop detail maps to the same route. |
 | `election_admin_dashboard` | `/admin/elections` | route-complete prototype | fixture | not implemented | Admin election dashboard. |
 | `election_audit_results_report` | `/admin/elections/[electionId]/audit` | route-complete prototype | fixture | not implemented | Admin audit report. |
-| `election_hub` | `/elections` | route-complete prototype | fixture | not implemented | Member election hub. |
-| `election_results_audit` | `/elections/[electionId]/results` | route-complete prototype | fixture | not implemented | Member results audit. |
-| `election_voting_details` | `/elections/[electionId]/vote` | route-complete prototype | fixture | not implemented | Voting detail route with disabled cast action. |
+| `election_hub` | `/elections` | live route | live API | implemented | Member election hub uses the live election API with paginated load-more behavior. |
+| `election_results_audit` | `/elections/[electionId]/results` | live route | live API | implemented | Member results route uses live election results and quorum data. |
+| `election_voting_details` | `/elections/[electionId]/vote` | live route | live API | implemented | Voting route submits live eligible-voter ballots through the election API. |
 | `find_a_mentor` | `/mentorship/find` | live route | live API | implemented | Mentor discovery route uses live mentor profiles, filters, and paginated load-more behavior. |
 | `initiative_details` | `/initiatives/[initiativeId]` | live route | live API | implemented | Initiative detail route backed by live initiative and milestone records. |
 | `initiative_hub` | `/initiatives` | live route | live API | implemented | Initiative hub backed by live initiative search and current-user initiatives. |
@@ -89,6 +89,6 @@ These routes were necessary to map every export cleanly:
 
 ## Current Backend Gap Summary
 
-- Implemented live modules: auth, profile, program affiliation, verification, directory, MWF alumni directory cache, communities, direct messages, notifications, admin overview, admin verification, admin moderation, audit log, notification digests, opportunities, resources, success stories, events, initiatives, mentorship.
-- Missing backend modules: contributions/payments/receipts, elections/voter rolls/ballots/audits, chapter analytics, treasury.
+- Implemented live modules: auth, profile, program affiliation, verification, directory, MWF alumni directory cache, communities, direct messages, notifications, admin overview, admin verification, admin moderation, audit log, notification digests, opportunities, resources, success stories, events, initiatives, mentorship, member elections, and the separate admin-console election lifecycle/voter-roll tools.
+- Missing backend modules: contributions/payments/receipts, chapter analytics, treasury, plus advanced election workflows such as nominations, certified audit exports, chapter/cohort voter-roll imports, and dedicated admin detail subroutes beyond the consolidated admin-console panel.
 - Current route parity status: frontend routes exist for all exported screens; data is live only where the backend already exists.
