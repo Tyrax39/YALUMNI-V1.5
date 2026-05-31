@@ -18,6 +18,7 @@ from app.modules.elections.schemas import (
     ElectionAuditResponse,
     ElectionCandidateCreate,
     ElectionCandidateResponse,
+    ElectionCandidateStatusAction,
     ElectionCreate,
     ElectionListResponse,
     ElectionPrivacyResponse,
@@ -42,6 +43,7 @@ ELECTION_STATUSES = {"ARCHIVED", "CLOSED", "DRAFT", "OPEN"}
 ELECTION_SCOPES = {"CHAPTER", "COMMITTEE", "PLATFORM", "REGIONAL"}
 RESULTS_VISIBILITY = {"AFTER_CLOSE", "LIVE"}
 ACTIVE_CANDIDATE_STATUS = "ACTIVE"
+CANDIDATE_STATUSES = {ACTIVE_CANDIDATE_STATUS, "REJECTED"}
 ELIGIBLE_VOTER_STATUS = "ELIGIBLE"
 
 
@@ -453,10 +455,11 @@ def list_candidates(
     election = _get_election_or_404(db, election_id)
     _ensure_visible(election, current_user)
     counts = _candidate_vote_counts(db, election.id)
+    query = select(ElectionCandidate).where(ElectionCandidate.election_id == election.id)
+    if not _is_election_admin(current_user):
+        query = query.where(ElectionCandidate.status == ACTIVE_CANDIDATE_STATUS)
     candidates = db.scalars(
-        select(ElectionCandidate)
-        .where(ElectionCandidate.election_id == election.id)
-        .order_by(ElectionCandidate.sort_order.asc(), ElectionCandidate.created_at.asc())
+        query.order_by(ElectionCandidate.sort_order.asc(), ElectionCandidate.created_at.asc())
     ).all()
     return [
         _serialize_candidate(candidate, vote_count=counts.get(candidate.id, 0))
@@ -507,6 +510,57 @@ def add_candidate(
         current_user,
         "elections.candidate_added",
         {"candidate_id": str(candidate.id), "election_id": str(election.id)},
+    )
+    db.commit()
+    return _serialize_candidate(candidate)
+
+
+@router.patch(
+    "/admin/{election_id}/candidates/{candidate_id}",
+    response_model=ElectionCandidateResponse,
+)
+def update_candidate_status(
+    election_id: uuid.UUID,
+    candidate_id: uuid.UUID,
+    payload: ElectionCandidateStatusAction,
+    request: Request,
+    current_user: Annotated[User, Depends(election_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> ElectionCandidateResponse:
+    election = _get_election_or_404(db, election_id)
+    if election.status != "DRAFT":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Candidates can only be reviewed while the election is in draft",
+        )
+    if payload.status not in CANDIDATE_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid candidate status",
+        )
+    candidate = db.scalar(
+        select(ElectionCandidate).where(
+            ElectionCandidate.election_id == election.id,
+            ElectionCandidate.id == candidate_id,
+        )
+    )
+    if candidate is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Candidate not found")
+
+    previous_status = candidate.status
+    candidate.status = payload.status
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "elections.candidate_status_changed",
+        {
+            "candidate_id": str(candidate.id),
+            "election_id": str(election.id),
+            "note": payload.note,
+            "previous_status": previous_status,
+            "status": candidate.status,
+        },
     )
     db.commit()
     return _serialize_candidate(candidate)
@@ -757,7 +811,10 @@ def get_results(
     total_votes = sum(counts.values())
     candidates = db.scalars(
         select(ElectionCandidate)
-        .where(ElectionCandidate.election_id == election.id)
+        .where(
+            ElectionCandidate.election_id == election.id,
+            ElectionCandidate.status == ACTIVE_CANDIDATE_STATUS,
+        )
         .order_by(ElectionCandidate.sort_order.asc(), ElectionCandidate.created_at.asc())
     ).all()
     serialized = []

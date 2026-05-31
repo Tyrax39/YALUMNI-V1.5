@@ -68,6 +68,27 @@ class ElectionCandidateCreate(BaseModel):
         return normalized or None
 
 
+class ElectionCandidateStatusAction(BaseModel):
+    status: str = Field(max_length=40)
+    note: str | None = Field(default=None, max_length=2000)
+
+    @field_validator("status")
+    @classmethod
+    def normalize_status(cls, value: str) -> str:
+        normalized = value.strip().upper().replace(" ", "_").replace("-", "_")
+        if not normalized:
+            raise ValueError("Candidate status is required")
+        return normalized
+
+    @field_validator("note")
+    @classmethod
+    def normalize_note(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+
 class ElectionVoterRollUpsert(BaseModel):
     emails: list[str] = Field(min_length=1, max_length=500)
 

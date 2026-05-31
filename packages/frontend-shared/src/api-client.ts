@@ -622,6 +622,11 @@ export type ElectionCandidatePayload = {
   user_email?: string | null;
 };
 
+export type ElectionCandidateStatusPayload = {
+  note?: string | null;
+  status: string;
+};
+
 export type ElectionFilters = {
   limit?: number;
   offset?: number;
@@ -1359,6 +1364,18 @@ export function addElectionCandidate(
   return mutateJson<ElectionCandidate>(
     `/api/backend/api/v1/elections/admin/${encodeURIComponent(electionId)}/candidates`,
     "POST",
+    payload
+  );
+}
+
+export function updateElectionCandidateStatus(
+  electionId: string,
+  candidateId: string,
+  payload: ElectionCandidateStatusPayload
+): Promise<ElectionCandidate> {
+  return mutateJson<ElectionCandidate>(
+    `/api/backend/api/v1/elections/admin/${encodeURIComponent(electionId)}/candidates/${encodeURIComponent(candidateId)}`,
+    "PATCH",
     payload
   );
 }

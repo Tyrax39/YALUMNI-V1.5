@@ -122,10 +122,10 @@ export const screenParityRecords: ScreenParityRecord[] = [
     status: "route-complete prototype"
   },
   {
-    backendDependencyStatus: "not implemented",
+    backendDependencyStatus: "partially implemented",
     dataSource: "fixture",
     exportFolder: "candidate_review_queue",
-    notes: "Candidate review queue for future elections backend.",
+    notes: "Legacy route remains a fixture reference; live draft-only candidate approve/reject controls exist in the separate admin console.",
     route: "/admin/elections/[electionId]/candidates",
     status: "route-complete prototype"
   },
@@ -2266,7 +2266,7 @@ export const featureScreens = {
     workflow: ["Review candidates", "Lock voter roll", "Open voting", "Publish audit"]
   },
   adminElectionCandidates: {
-    backendDependencyStatus: "not implemented",
+    backendDependencyStatus: "partially implemented",
     dataSource: "fixture",
     description:
       "Candidate review queue for election admins, including eligibility checks, statements, and decision notes.",
@@ -2278,9 +2278,9 @@ export const featureScreens = {
         title: "Candidate governance"
       },
       {
-        body: "Decision actions remain disabled while election APIs are pending.",
-        meta: "Backend needed",
-        title: "Safe review"
+        body: "The separate admin console can approve or reject draft candidates through the live election API.",
+        meta: "Live admin console",
+        title: "Draft review available"
       },
       {
         body: "Designed for audit notes and candidate statement validation.",
@@ -2293,7 +2293,7 @@ export const featureScreens = {
       { label: "Approved", value: "14" },
       { label: "Needs info", value: "3" }
     ],
-    primaryAction: { disabled: true, label: "Approve candidate" },
+    primaryAction: { disabled: true, label: "Use admin console" },
     requiresAdmin: true,
     route: "/admin/elections/[electionId]/candidates",
     sourceExports: ["candidate_review_queue"],

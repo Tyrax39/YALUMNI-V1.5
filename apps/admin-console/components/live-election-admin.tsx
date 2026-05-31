@@ -3,13 +3,15 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import {
+  CheckCircle2,
   Loader2,
   Plus,
   RefreshCcw,
   ShieldCheck,
   UserRoundPlus,
   UsersRound,
-  Vote
+  Vote,
+  XCircle
 } from "lucide-react";
 import {
   type ElectionCandidate,
@@ -22,6 +24,7 @@ import {
   fetchElectionCandidates,
   fetchElectionVoterRoll,
   openElection,
+  updateElectionCandidateStatus,
   upsertElectionVoterRoll
 } from "@yalumni/frontend-shared";
 
@@ -172,6 +175,26 @@ export function LiveElectionAdmin() {
       setReloadKey((current) => current + 1);
     } catch (caught) {
       setMessage(caught instanceof Error ? caught.message : "Candidate could not be added.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function handleCandidateStatus(candidateId: string, status: "ACTIVE" | "REJECTED") {
+    if (!selectedElectionId) {
+      return;
+    }
+    setBusy(`candidate:${candidateId}:${status}`);
+    setMessage(null);
+    try {
+      await updateElectionCandidateStatus(selectedElectionId, candidateId, {
+        note: `Marked ${status.toLowerCase()} from admin console.`,
+        status
+      });
+      setMessage(`Candidate ${status === "ACTIVE" ? "approved" : "rejected"}.`);
+      setReloadKey((current) => current + 1);
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : "Candidate status could not be updated.");
     } finally {
       setBusy(null);
     }
@@ -364,8 +387,57 @@ export function LiveElectionAdmin() {
             {candidates.length ? (
               candidates.map((candidate) => (
                 <div className="rounded-lg border border-border bg-surface p-3" key={candidate.id}>
-                  <p className="text-sm font-bold text-ink">{candidate.display_name}</p>
-                  <p className="mt-1 text-xs font-semibold text-muted">{candidate.headline ?? "Candidate"}</p>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-bold text-ink">{candidate.display_name}</p>
+                      <p className="mt-1 text-xs font-semibold text-muted">{candidate.headline ?? "Candidate"}</p>
+                    </div>
+                    <span className="rounded-md border border-border bg-white px-2 py-1 text-[11px] font-bold uppercase tracking-[0.08em] text-muted">
+                      {formatStatus(candidate.status)}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      className="focus-ring inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-border bg-white px-3 text-xs font-bold text-ink disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={
+                        !selectedElection ||
+                        selectedElection.status !== "DRAFT" ||
+                        candidate.status === "ACTIVE" ||
+                        busy === `candidate:${candidate.id}:ACTIVE`
+                      }
+                      onClick={() => {
+                        void handleCandidateStatus(candidate.id, "ACTIVE");
+                      }}
+                      type="button"
+                    >
+                      {busy === `candidate:${candidate.id}:ACTIVE` ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                      )}
+                      Approve
+                    </button>
+                    <button
+                      className="focus-ring inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-border bg-white px-3 text-xs font-bold text-ink disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={
+                        !selectedElection ||
+                        selectedElection.status !== "DRAFT" ||
+                        candidate.status === "REJECTED" ||
+                        busy === `candidate:${candidate.id}:REJECTED`
+                      }
+                      onClick={() => {
+                        void handleCandidateStatus(candidate.id, "REJECTED");
+                      }}
+                      type="button"
+                    >
+                      {busy === `candidate:${candidate.id}:REJECTED` ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <XCircle className="h-3.5 w-3.5" />
+                      )}
+                      Reject
+                    </button>
+                  </div>
                 </div>
               ))
             ) : (

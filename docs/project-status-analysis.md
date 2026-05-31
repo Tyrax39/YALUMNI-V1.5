@@ -8,6 +8,32 @@ The current Yalumni project is a useful Laravel 9 alumni management platform, bu
 
 The V1.5 implementation is active in `D:\YALUMNI-V1.5`. The new repository now contains a platform foundation with a FastAPI backend, Next.js web shell, Docker Compose, CI workflow, shared packages, copied YALUMNI logo assets, and documentation.
 
+## Current V1.5 Implementation Update: 2026-05-31 Election Candidate Review Controls Slice
+
+Completed after the member elections pagination slice:
+
+- Added draft-only election candidate status review to the live elections API,
+  allowing election admins to mark candidates `ACTIVE` or `REJECTED`.
+- Added the corresponding admin-console controls inside the existing live
+  election lifecycle panel, preserving the separate admin app on `3011`.
+- Added focused API coverage for candidate rejection, re-approval, non-admin
+  denial, and open-election lockout.
+
+Current plan position:
+
+- Post-MVP elections moves from roughly 68% to roughly 70% complete because the
+  candidate review/control gap now has a live API and admin-console path.
+- Overall 24-week MVP-plus implementation remains roughly 79% complete as an
+  estimate because this was a focused governance hardening slice, not a new
+  product module.
+
+Frozen/protected behavior:
+
+- Existing election creation, candidate creation, voter roll, open/close,
+  voting, results, and audit behavior remain unchanged.
+- Candidate review is intentionally limited to draft elections; open and closed
+  elections still reject candidate status changes.
+
 ## Current V1.5 Implementation Update: 2026-05-30 Member Elections Pagination Slice
 
 Completed after the mentor discovery pagination slice:

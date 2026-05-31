@@ -159,6 +159,44 @@ def test_election_lifecycle_voter_roll_vote_and_results(client: TestClient) -> N
     assert candidate_response.status_code == 201
     candidate = candidate_response.json()
     assert candidate["display_name"] == "Amina Leader"
+    assert candidate["status"] == "ACTIVE"
+
+    reject_candidate = client.patch(
+        f"/api/v1/elections/admin/{election['id']}/candidates/{candidate['id']}",
+        headers=admin_headers,
+        json={"note": "Candidate did not pass review.", "status": "REJECTED"},
+    )
+    assert reject_candidate.status_code == 200
+    assert reject_candidate.json()["status"] == "REJECTED"
+
+    open_without_active_candidate = client.post(
+        f"/api/v1/elections/admin/{election['id']}/open",
+        headers=admin_headers,
+        json={"note": "Try opening before candidate approval."},
+    )
+    assert open_without_active_candidate.status_code == 409
+
+    approve_candidate = client.patch(
+        f"/api/v1/elections/admin/{election['id']}/candidates/{candidate['id']}",
+        headers=admin_headers,
+        json={"note": "Candidate approved.", "status": "ACTIVE"},
+    )
+    assert approve_candidate.status_code == 200
+    assert approve_candidate.json()["status"] == "ACTIVE"
+
+    rejected_candidate_response = client.post(
+        f"/api/v1/elections/admin/{election['id']}/candidates",
+        headers=admin_headers,
+        json=candidate_payload("Rejected Candidate"),
+    )
+    assert rejected_candidate_response.status_code == 201
+    rejected_candidate = rejected_candidate_response.json()
+    rejected_candidate_review = client.patch(
+        f"/api/v1/elections/admin/{election['id']}/candidates/{rejected_candidate['id']}",
+        headers=admin_headers,
+        json={"status": "REJECTED"},
+    )
+    assert rejected_candidate_review.status_code == 200
 
     roll_response = client.post(
         f"/api/v1/elections/admin/{election['id']}/voter-roll",
@@ -183,6 +221,20 @@ def test_election_lifecycle_voter_roll_vote_and_results(client: TestClient) -> N
     assert member_list.status_code == 200
     assert member_list.json()["total"] == 1
     assert member_list.json()["elections"][0]["can_vote"] is True
+
+    member_candidates = client.get(
+        f"/api/v1/elections/{election['id']}/candidates",
+        headers=voter_headers,
+    )
+    assert member_candidates.status_code == 200
+    assert [item["id"] for item in member_candidates.json()] == [candidate["id"]]
+
+    admin_candidates = client.get(
+        f"/api/v1/elections/{election['id']}/candidates",
+        headers=admin_headers,
+    )
+    assert admin_candidates.status_code == 200
+    assert {item["status"] for item in admin_candidates.json()} == {"ACTIVE", "REJECTED"}
 
     hidden_results = client.get(
         f"/api/v1/elections/{election['id']}/results",
@@ -234,6 +286,7 @@ def test_election_lifecycle_voter_roll_vote_and_results(client: TestClient) -> N
     assert audit_response.status_code == 200
     assert {event["event_type"] for event in audit_response.json()["events"]} >= {
         "elections.created",
+        "elections.candidate_status_changed",
         "elections.opened",
         "elections.closed",
     }
@@ -269,6 +322,13 @@ def test_election_admin_role_and_voter_eligibility_are_enforced(client: TestClie
     assert candidate_response.status_code == 201
     candidate_id = candidate_response.json()["id"]
 
+    denied_candidate_review = client.patch(
+        f"/api/v1/elections/admin/{election_id}/candidates/{candidate_id}",
+        headers=member_headers,
+        json={"status": "REJECTED"},
+    )
+    assert denied_candidate_review.status_code == 403
+
     roll_response = client.post(
         f"/api/v1/elections/admin/{election_id}/voter-roll",
         headers=admin_headers,
@@ -282,6 +342,13 @@ def test_election_admin_role_and_voter_eligibility_are_enforced(client: TestClie
         json={},
     )
     assert open_response.status_code == 200
+
+    locked_candidate_review = client.patch(
+        f"/api/v1/elections/admin/{election_id}/candidates/{candidate_id}",
+        headers=admin_headers,
+        json={"status": "REJECTED"},
+    )
+    assert locked_candidate_review.status_code == 409
 
     ineligible_vote = client.post(
         f"/api/v1/elections/{election_id}/vote",

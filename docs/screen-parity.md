@@ -25,7 +25,7 @@ Audit date: 2026-05-08
 | `alumni_verification` | `/verification` | live route | live API | implemented | Focused Step 3 credentials submission screen uses current verification request and evidence APIs. |
 | `annual_gathering_hub` | `/events/[eventId]` | live route | live API | implemented | Event detail and gathering hub backed by live event records. |
 | `ballot_privacy_integrity_controls` | `/admin/elections/[electionId]/privacy` | route-complete prototype | fixture | not implemented | Ballot privacy and integrity controls. |
-| `candidate_review_queue` | `/admin/elections/[electionId]/candidates` | route-complete prototype | fixture | not implemented | Candidate review queue. |
+| `candidate_review_queue` | `/admin/elections/[electionId]/candidates` | route-complete prototype | fixture | partially implemented | Candidate review route remains a fixture reference; live draft-only candidate approve/reject controls exist in the separate admin console. |
 | `chapter_analytics_dashboard` | `/admin/chapters/[chapterId]/analytics` | route-complete prototype | fixture | not implemented | Chapter analytics shell. |
 | `chapter_leader_dashboard` | `/communities/[communityId]/dashboard` | route-complete prototype | fixture | partially implemented | Community backend exists; leader dashboard is fixture-enhanced. |
 | `complete_your_profile` | `/profile/setup` | live route | live API | implemented | Focused Step 4 setup screen uses current profile and photo APIs. |
@@ -90,5 +90,5 @@ These routes were necessary to map every export cleanly:
 ## Current Backend Gap Summary
 
 - Implemented live modules: auth, profile, program affiliation, verification, directory, MWF alumni directory cache, communities, direct messages, notifications, admin overview, admin verification, admin moderation, audit log, notification digests, opportunities, resources, success stories, events, initiatives, mentorship, member elections, and the separate admin-console election lifecycle/voter-roll tools.
-- Missing backend modules: contributions/payments/receipts, chapter analytics, treasury, plus advanced election workflows such as nominations, certified audit exports, chapter/cohort voter-roll imports, and dedicated admin detail subroutes beyond the consolidated admin-console panel.
+- Missing backend modules: contributions/payments/receipts, chapter analytics, treasury, plus advanced election workflows such as nominations, certified audit exports, chapter/cohort voter-roll imports, richer candidate nomination states beyond draft approve/reject, and dedicated admin detail subroutes beyond the consolidated admin-console panel.
 - Current route parity status: frontend routes exist for all exported screens; data is live only where the backend already exists.
