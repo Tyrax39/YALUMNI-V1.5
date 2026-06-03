@@ -8,6 +8,31 @@ The current Yalumni project is a useful Laravel 9 alumni management platform, bu
 
 The V1.5 implementation is active in `D:\YALUMNI-V1.5`. The new repository now contains a platform foundation with a FastAPI backend, Next.js web shell, Docker Compose, CI workflow, shared packages, copied YALUMNI logo assets, and documentation.
 
+## Current V1.5 Implementation Update: 2026-06-03 Election Audit CSV Export Slice
+
+Completed after the election candidate review controls slice:
+
+- Added a role-protected election audit CSV export endpoint backed by the
+  existing live election audit events.
+- Added an admin-console `Audit CSV` download action for the selected election
+  in the existing live election lifecycle panel.
+- Added focused API coverage for CSV headers, event content, attachment
+  filename, and non-admin denial.
+
+Current plan position:
+
+- Post-MVP elections moves from roughly 70% to roughly 72% complete because
+  election audit evidence is now exportable as a live CSV foundation.
+- Overall 24-week MVP-plus implementation remains roughly 79% complete as an
+  estimate because signed/certified audit packets, dispute workflows, and
+  dedicated legacy admin detail routes are still future work.
+
+Frozen/protected behavior:
+
+- Existing JSON audit responses, election lifecycle operations, candidate
+  review, voter rolls, vote casting, and results behavior remain unchanged.
+- The new export reuses the existing audit event scope and RBAC boundary.
+
 ## Current V1.5 Implementation Update: 2026-05-31 Election Candidate Review Controls Slice
 
 Completed after the member elections pagination slice:

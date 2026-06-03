@@ -1,9 +1,12 @@
+import csv
 import hashlib
+import io
+import json
 import uuid
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
@@ -365,6 +368,24 @@ def _apply_filters(
     if normalized_status and normalized_status != "ALL":
         query = query.where(Election.status == normalized_status)
     return query
+
+
+def _election_audit_events(db: Session, election_id: uuid.UUID) -> list[SecurityEvent]:
+    events = db.scalars(
+        select(SecurityEvent)
+        .options(joinedload(SecurityEvent.user))
+        .where(
+            SecurityEvent.event_type.ilike("elections.%"),
+            SecurityEvent.metadata_json.is_not(None),
+        )
+        .order_by(SecurityEvent.created_at.desc())
+        .limit(100)
+    ).all()
+    return [
+        event
+        for event in events
+        if str(event.metadata_json.get("election_id")) == str(election_id)
+    ]
 
 
 @router.get("", response_model=ElectionListResponse)
@@ -848,21 +869,7 @@ def get_election_audit(
     db: Annotated[Session, Depends(get_db_session)],
 ) -> ElectionAuditResponse:
     election = _get_election_or_404(db, election_id)
-    events = db.scalars(
-        select(SecurityEvent)
-        .options(joinedload(SecurityEvent.user))
-        .where(
-            SecurityEvent.event_type.ilike("elections.%"),
-            SecurityEvent.metadata_json.is_not(None),
-        )
-        .order_by(SecurityEvent.created_at.desc())
-        .limit(100)
-    ).all()
-    filtered = [
-        event
-        for event in events
-        if str(event.metadata_json.get("election_id")) == str(election.id)
-    ]
+    events = _election_audit_events(db, election.id)
     return ElectionAuditResponse(
         election=_serialize_election(db, election, current_user),
         events=[
@@ -874,8 +881,45 @@ def get_election_audit(
                 user_display_name=event.user.display_name if event.user else None,
                 user_email=event.user.email if event.user else None,
             )
-            for event in filtered
+            for event in events
         ],
+    )
+
+
+@router.get("/admin/{election_id}/audit.csv")
+def export_election_audit_csv(
+    election_id: uuid.UUID,
+    current_user: Annotated[User, Depends(election_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> Response:
+    election = _get_election_or_404(db, election_id)
+    events = _election_audit_events(db, election.id)
+    output = io.StringIO()
+    writer = csv.writer(output, lineterminator="\n")
+    writer.writerow(
+        [
+            "created_at",
+            "event_type",
+            "user_email",
+            "user_display_name",
+            "metadata",
+        ]
+    )
+    for event in events:
+        writer.writerow(
+            [
+                event.created_at.isoformat(),
+                event.event_type,
+                event.user.email if event.user else "",
+                event.user.display_name if event.user else "",
+                json.dumps(event.metadata_json or {}, sort_keys=True),
+            ]
+        )
+    filename = f"election-audit-{election.id}.csv"
+    return Response(
+        content=output.getvalue(),
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        media_type="text/csv",
     )
 
 

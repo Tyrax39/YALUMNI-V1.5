@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import {
   CheckCircle2,
+  Download,
   Loader2,
   Plus,
   RefreshCcw,
@@ -20,6 +21,7 @@ import {
   addElectionCandidate,
   closeElection,
   createElection,
+  electionAuditExportUrl,
   fetchAdminElections,
   fetchElectionCandidates,
   fetchElectionVoterRoll,
@@ -306,6 +308,16 @@ export function LiveElectionAdmin() {
                   {busy === "close" ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
                   Close
                 </button>
+                {selectedElection ? (
+                  <a
+                    className="focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-border bg-white px-4 text-sm font-bold text-ink"
+                    download
+                    href={electionAuditExportUrl(selectedElection.id)}
+                  >
+                    <Download aria-hidden="true" className="h-4 w-4" />
+                    Audit CSV
+                  </a>
+                ) : null}
               </div>
             </div>
 

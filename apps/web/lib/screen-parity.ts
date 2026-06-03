@@ -226,10 +226,10 @@ export const screenParityRecords: ScreenParityRecord[] = [
     status: "route-complete prototype"
   },
   {
-    backendDependencyStatus: "not implemented",
+    backendDependencyStatus: "partially implemented",
     dataSource: "fixture",
     exportFolder: "election_audit_results_report",
-    notes: "Admin election audit report shell until election audit APIs land.",
+    notes: "Legacy route remains a fixture reference; live admin-console election audit CSV export is available.",
     route: "/admin/elections/[electionId]/audit",
     status: "route-complete prototype"
   },
@@ -1813,7 +1813,7 @@ export const featureScreens = {
         title: "Full member surface"
       },
       {
-        body: "Nomination workflows, certified exports, and dedicated admin detail routes remain follow-up work.",
+        body: "Nomination workflows, signed audit packets, and dedicated admin detail routes remain follow-up work.",
         meta: "Future hardening",
         title: "Advanced governance gaps"
       }
@@ -1855,7 +1855,7 @@ export const featureScreens = {
         title: "Rules surfaced"
       },
       {
-        body: "Admin detail subroutes and certified audit exports are still future hardening.",
+        body: "Admin detail subroutes and signed audit packets are still future hardening.",
         meta: "Future hardening",
         title: "Advanced admin gaps"
       }
@@ -1982,7 +1982,7 @@ export const featureScreens = {
         title: "Cross-linked"
       },
       {
-        body: "Certified report exports and dispute handling remain later governance hardening.",
+        body: "Signed report packets and dispute handling remain later governance hardening.",
         meta: "Future hardening",
         title: "Audit exports pending"
       }
@@ -2395,7 +2395,7 @@ export const featureScreens = {
     workflow: ["Review policy", "Set privacy", "Lock controls", "Audit"]
   },
   adminElectionAudit: {
-    backendDependencyStatus: "not implemented",
+    backendDependencyStatus: "partially implemented",
     dataSource: "fixture",
     description:
       "Election audit report route for turnout, tally confirmation, privacy checks, and publication notes.",
@@ -2407,9 +2407,9 @@ export const featureScreens = {
         title: "Results report"
       },
       {
-        body: "Export and publish controls are disabled until audit records exist.",
-        meta: "Backend needed",
-        title: "Safe report"
+        body: "The separate admin console can download a CSV export from live audit events.",
+        meta: "Live admin console",
+        title: "CSV export available"
       },
       {
         body: "Complements the member-facing results audit route.",
@@ -2422,7 +2422,7 @@ export const featureScreens = {
       { label: "Exceptions", value: "0" },
       { label: "Status", value: "clean" }
     ],
-    primaryAction: { disabled: true, label: "Publish audit report" },
+    primaryAction: { disabled: true, label: "Use admin console" },
     requiresAdmin: true,
     route: "/admin/elections/[electionId]/audit",
     sourceExports: ["election_audit_results_report"],

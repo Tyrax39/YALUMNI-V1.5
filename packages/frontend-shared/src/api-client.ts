@@ -1433,6 +1433,10 @@ export function fetchElectionAudit(electionId: string): Promise<ElectionAuditRes
   );
 }
 
+export function electionAuditExportUrl(electionId: string): string {
+  return `/api/backend/api/v1/elections/admin/${encodeURIComponent(electionId)}/audit.csv`;
+}
+
 export function fetchElectionPrivacy(electionId: string): Promise<ElectionPrivacyResponse> {
   return fetchJson<ElectionPrivacyResponse>(
     `/api/backend/api/v1/elections/admin/${encodeURIComponent(electionId)}/privacy`

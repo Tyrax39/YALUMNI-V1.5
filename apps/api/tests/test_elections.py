@@ -291,6 +291,18 @@ def test_election_lifecycle_voter_roll_vote_and_results(client: TestClient) -> N
         "elections.closed",
     }
 
+    audit_export_response = client.get(
+        f"/api/v1/elections/admin/{election['id']}/audit.csv",
+        headers=admin_headers,
+    )
+    assert audit_export_response.status_code == 200
+    assert audit_export_response.headers["content-type"].startswith("text/csv")
+    assert "election-audit-" in audit_export_response.headers["content-disposition"]
+    audit_csv = audit_export_response.text
+    assert audit_csv.startswith("created_at,event_type,user_email,user_display_name,metadata")
+    assert "elections.created" in audit_csv
+    assert "elections.closed" in audit_csv
+
 
 def test_election_admin_role_and_voter_eligibility_are_enforced(client: TestClient) -> None:
     admin_headers = create_admin(client, "elections.reviewer@example.com")
@@ -362,3 +374,9 @@ def test_election_admin_role_and_voter_eligibility_are_enforced(client: TestClie
         headers=member_headers,
     )
     assert denied_roll.status_code == 403
+
+    denied_audit_export = client.get(
+        f"/api/v1/elections/admin/{election_id}/audit.csv",
+        headers=member_headers,
+    )
+    assert denied_audit_export.status_code == 403
