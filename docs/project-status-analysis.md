@@ -8,6 +8,34 @@ The current Yalumni project is a useful Laravel 9 alumni management platform, bu
 
 The V1.5 implementation is active in `D:\YALUMNI-V1.5`. The new repository now contains a platform foundation with a FastAPI backend, Next.js web shell, Docker Compose, CI workflow, shared packages, copied YALUMNI logo assets, and documentation.
 
+## Current V1.5 Implementation Update: 2026-06-04 Staging Auth Parity And QA Account Expansion Slice
+
+Completed after the election audit CSV export slice:
+
+- Added ten managed `@yalumni.org` QA accounts covering super-admin,
+  platform-admin, verification, moderation, finance, elections,
+  verified-member, and applicant flows.
+- Extended the existing test-account seed script with an explicit
+  `--allow-nonlocal` flag so the same managed QA account set can be seeded into
+  staging deliberately without weakening normal runtime behavior.
+- Confirmed the Azure login mismatch as a staging platform-owner password drift
+  issue rather than a frontend-route or API-base-URL regression.
+
+Current plan position:
+
+- Deployment readiness improves materially because staging now has a repeatable
+  path for QA account provisioning and owner-password parity verification.
+- Overall 24-week MVP-plus implementation moves from roughly 79% to roughly 80%
+  complete as an estimate because this slice closes an operational gap but does
+  not introduce a new product module.
+
+Frozen/protected behavior:
+
+- Existing auth routes, login payloads, role restoration, and frontend auth
+  flows remain unchanged.
+- Runtime test-account auto-seeding remains local-only unless an operator
+  deliberately runs the seed script with `--allow-nonlocal`.
+
 ## Current V1.5 Implementation Update: 2026-06-03 Election Audit CSV Export Slice
 
 Completed after the election candidate review controls slice:

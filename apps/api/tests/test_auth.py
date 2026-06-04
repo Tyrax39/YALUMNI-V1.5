@@ -300,6 +300,15 @@ def test_test_account_seed_creates_role_shaped_local_accounts() -> None:
         assert role_map["test.verifier@yalumni.local"] == {"VERIFICATION_ADMIN"}
         assert role_map["test.alumni@yalumni.local"] == {"ALUMNI_MEMBER"}
         assert role_map["test.applicant@yalumni.local"] == {"UNVERIFIED_USER"}
+        assert role_map["qa.superadmin@yalumni.org"] == {
+            "SUPER_ADMIN",
+            "PLATFORM_ADMIN",
+            "VERIFICATION_ADMIN",
+        }
+        assert role_map["qa.finance@yalumni.org"] == {"FINANCE_ADMIN"}
+        assert role_map["qa.elections@yalumni.org"] == {"ELECTION_ADMIN"}
+        assert role_map["qa.member1@yalumni.org"] == {"ALUMNI_MEMBER"}
+        assert role_map["qa.applicant2@yalumni.org"] == {"UNVERIFIED_USER"}
 
         profile = db.scalar(
             select(alumni_models.AlumniProfile)
@@ -309,6 +318,15 @@ def test_test_account_seed_creates_role_shaped_local_accounts() -> None:
         assert profile is not None
         assert profile.visibility["email"] is False
         assert profile.program_affiliations[0].program_name == ("YALI Regional Leadership Center")
+
+        qa_profile = db.scalar(
+            select(alumni_models.AlumniProfile)
+            .join(auth_models.User)
+            .where(auth_models.User.email == "qa.member1@yalumni.org")
+        )
+        assert qa_profile is not None
+        assert qa_profile.country == "Kenya"
+        assert qa_profile.program_affiliations[0].program_name == "Mandela Washington Fellowship"
 
         ensure_test_accounts(db, "RotatedTestPass123!")
         total_users = db.scalar(select(func.count(auth_models.User.id)))
