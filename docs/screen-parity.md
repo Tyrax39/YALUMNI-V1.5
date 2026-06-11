@@ -29,7 +29,7 @@ Audit date: 2026-05-08
 | `chapter_analytics_dashboard` | `/admin/chapters/[chapterId]/analytics` | route-complete prototype | fixture | not implemented | Chapter analytics shell. |
 | `chapter_leader_dashboard` | `/communities/[communityId]/dashboard` | route-complete prototype | fixture | partially implemented | Community backend exists; leader dashboard is fixture-enhanced. |
 | `complete_your_profile` | `/profile/setup` | live route | live API | implemented | Focused Step 4 setup screen uses current profile and photo APIs. |
-| `contribute_a_resource` | `/resources/new` | route-complete prototype | fixture | not implemented | Resource contribution form. |
+| `contribute_a_resource` | `/resources/new` | live route | live API | implemented | Resource contribution form submits member resources into the moderation workflow. |
 | `contribute_to_campaign` | `/contributions/[campaignId]/pay` | route-complete prototype | fixture | not implemented | Contribution checkout shell, no real payments. |
 | `contribution_campaign_detail` | `/contributions/[campaignId]` | route-complete prototype | fixture | not implemented | Contribution campaign detail. |
 | `contribution_receipt` | `/contributions/receipts/[receiptId]` | route-complete prototype | fixture | not implemented | Receipt preview route. |
@@ -54,23 +54,23 @@ Audit date: 2026-05-08
 | `mobile_onboarding_flow` | `/onboarding` | code-native route | live API | partially implemented | Mirrors the mobile onboarding export, reads live profile and verification status, and links into live profile, affiliation, and verification routes. |
 | `my_mentorships` | `/mentorship` | live route | live API | implemented | Mentorship hub uses live mentor summary, incoming requests, outgoing requests, and recommended mentors. |
 | `new_message` | `/messages/new` | live route | live API | implemented | Live member search and conversation composer. |
-| `opportunities_marketplace` | `/opportunities` | route-complete prototype | fixture | not implemented | Opportunities marketplace. |
-| `opportunity_details` | `/opportunities/[opportunityId]` | route-complete prototype | fixture | not implemented | Opportunity detail. |
+| `opportunities_marketplace` | `/opportunities` | live route | live API | implemented | Opportunities marketplace uses live API filters, member submissions, and paginated load-more behavior. |
+| `opportunity_details` | `/opportunities/[opportunityId]` | live route | live API | implemented | Opportunity detail reads live opportunity records. |
 | `opportunity_moderation_queue` | `/admin/opportunities` | route-complete prototype | fixture | not implemented | Admin opportunity moderation. |
-| `post_new_opportunity` | `/opportunities/new` | route-complete prototype | fixture | not implemented | Opportunity posting form. |
+| `post_new_opportunity` | `/opportunities/new` | live route | live API | implemented | Opportunity posting form submits member opportunities into the moderation workflow. |
 | `program_affiliation` | `/profile/program-affiliation` | live route | live API | implemented | Focused Step 2 program selection route uses the existing profile affiliation API. |
 | `propose_new_initiative` | `/initiatives/new` | live route | live API | implemented | Initiative proposal form creates live member initiatives with optional first milestone. |
 | `public_landing_page` | `/` | live route | live API | implemented | Existing code-native public landing. |
 | `public_landing_page_mobile` | `/` | responsive reference | live API | implemented | Mobile landing reference. |
 | `request_mentorship` | `/mentorship/request` | live route | live API | implemented | Mentorship request form creates live pending mentorship requests. |
-| `resource_detail_view` | `/resources/[resourceId]` | route-complete prototype | fixture | not implemented | Resource detail. |
-| `resource_library_hub` | `/resources` | route-complete prototype | fixture | not implemented | Resource library. |
+| `resource_detail_view` | `/resources/[resourceId]` | live route | live API | implemented | Resource detail reads live resource records. |
+| `resource_library_hub` | `/resources` | live route | live API | implemented | Resource library uses live API filters, member submissions, and paginated load-more behavior. |
 | `resource_management_console` | `/admin/resources` | route-complete prototype | fixture | not implemented | Admin resource management. |
 | `rsvp_attendee_management` | `/events/[eventId]/attendees` | live route | live API | implemented | RSVP and attendee management backed by event attendee records. |
-| `share_your_impact_story` | `/success-stories/new` | route-complete prototype | fixture | not implemented | Impact story submission form. |
-| `story_detail_empowering_agri_tech_in_zambia` | `/success-stories/[storyId]` | route-complete prototype | fixture | not implemented | Story detail. |
-| `success_stories_hub` | `/success-stories` | route-complete prototype | fixture | not implemented | Success stories hub. |
-| `success_stories_hub_mobile` | `/success-stories` | responsive reference | fixture | not implemented | Mobile success stories reference. |
+| `share_your_impact_story` | `/success-stories/new` | live route | live API | implemented | Impact story submission form submits stories into the moderation workflow. |
+| `story_detail_empowering_agri_tech_in_zambia` | `/success-stories/[storyId]` | live route | live API | implemented | Story detail reads live success-story records. |
+| `success_stories_hub` | `/success-stories` | live route | live API | implemented | Success stories hub uses live API filters, member submissions, and paginated load-more behavior. |
+| `success_stories_hub_mobile` | `/success-stories` | responsive reference | live API | implemented | Mobile behavior is folded into the live success stories route. |
 | `success_story_moderation_queue` | `/admin/success-stories` | route-complete prototype | fixture | not implemented | Admin story moderation. |
 | `treasurer_dashboard` | `/admin/treasury` | route-complete prototype | fixture | not implemented | Treasurer dashboard. |
 | `voter_roll_management` | `/admin/elections/[electionId]/voter-roll` | route-complete prototype | fixture | not implemented | Voter roll management. |

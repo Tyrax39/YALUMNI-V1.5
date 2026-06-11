@@ -31,6 +31,7 @@ import { AppShell } from "@/components/platform/app-shell";
 type ListState =
   | { status: "loading" }
   | {
+      hasMore: boolean;
       mine: Opportunity[];
       opportunities: Opportunity[];
       status: "ready";
@@ -69,6 +70,7 @@ const INITIAL_FORM: FormState = {
 
 export function OpportunityHub() {
   const [state, setState] = useState<ListState>({ status: "loading" });
+  const [loadingMore, setLoadingMore] = useState(false);
   const [filters, setFilters] = useState({
     country: "",
     opportunityType: "",
@@ -99,6 +101,7 @@ export function OpportunityHub() {
           return;
         }
         setState({
+          hasMore: published.has_more,
           mine: mine.opportunities,
           opportunities: published.opportunities,
           status: "ready",
@@ -119,6 +122,40 @@ export function OpportunityHub() {
       isMounted = false;
     };
   }, [apiFilters, reloadKey]);
+
+  async function loadMore() {
+    if (state.status !== "ready" || loadingMore) {
+      return;
+    }
+
+    setLoadingMore(true);
+    try {
+      const nextPage = await fetchOpportunities({
+        ...apiFilters,
+        limit: 12,
+        offset: state.opportunities.length
+      });
+      setState((current) => {
+        if (current.status !== "ready") {
+          return current;
+        }
+        return {
+          ...current,
+          hasMore: nextPage.has_more,
+          opportunities: [...current.opportunities, ...nextPage.opportunities],
+          total: nextPage.total
+        };
+      });
+    } catch (caught) {
+      setState({
+        message:
+          caught instanceof Error ? caught.message : "More opportunities could not be loaded.",
+        status: "error"
+      });
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   return (
     <AppShell
@@ -221,9 +258,26 @@ export function OpportunityHub() {
                   </p>
                 </div>
                 {state.opportunities.length ? (
-                  state.opportunities.map((opportunity) => (
-                    <OpportunityCard key={opportunity.id} opportunity={opportunity} />
-                  ))
+                  <>
+                    {state.opportunities.map((opportunity) => (
+                      <OpportunityCard key={opportunity.id} opportunity={opportunity} />
+                    ))}
+                    {state.hasMore ? (
+                      <button
+                        className="focus-ring inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-border bg-white px-4 text-sm font-bold text-ink transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={loadingMore}
+                        onClick={loadMore}
+                        type="button"
+                      >
+                        {loadingMore ? (
+                          <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <RefreshCcw aria-hidden="true" className="h-4 w-4" />
+                        )}
+                        {loadingMore ? "Loading" : "Load more opportunities"}
+                      </button>
+                    ) : null}
+                  </>
                 ) : (
                   <EmptyPanel label="No published opportunities match the current filters." />
                 )}

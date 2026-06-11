@@ -8,6 +8,32 @@ The current Yalumni project is a useful Laravel 9 alumni management platform, bu
 
 The V1.5 implementation is active in `D:\YALUMNI-V1.5`. The new repository now contains a platform foundation with a FastAPI backend, Next.js web shell, Docker Compose, CI workflow, shared packages, copied YALUMNI logo assets, and documentation.
 
+## Current V1.5 Implementation Update: 2026-06-11 Live Content Hub Pagination Slice
+
+Completed after the staging auth parity and deployment parity work:
+
+- Added paginated load-more behavior to the live member resources,
+  opportunities, and success stories hubs using the existing API `limit`,
+  `offset`, and `has_more` response contracts.
+- Reconciled stale screen parity entries for resources, opportunities, and
+  success stories. These member routes are live API-backed, while the remaining
+  gaps are deeper admin detail routes and production-hardening workflows.
+
+Current plan position:
+
+- Content discovery and publishing moves from partially reconciled to stronger
+  live member coverage because published lists no longer stop at the first
+  server page.
+- Overall 24-week MVP-plus implementation moves from roughly 80% to roughly 81%
+  complete as an estimate.
+
+Frozen/protected behavior:
+
+- Existing filters, member submissions, detail routes, admin review queues, auth
+  gates, and API contracts remain unchanged.
+- The new behavior only appends the next live API page when the backend reports
+  `has_more`.
+
 ## Current V1.5 Implementation Update: 2026-06-04 Staging Auth Parity And QA Account Expansion Slice
 
 Completed after the election audit CSV export slice:

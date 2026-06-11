@@ -154,12 +154,12 @@ export const screenParityRecords: ScreenParityRecord[] = [
     status: "live route"
   },
   {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     exportFolder: "contribute_a_resource",
-    notes: "Resource contribution form shell until resources backend lands.",
+    notes: "Resource contribution form submits live member resources into the moderation workflow.",
     route: "/resources/new",
-    status: "route-complete prototype"
+    status: "live route"
   },
   {
     backendDependencyStatus: "not implemented",
@@ -354,20 +354,20 @@ export const screenParityRecords: ScreenParityRecord[] = [
     status: "live route"
   },
   {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     exportFolder: "opportunities_marketplace",
-    notes: "Opportunities marketplace uses fixture opportunity listings.",
+    notes: "Opportunities marketplace uses the live API with filters, member submissions, and paginated load-more behavior.",
     route: "/opportunities",
-    status: "route-complete prototype"
+    status: "live route"
   },
   {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     exportFolder: "opportunity_details",
-    notes: "Opportunity detail route uses fixture deadline and application data.",
+    notes: "Opportunity detail route reads live opportunity records.",
     route: "/opportunities/[opportunityId]",
-    status: "route-complete prototype"
+    status: "live route"
   },
   {
     backendDependencyStatus: "not implemented",
@@ -378,12 +378,12 @@ export const screenParityRecords: ScreenParityRecord[] = [
     status: "route-complete prototype"
   },
   {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     exportFolder: "post_new_opportunity",
-    notes: "Opportunity posting form is present with disabled submit.",
+    notes: "Opportunity posting form submits live member opportunities into the moderation workflow.",
     route: "/opportunities/new",
-    status: "route-complete prototype"
+    status: "live route"
   },
   {
     backendDependencyStatus: "implemented",
@@ -426,20 +426,20 @@ export const screenParityRecords: ScreenParityRecord[] = [
     status: "live route"
   },
   {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     exportFolder: "resource_detail_view",
-    notes: "Resource detail route uses fixture resource metadata.",
+    notes: "Resource detail route reads live resource records.",
     route: "/resources/[resourceId]",
-    status: "route-complete prototype"
+    status: "live route"
   },
   {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     exportFolder: "resource_library_hub",
-    notes: "Resource library hub uses fixture categories and resources.",
+    notes: "Resource library hub uses the live API with filters, member submissions, and paginated load-more behavior.",
     route: "/resources",
-    status: "route-complete prototype"
+    status: "live route"
   },
   {
     backendDependencyStatus: "not implemented",
@@ -458,34 +458,34 @@ export const screenParityRecords: ScreenParityRecord[] = [
     status: "route-complete prototype"
   },
   {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     exportFolder: "share_your_impact_story",
-    notes: "Impact story submission form is present with disabled submit.",
+    notes: "Impact story submission form submits live stories into the moderation workflow.",
     route: "/success-stories/new",
-    status: "route-complete prototype"
+    status: "live route"
   },
   {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     exportFolder: "story_detail_empowering_agri_tech_in_zambia",
-    notes: "Story detail route uses fixture impact story data.",
+    notes: "Story detail route reads live success-story records.",
     route: "/success-stories/[storyId]",
-    status: "route-complete prototype"
+    status: "live route"
   },
   {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     exportFolder: "success_stories_hub",
-    notes: "Success stories hub uses fixture stories and filters.",
+    notes: "Success stories hub uses the live API with filters, member submissions, and paginated load-more behavior.",
     route: "/success-stories",
-    status: "route-complete prototype"
+    status: "live route"
   },
   {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     exportFolder: "success_stories_hub_mobile",
-    notes: "Mobile success stories export is a responsive reference.",
+    notes: "Mobile behavior is folded into the live success stories route.",
     route: "/success-stories",
     status: "responsive reference"
   },

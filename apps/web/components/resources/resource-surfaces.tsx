@@ -31,7 +31,13 @@ import { AppShell } from "@/components/platform/app-shell";
 
 type ListState =
   | { status: "loading" }
-  | { mine: ResourceItem[]; resources: ResourceItem[]; status: "ready"; total: number }
+  | {
+      hasMore: boolean;
+      mine: ResourceItem[];
+      resources: ResourceItem[];
+      status: "ready";
+      total: number;
+    }
   | { message: string; status: "error" };
 
 type DetailState =
@@ -63,6 +69,7 @@ const INITIAL_FORM: FormState = {
 
 export function ResourceHub() {
   const [state, setState] = useState<ListState>({ status: "loading" });
+  const [loadingMore, setLoadingMore] = useState(false);
   const [filters, setFilters] = useState({
     country: "",
     q: "",
@@ -95,6 +102,7 @@ export function ResourceHub() {
           return;
         }
         setState({
+          hasMore: published.has_more,
           mine: mine.resources,
           resources: published.resources,
           status: "ready",
@@ -119,6 +127,39 @@ export function ResourceHub() {
   function updateFilter(patch: Partial<typeof filters>) {
     setState({ status: "loading" });
     setFilters((current) => ({ ...current, ...patch }));
+  }
+
+  async function loadMore() {
+    if (state.status !== "ready" || loadingMore) {
+      return;
+    }
+
+    setLoadingMore(true);
+    try {
+      const nextPage = await fetchResources({
+        ...apiFilters,
+        limit: 12,
+        offset: state.resources.length
+      });
+      setState((current) => {
+        if (current.status !== "ready") {
+          return current;
+        }
+        return {
+          ...current,
+          hasMore: nextPage.has_more,
+          resources: [...current.resources, ...nextPage.resources],
+          total: nextPage.total
+        };
+      });
+    } catch (caught) {
+      setState({
+        message: caught instanceof Error ? caught.message : "More resources could not be loaded.",
+        status: "error"
+      });
+    } finally {
+      setLoadingMore(false);
+    }
   }
 
   return (
@@ -210,9 +251,26 @@ export function ResourceHub() {
                   </p>
                 </div>
                 {state.resources.length ? (
-                  state.resources.map((resource) => (
-                    <ResourceCard key={resource.id} resource={resource} />
-                  ))
+                  <>
+                    {state.resources.map((resource) => (
+                      <ResourceCard key={resource.id} resource={resource} />
+                    ))}
+                    {state.hasMore ? (
+                      <button
+                        className="focus-ring inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-border bg-white px-4 text-sm font-bold text-ink transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={loadingMore}
+                        onClick={loadMore}
+                        type="button"
+                      >
+                        {loadingMore ? (
+                          <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <RefreshCcw aria-hidden="true" className="h-4 w-4" />
+                        )}
+                        {loadingMore ? "Loading" : "Load more resources"}
+                      </button>
+                    ) : null}
+                  </>
                 ) : (
                   <EmptyPanel label="No published resources match the current filters." />
                 )}

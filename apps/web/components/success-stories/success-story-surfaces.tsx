@@ -32,7 +32,13 @@ import { AppShell } from "@/components/platform/app-shell";
 
 type ListState =
   | { status: "loading" }
-  | { mine: SuccessStory[]; stories: SuccessStory[]; status: "ready"; total: number }
+  | {
+      hasMore: boolean;
+      mine: SuccessStory[];
+      status: "ready";
+      stories: SuccessStory[];
+      total: number;
+    }
   | { message: string; status: "error" };
 
 type DetailState =
@@ -70,6 +76,7 @@ const INITIAL_FORM: FormState = {
 
 export function SuccessStoriesHub() {
   const [state, setState] = useState<ListState>({ status: "loading" });
+  const [loadingMore, setLoadingMore] = useState(false);
   const [filters, setFilters] = useState({
     country: "",
     program: "",
@@ -100,6 +107,7 @@ export function SuccessStoriesHub() {
           return;
         }
         setState({
+          hasMore: published.has_more,
           mine: mine.stories,
           status: "ready",
           stories: published.stories,
@@ -124,6 +132,40 @@ export function SuccessStoriesHub() {
   function updateFilter(patch: Partial<typeof filters>) {
     setState({ status: "loading" });
     setFilters((current) => ({ ...current, ...patch }));
+  }
+
+  async function loadMore() {
+    if (state.status !== "ready" || loadingMore) {
+      return;
+    }
+
+    setLoadingMore(true);
+    try {
+      const nextPage = await fetchSuccessStories({
+        ...apiFilters,
+        limit: 12,
+        offset: state.stories.length
+      });
+      setState((current) => {
+        if (current.status !== "ready") {
+          return current;
+        }
+        return {
+          ...current,
+          hasMore: nextPage.has_more,
+          stories: [...current.stories, ...nextPage.stories],
+          total: nextPage.total
+        };
+      });
+    } catch (caught) {
+      setState({
+        message:
+          caught instanceof Error ? caught.message : "More success stories could not be loaded.",
+        status: "error"
+      });
+    } finally {
+      setLoadingMore(false);
+    }
   }
 
   return (
@@ -211,7 +253,24 @@ export function SuccessStoriesHub() {
                   </p>
                 </div>
                 {state.stories.length ? (
-                  state.stories.map((story) => <StoryCard key={story.id} story={story} />)
+                  <>
+                    {state.stories.map((story) => <StoryCard key={story.id} story={story} />)}
+                    {state.hasMore ? (
+                      <button
+                        className="focus-ring inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-border bg-white px-4 text-sm font-bold text-ink transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={loadingMore}
+                        onClick={loadMore}
+                        type="button"
+                      >
+                        {loadingMore ? (
+                          <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <RefreshCcw aria-hidden="true" className="h-4 w-4" />
+                        )}
+                        {loadingMore ? "Loading" : "Load more stories"}
+                      </button>
+                    ) : null}
+                  </>
                 ) : (
                   <EmptyPanel label="No published stories match the current filters." />
                 )}
