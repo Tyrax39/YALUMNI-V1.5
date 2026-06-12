@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { AdminMessageModerationConsole } from "@/components/admin/admin-message-moderation-console";
 import { AdminModerationConsole } from "@/components/admin/admin-moderation-console";
 import { VerificationQueuePanel } from "@/components/admin/admin-console";
@@ -12,6 +13,7 @@ import { MessagingPanel } from "@/components/messages/messaging-panel";
 import { AppShell } from "@/components/platform/app-shell";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { ADMIN_ROLES, MEMBER_ACCESS_ROLES, isAdminRole } from "@yalumni/frontend-shared";
+import { useEffect } from "react";
 
 export function DirectoryRoutePage() {
   return (
@@ -153,4 +155,101 @@ export function AdminModerationRoutePage() {
       )}
     </AppShell>
   );
+}
+
+export function AdminConsoleRedirectRoutePage({
+  description,
+  eyebrow,
+  targetPath,
+  title
+}: {
+  description: string;
+  eyebrow: string;
+  targetPath: string;
+  title: string;
+}) {
+  return (
+    <ProtectedRoute
+      allowLocalAdminBootstrap
+      description={description}
+      requiredRoles={ADMIN_ROLES}
+      title={title}
+    >
+      {() => (
+        <AdminConsoleRedirectPanel
+          description={description}
+          eyebrow={eyebrow}
+          targetPath={targetPath}
+          title={title}
+        />
+      )}
+    </ProtectedRoute>
+  );
+}
+
+function AdminConsoleRedirectPanel({
+  description,
+  eyebrow,
+  targetPath,
+  title
+}: {
+  description: string;
+  eyebrow: string;
+  targetPath: string;
+  title: string;
+}) {
+  const targetUrl = resolveAdminConsoleUrl(targetPath);
+
+  useEffect(() => {
+    window.location.replace(targetUrl);
+  }, [targetUrl]);
+
+  return (
+    <section className="mx-auto flex min-h-[calc(100vh-76px)] max-w-5xl items-center px-5 py-12 sm:px-8">
+      <div className="w-full rounded-lg border border-border bg-white p-6 shadow-soft sm:p-8">
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-secondary">{eyebrow}</p>
+        <h1 className="mt-3 font-display text-3xl font-bold text-ink sm:text-4xl">{title}</h1>
+        <p className="mt-4 max-w-2xl text-base leading-7 text-muted">{description}</p>
+        <p className="mt-4 text-sm font-semibold text-muted">
+          Redirecting to the separate admin console...
+        </p>
+        <div className="mt-6">
+          <Link
+            className="focus-ring inline-flex rounded-lg bg-primary px-5 py-3 text-sm font-semibold text-white"
+            href={targetUrl}
+          >
+            Open admin console
+          </Link>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function resolveAdminConsoleUrl(targetPath: string): string {
+  const normalizedPath = targetPath.startsWith("/") ? targetPath : `/${targetPath}`;
+  const configuredBaseUrl = process.env.NEXT_PUBLIC_ADMIN_CONSOLE_BASE_URL?.replace(/\/$/, "");
+
+  if (configuredBaseUrl) {
+    return `${configuredBaseUrl}${normalizedPath}`;
+  }
+
+  if (typeof window === "undefined") {
+    return normalizedPath;
+  }
+
+  const { hostname, protocol } = window.location;
+  const currentPort = Number(window.location.port || 0);
+
+  if (hostname === "127.0.0.1" || hostname === "localhost") {
+    const adminPort =
+      currentPort === 3010 || currentPort === 3110 ? currentPort + 1 : 3011;
+    return `${protocol}//${hostname}:${adminPort}${normalizedPath}`;
+  }
+
+  if (hostname.includes("member")) {
+    return `${protocol}//${hostname.replace("member", "admin")}${normalizedPath}`;
+  }
+
+  return `${protocol}//${hostname}${normalizedPath}`;
 }

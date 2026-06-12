@@ -8,6 +8,35 @@ The current Yalumni project is a useful Laravel 9 alumni management platform, bu
 
 The V1.5 implementation is active in `D:\YALUMNI-V1.5`. The new repository now contains a platform foundation with a FastAPI backend, Next.js web shell, Docker Compose, CI workflow, shared packages, copied YALUMNI logo assets, and documentation.
 
+## Current V1.5 Implementation Update: 2026-06-12 Legacy Admin Content Route Handoff Slice
+
+Completed after the community leader dashboard live slice:
+
+- Replaced the stale member-app prototype routes for `/admin/opportunities`,
+  `/admin/resources`, and `/admin/success-stories` with guarded handoffs into
+  the separate RBAC admin console.
+- The handoff now preserves admin auth gating in the member app, then redirects
+  to the already-live admin-console moderation routes instead of rendering dead
+  prototype shells.
+- Added environment-aware admin-console URL resolution so local member-app
+  routes hand off to port `3011`, while deployed member hostnames can map from
+  `member` to `admin` without another hardcoded localhost-only redirect.
+
+Current plan position:
+
+- Route parity and runtime separation both improve because three legacy admin
+  routes now terminate in live admin functionality instead of fixture-backed
+  placeholders.
+- Overall 24-week MVP-plus implementation moves from roughly 82% to roughly 83%
+  complete as an estimate.
+
+Frozen/protected behavior:
+
+- Existing separate admin-console moderation queues, member publishing flows,
+  and backend moderation APIs remain unchanged.
+- The member app now serves only as a secure bridge for these three legacy
+  admin paths; no moderation data contract changed.
+
 ## Current V1.5 Implementation Update: 2026-06-12 Community Leader Dashboard Live Slice
 
 Completed after the live content hub pagination slice:

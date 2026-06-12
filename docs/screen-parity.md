@@ -56,7 +56,7 @@ Audit date: 2026-05-08
 | `new_message` | `/messages/new` | live route | live API | implemented | Live member search and conversation composer. |
 | `opportunities_marketplace` | `/opportunities` | live route | live API | implemented | Opportunities marketplace uses live API filters, member submissions, and paginated load-more behavior. |
 | `opportunity_details` | `/opportunities/[opportunityId]` | live route | live API | implemented | Opportunity detail reads live opportunity records. |
-| `opportunity_moderation_queue` | `/admin/opportunities` | route-complete prototype | fixture | not implemented | Admin opportunity moderation. |
+| `opportunity_moderation_queue` | `/admin/opportunities` | live redirect | live API | implemented | Legacy member-app route now hands off to the separate live admin console moderation queue. |
 | `post_new_opportunity` | `/opportunities/new` | live route | live API | implemented | Opportunity posting form submits member opportunities into the moderation workflow. |
 | `program_affiliation` | `/profile/program-affiliation` | live route | live API | implemented | Focused Step 2 program selection route uses the existing profile affiliation API. |
 | `propose_new_initiative` | `/initiatives/new` | live route | live API | implemented | Initiative proposal form creates live member initiatives with optional first milestone. |
@@ -65,13 +65,13 @@ Audit date: 2026-05-08
 | `request_mentorship` | `/mentorship/request` | live route | live API | implemented | Mentorship request form creates live pending mentorship requests. |
 | `resource_detail_view` | `/resources/[resourceId]` | live route | live API | implemented | Resource detail reads live resource records. |
 | `resource_library_hub` | `/resources` | live route | live API | implemented | Resource library uses live API filters, member submissions, and paginated load-more behavior. |
-| `resource_management_console` | `/admin/resources` | route-complete prototype | fixture | not implemented | Admin resource management. |
+| `resource_management_console` | `/admin/resources` | live redirect | live API | implemented | Legacy member-app route now hands off to the separate live admin console moderation queue. |
 | `rsvp_attendee_management` | `/events/[eventId]/attendees` | live route | live API | implemented | RSVP and attendee management backed by event attendee records. |
 | `share_your_impact_story` | `/success-stories/new` | live route | live API | implemented | Impact story submission form submits stories into the moderation workflow. |
 | `story_detail_empowering_agri_tech_in_zambia` | `/success-stories/[storyId]` | live route | live API | implemented | Story detail reads live success-story records. |
 | `success_stories_hub` | `/success-stories` | live route | live API | implemented | Success stories hub uses live API filters, member submissions, and paginated load-more behavior. |
 | `success_stories_hub_mobile` | `/success-stories` | responsive reference | live API | implemented | Mobile behavior is folded into the live success stories route. |
-| `success_story_moderation_queue` | `/admin/success-stories` | route-complete prototype | fixture | not implemented | Admin story moderation. |
+| `success_story_moderation_queue` | `/admin/success-stories` | live redirect | live API | implemented | Legacy member-app route now hands off to the separate live admin console moderation queue. |
 | `treasurer_dashboard` | `/admin/treasury` | route-complete prototype | fixture | not implemented | Treasurer dashboard. |
 | `voter_roll_management` | `/admin/elections/[electionId]/voter-roll` | route-complete prototype | fixture | not implemented | Voter roll management. |
 | `welcome_to_the_network` | `/verification/submitted` | code-native route | live API | implemented | Verification submitted screen reads live profile and verification status with first-action links into member routes. |

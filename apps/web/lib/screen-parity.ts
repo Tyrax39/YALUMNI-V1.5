@@ -370,12 +370,12 @@ export const screenParityRecords: ScreenParityRecord[] = [
     status: "live route"
   },
   {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     exportFolder: "opportunity_moderation_queue",
-    notes: "Admin opportunity moderation queue is fixture-backed.",
+    notes: "Legacy member-app route now hands off to the separate live admin console moderation queue.",
     route: "/admin/opportunities",
-    status: "route-complete prototype"
+    status: "live redirect"
   },
   {
     backendDependencyStatus: "implemented",
@@ -442,12 +442,12 @@ export const screenParityRecords: ScreenParityRecord[] = [
     status: "live route"
   },
   {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     exportFolder: "resource_management_console",
-    notes: "Admin resource management queue is fixture-backed.",
+    notes: "Legacy member-app route now hands off to the separate live admin console moderation queue.",
     route: "/admin/resources",
-    status: "route-complete prototype"
+    status: "live redirect"
   },
   {
     backendDependencyStatus: "not implemented",
@@ -490,12 +490,12 @@ export const screenParityRecords: ScreenParityRecord[] = [
     status: "responsive reference"
   },
   {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     exportFolder: "success_story_moderation_queue",
-    notes: "Admin story moderation queue is fixture-backed.",
+    notes: "Legacy member-app route now hands off to the separate live admin console moderation queue.",
     route: "/admin/success-stories",
-    status: "route-complete prototype"
+    status: "live redirect"
   },
   {
     backendDependencyStatus: "not implemented",
@@ -2007,133 +2007,133 @@ export const featureScreens = {
     workflow: ["Close polls", "Tally ballots", "Publish results", "Audit report"]
   },
   adminOpportunities: {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     description:
-      "Admin moderation queue for submitted opportunities, partner listings, deadlines, and trust review.",
+      "Legacy member-app route that now redirects admins into the live separate admin console opportunity moderation queue.",
     eyebrow: "Admin opportunities",
     highlights: [
       {
-        body: "Queue includes pending, approved, rejected, and expired opportunity states.",
-        meta: "Moderation",
-        title: "Listing review"
+        body: "Submitted opportunities are reviewed in the separate RBAC admin console.",
+        meta: "Live console",
+        title: "Operational moderation"
       },
       {
-        body: "Decision actions are disabled until opportunity moderation APIs exist.",
-        meta: "Backend needed",
-        title: "Safe admin prototype"
+        body: "The moderation API is already live in the admin app and publishes approved listings into the member marketplace.",
+        meta: "Live API",
+        title: "Publishing connected"
       },
       {
-        body: "Designed to connect to the public member marketplace.",
-        meta: "Publishing",
-        title: "Workflow-ready"
+        body: "This legacy route now exists as a secure handoff instead of a dead-end prototype.",
+        meta: "Route parity",
+        title: "Split-runtime aligned"
       }
     ],
     metrics: [
-      { label: "Pending", value: "11" },
-      { label: "Approved", value: "36" },
-      { label: "Expired", value: "4" }
+      { label: "Runtime", value: "3011" },
+      { label: "Review queue", value: "live" },
+      { label: "Publishing", value: "connected" }
     ],
-    primaryAction: { disabled: true, label: "Approve selected" },
+    primaryAction: { href: "http://127.0.0.1:3011/opportunities", label: "Open admin console" },
     requiresAdmin: true,
     route: "/admin/opportunities",
     sourceExports: ["opportunity_moderation_queue"],
     table: {
       headers: ["Listing", "Sponsor", "Status"],
       rows: [
-        ["Civic innovation grant", "Partner org", "pending"],
-        ["Climate fellowship", "Regional hub", "approved"],
-        ["Program manager role", "Chapter partner", "pending"]
+        ["Review queue", "Separate admin console", "live"],
+        ["Member publishing", "Opportunity API", "live"],
+        ["Legacy route", "Secure handoff", "active"]
       ]
     },
     title: "Opportunity moderation queue",
-    workflow: ["Review listing", "Check sponsor", "Approve or reject", "Publish"]
+    workflow: ["Authenticate as admin", "Redirect to admin console", "Review listing", "Publish"]
   },
   adminResources: {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     description:
-      "Admin resource management console for submitted resources, review notes, categories, and publishing state.",
+      "Legacy member-app route that now redirects admins into the live separate admin console resource moderation queue.",
     eyebrow: "Admin resources",
     highlights: [
       {
-        body: "Queue resources by submitted, approved, needs changes, and archived states.",
-        meta: "Content ops",
-        title: "Resource review"
+        body: "Submitted resources are reviewed in the separate RBAC admin console.",
+        meta: "Live console",
+        title: "Operational moderation"
       },
       {
-        body: "Approvals and file checks are disabled until resource APIs exist.",
-        meta: "Backend needed",
-        title: "Safe controls"
+        body: "The moderation API is already live in the admin app and publishes approved records into the member library.",
+        meta: "Live API",
+        title: "Publishing connected"
       },
       {
-        body: "Designed to publish into the member resource library.",
-        meta: "Library",
-        title: "Publishing path"
+        body: "This legacy route now exists as a secure handoff instead of a dead-end prototype.",
+        meta: "Route parity",
+        title: "Split-runtime aligned"
       }
     ],
     metrics: [
-      { label: "Pending", value: "9" },
-      { label: "Approved", value: "128" },
-      { label: "Needs changes", value: "3" }
+      { label: "Runtime", value: "3011" },
+      { label: "Review queue", value: "live" },
+      { label: "Publishing", value: "connected" }
     ],
-    primaryAction: { disabled: true, label: "Publish resource" },
+    primaryAction: { href: "http://127.0.0.1:3011/resources", label: "Open admin console" },
     requiresAdmin: true,
     route: "/admin/resources",
     sourceExports: ["resource_management_console"],
     table: {
       headers: ["Resource", "Contributor", "Status"],
       rows: [
-        ["Grant proposal toolkit", "Ghana chapter", "pending"],
-        ["Mentorship playbook", "Rwanda chapter", "approved"],
-        ["Event checklist", "Kenya chapter", "needs changes"]
+        ["Review queue", "Separate admin console", "live"],
+        ["Member publishing", "Resource API", "live"],
+        ["Legacy route", "Secure handoff", "active"]
       ]
     },
     title: "Resource management console",
-    workflow: ["Review submission", "Check metadata", "Approve", "Publish"]
+    workflow: ["Authenticate as admin", "Redirect to admin console", "Review resource", "Publish"]
   },
   adminSuccessStories: {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     description:
-      "Editorial moderation queue for submitted success stories, evidence, media rights, and publishing status.",
+      "Legacy member-app route that now redirects admins into the live separate admin console success story moderation queue.",
     eyebrow: "Admin stories",
     highlights: [
       {
-        body: "Queue supports editorial review, evidence checks, and publication decisions.",
-        meta: "Editorial",
-        title: "Story moderation"
+        body: "Submitted stories are reviewed in the separate RBAC admin console.",
+        meta: "Live console",
+        title: "Operational moderation"
       },
       {
-        body: "Publishing actions are disabled until story backend and media storage exist.",
-        meta: "Backend needed",
-        title: "Safe prototype"
+        body: "The moderation API is already live in the admin app and publishes approved stories into the member hub.",
+        meta: "Live API",
+        title: "Publishing connected"
       },
       {
-        body: "Designed to connect directly to the success stories hub.",
-        meta: "Publishing",
-        title: "Impact storytelling"
+        body: "This legacy route now exists as a secure handoff instead of a dead-end prototype.",
+        meta: "Route parity",
+        title: "Split-runtime aligned"
       }
     ],
     metrics: [
-      { label: "Pending", value: "6" },
-      { label: "Approved", value: "54" },
-      { label: "Needs edits", value: "4" }
+      { label: "Runtime", value: "3011" },
+      { label: "Review queue", value: "live" },
+      { label: "Publishing", value: "connected" }
     ],
-    primaryAction: { disabled: true, label: "Approve story" },
+    primaryAction: { href: "http://127.0.0.1:3011/success-stories", label: "Open admin console" },
     requiresAdmin: true,
     route: "/admin/success-stories",
     sourceExports: ["success_story_moderation_queue"],
     table: {
       headers: ["Story", "Country", "Status"],
       rows: [
-        ["Agri-tech in Zambia", "Zambia", "pending media"],
-        ["Girls in STEM bootcamp", "Nigeria", "needs edits"],
-        ["Open budget fellows", "Kenya", "approved"]
+        ["Review queue", "Separate admin console", "live"],
+        ["Member publishing", "Success stories API", "live"],
+        ["Legacy route", "Secure handoff", "active"]
       ]
     },
     title: "Success story moderation queue",
-    workflow: ["Review narrative", "Check evidence", "Edit copy", "Publish"]
+    workflow: ["Authenticate as admin", "Redirect to admin console", "Review story", "Publish"]
   },
   adminElections: {
     backendDependencyStatus: "not implemented",
