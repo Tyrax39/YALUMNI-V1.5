@@ -27,7 +27,7 @@ Audit date: 2026-05-08
 | `ballot_privacy_integrity_controls` | `/admin/elections/[electionId]/privacy` | route-complete prototype | fixture | not implemented | Ballot privacy and integrity controls. |
 | `candidate_review_queue` | `/admin/elections/[electionId]/candidates` | route-complete prototype | fixture | partially implemented | Candidate review route remains a fixture reference; live draft-only candidate approve/reject controls exist in the separate admin console. |
 | `chapter_analytics_dashboard` | `/admin/chapters/[chapterId]/analytics` | route-complete prototype | fixture | not implemented | Chapter analytics shell. |
-| `chapter_leader_dashboard` | `/communities/[communityId]/dashboard` | route-complete prototype | fixture | partially implemented | Community backend exists; leader dashboard is fixture-enhanced. |
+| `chapter_leader_dashboard` | `/communities/[communityId]/dashboard` | live route | live API | partially implemented | Dedicated leader dashboard now uses live community, roster, invitation, post, and report APIs. |
 | `complete_your_profile` | `/profile/setup` | live route | live API | implemented | Focused Step 4 setup screen uses current profile and photo APIs. |
 | `contribute_a_resource` | `/resources/new` | live route | live API | implemented | Resource contribution form submits member resources into the moderation workflow. |
 | `contribute_to_campaign` | `/contributions/[campaignId]/pay` | route-complete prototype | fixture | not implemented | Contribution checkout shell, no real payments. |

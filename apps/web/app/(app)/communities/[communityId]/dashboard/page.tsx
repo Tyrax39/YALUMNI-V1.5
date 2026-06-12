@@ -1,4 +1,4 @@
-import { PrototypeFeaturePage } from "@/components/platform/prototype-feature-page";
+import { CommunityLeaderDashboardPage } from "@/components/communities/community-leader-dashboard-page";
 
 type CommunityLeaderPageProps = {
   params: Promise<{
@@ -9,6 +9,5 @@ type CommunityLeaderPageProps = {
 export default async function CommunityLeaderPage({ params }: CommunityLeaderPageProps) {
   const { communityId } = await params;
 
-  return <PrototypeFeaturePage recordId={communityId} screenKey="communityLeader" />;
+  return <CommunityLeaderDashboardPage communityId={communityId} />;
 }
-

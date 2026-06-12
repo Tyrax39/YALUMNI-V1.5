@@ -8,6 +8,32 @@ The current Yalumni project is a useful Laravel 9 alumni management platform, bu
 
 The V1.5 implementation is active in `D:\YALUMNI-V1.5`. The new repository now contains a platform foundation with a FastAPI backend, Next.js web shell, Docker Compose, CI workflow, shared packages, copied YALUMNI logo assets, and documentation.
 
+## Current V1.5 Implementation Update: 2026-06-12 Community Leader Dashboard Live Slice
+
+Completed after the live content hub pagination slice:
+
+- Replaced the prototype `/communities/[communityId]/dashboard` export route
+  with a real live leadership surface backed by the existing communities API.
+- The dedicated route now loads live community profile data, active members,
+  pending approvals, invitations, recent posts, and open report counts.
+- Existing community detail behavior, join/leave controls, invitations,
+  publishing, moderation, and ownership flows remain unchanged on the live
+  community detail route.
+
+Current plan position:
+
+- Route parity improves again because another previously prototype-backed
+  exported route now uses live API data instead of the generic feature shell.
+- Overall 24-week MVP-plus implementation moves from roughly 81% to roughly 82%
+  complete as an estimate.
+
+Frozen/protected behavior:
+
+- The existing `/communities` listing route and `/communities/[communityId]`
+  operational detail route remain unchanged.
+- This slice adds a dedicated live overview route for leaders without changing
+  current API contracts or community moderation behavior.
+
 ## Current V1.5 Implementation Update: 2026-06-11 Live Content Hub Pagination Slice
 
 Completed after the staging auth parity and deployment parity work:

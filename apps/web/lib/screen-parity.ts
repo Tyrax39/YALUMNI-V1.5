@@ -141,9 +141,9 @@ export const screenParityRecords: ScreenParityRecord[] = [
     backendDependencyStatus: "partially implemented",
     dataSource: "live API",
     exportFolder: "chapter_leader_dashboard",
-    notes: "Community detail APIs exist; dedicated leader dashboard is fixture-enhanced.",
+    notes: "Dedicated leader dashboard route now uses live community, roster, invitation, post, and report APIs.",
     route: "/communities/[communityId]/dashboard",
-    status: "route-complete prototype"
+    status: "live route"
   },
   {
     backendDependencyStatus: "implemented",
@@ -660,9 +660,9 @@ export const featureScreens = {
   },
   communityLeader: {
     backendDependencyStatus: "partially implemented",
-    dataSource: "fixture",
+    dataSource: "live API",
     description:
-      "A leader console for chapter managers that organizes member activity, pending approvals, invitations, posts, and governance actions.",
+      "A live leader console for chapter managers that organizes member activity, pending approvals, invitations, posts, and governance actions.",
     eyebrow: "Chapter leadership",
     highlights: [
       {
@@ -671,34 +671,34 @@ export const featureScreens = {
         title: "Manager command center"
       },
       {
-        body: "Route links back to the live community detail surface for current posts and members.",
-        meta: "Live link",
-        title: "Uses current community modules"
+        body: "The dedicated route now reads real community, roster, invitation, post, and report data.",
+        meta: "Live API",
+        title: "Operational leadership view"
       },
       {
-        body: "Adds room for future analytics, events, and chapter governance.",
+        body: "Next work can add analytics, chapter events, and deeper governance without replacing this live base.",
         meta: "Next",
         title: "Prepared for expansion"
       }
     ],
     metrics: [
-      { label: "Pending members", value: "14" },
-      { label: "Open reports", value: "3" },
-      { label: "Invites sent", value: "28" }
+      { detail: "Manager and owner visibility", label: "Access", value: "RBAC" },
+      { detail: "Community roster and approvals", label: "Data", value: "live" },
+      { detail: "Posts and reports surfaced", label: "Moderation", value: "live" }
     ],
-    primaryAction: { href: "/communities/demo-community", label: "Open live community" },
+    primaryAction: { href: "/communities", label: "Browse communities" },
     route: "/communities/[communityId]/dashboard",
     sourceExports: ["chapter_leader_dashboard"],
     table: {
       headers: ["Queue", "Current load", "Action"],
       rows: [
-        ["Membership approvals", "14 pending", "Review profiles"],
-        ["Post reports", "3 open", "Moderate content"],
-        ["Invitations", "28 active", "Track acceptance"]
+        ["Membership approvals", "live", "Review pending members"],
+        ["Post reports", "live", "Moderate content"],
+        ["Invitations", "live", "Track acceptance"]
       ]
     },
     title: "Chapter leader dashboard",
-    workflow: ["Review member requests", "Publish chapter update", "Moderate posts", "Prepare event"]
+    workflow: ["Review member requests", "Track invitations", "Moderate posts", "Open live community"]
   },
   initiativesHub: {
     backendDependencyStatus: "not implemented",
