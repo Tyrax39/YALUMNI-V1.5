@@ -72,7 +72,7 @@ Audit date: 2026-05-08
 | `success_stories_hub` | `/success-stories` | live route | live API | implemented | Success stories hub uses live API filters, member submissions, and paginated load-more behavior. |
 | `success_stories_hub_mobile` | `/success-stories` | responsive reference | live API | implemented | Mobile behavior is folded into the live success stories route. |
 | `success_story_moderation_queue` | `/admin/success-stories` | live redirect | live API | implemented | Legacy member-app route now hands off to the separate live admin console moderation queue. |
-| `treasurer_dashboard` | `/admin/treasury` | route-complete prototype | fixture | not implemented | Treasurer dashboard. |
+| `treasurer_dashboard` | `/admin/treasury` | live redirect | live API | implemented | Legacy member-app route now hands off to the separate live admin console treasury surface. |
 | `voter_roll_management` | `/admin/elections/[electionId]/voter-roll` | route-complete prototype | fixture | not implemented | Voter roll management. |
 | `welcome_to_the_network` | `/verification/submitted` | code-native route | live API | implemented | Verification submitted screen reads live profile and verification status with first-action links into member routes. |
 

@@ -498,12 +498,12 @@ export const screenParityRecords: ScreenParityRecord[] = [
     status: "live redirect"
   },
   {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     exportFolder: "treasurer_dashboard",
-    notes: "Treasurer dashboard uses fixture campaign and ledger data.",
+    notes: "Legacy member-app route now hands off to the separate live admin console treasury surface.",
     route: "/admin/treasury",
-    status: "route-complete prototype"
+    status: "live redirect"
   },
   {
     backendDependencyStatus: "not implemented",
@@ -2524,47 +2524,47 @@ export const featureScreens = {
     workflow: ["Review membership", "Check activity", "Flag risks", "Export report"]
   },
   adminTreasury: {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     description:
-      "Treasurer dashboard for campaign funding, ledger entries, receipts, allocations, and audit review.",
+      "Legacy member-app route that now redirects finance admins into the live separate admin console treasury surface.",
     eyebrow: "Treasury",
     highlights: [
       {
-        body: "Summarizes campaign totals, receipt coverage, allocations, and exceptions.",
-        meta: "Finance",
-        title: "Transparent treasury"
+        body: "Treasury review now runs in the separate RBAC admin console.",
+        meta: "Live console",
+        title: "Operational treasury"
       },
       {
-        body: "Ledger, payment provider, and receipt APIs are future backend slices.",
-        meta: "Backend needed",
-        title: "Fixture finance data"
+        body: "Live campaign, receipt, and ledger summaries already exist in the admin console surface.",
+        meta: "Live API",
+        title: "Finance visibility connected"
       },
       {
-        body: "Designed for finance admins and super admins only.",
-        meta: "Admin",
-        title: "Permission-gated"
+        body: "This legacy route now exists as a secure handoff instead of a dead-end prototype.",
+        meta: "Route parity",
+        title: "Split-runtime aligned"
       }
     ],
     metrics: [
-      { label: "Raised", value: "$42k" },
-      { label: "Receipts", value: "312" },
-      { label: "Exceptions", value: "2" }
+      { label: "Runtime", value: "3011" },
+      { label: "Treasury", value: "live" },
+      { label: "Receipts", value: "connected" }
     ],
-    primaryAction: { disabled: true, label: "Export ledger" },
+    primaryAction: { href: "http://127.0.0.1:3011/treasury", label: "Open admin console" },
     requiresAdmin: true,
     route: "/admin/treasury",
     sourceExports: ["treasurer_dashboard"],
     table: {
       headers: ["Ledger item", "Amount", "Status"],
       rows: [
-        ["Innovation fund receipts", "$18,400", "matched"],
-        ["Scholarship allocation", "$9,200", "pending approval"],
-        ["Microgrant reserve", "$14,100", "matched"]
+        ["Treasury queue", "Separate admin console", "live"],
+        ["Campaign and receipts", "Contribution APIs", "live"],
+        ["Legacy route", "Secure handoff", "active"]
       ]
     },
     title: "Treasurer dashboard",
-    workflow: ["Review campaigns", "Match receipts", "Approve allocation", "Export audit"]
+    workflow: ["Authenticate as admin", "Redirect to admin console", "Review treasury", "Export finance data"]
   }
 } satisfies Record<string, FeatureScreenConfig>;
 
