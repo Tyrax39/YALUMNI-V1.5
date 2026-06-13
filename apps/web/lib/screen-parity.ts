@@ -218,12 +218,12 @@ export const screenParityRecords: ScreenParityRecord[] = [
     status: "responsive reference"
   },
   {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     exportFolder: "election_admin_dashboard",
-    notes: "Election admin hub with fixture election lifecycle state.",
+    notes: "Legacy member-app route now hands off to the separate live admin console elections surface.",
     route: "/admin/elections",
-    status: "route-complete prototype"
+    status: "live redirect"
   },
   {
     backendDependencyStatus: "partially implemented",
@@ -2136,47 +2136,47 @@ export const featureScreens = {
     workflow: ["Authenticate as admin", "Redirect to admin console", "Review story", "Publish"]
   },
   adminElections: {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     description:
-      "Admin elections dashboard for lifecycle state, voter roll readiness, candidate review, privacy controls, and audits.",
+      "Legacy member-app route that now redirects election admins into the live separate admin console elections surface.",
     eyebrow: "Admin elections",
     highlights: [
       {
-        body: "Manage election setup, candidates, voter roll, privacy controls, and audit reports.",
-        meta: "Governance",
-        title: "Election operations"
+        body: "Election administration now runs in the separate RBAC admin console.",
+        meta: "Live console",
+        title: "Operational elections"
       },
       {
-        body: "All exported election admin surfaces are now routed for frontend review.",
+        body: "Live election summaries, draft candidate queues, and audit visibility already exist in the admin console surface.",
+        meta: "Live API",
+        title: "Governance visibility connected"
+      },
+      {
+        body: "This legacy route now exists as a secure handoff instead of a dead-end prototype.",
         meta: "Route parity",
-        title: "Complete admin surface"
-      },
-      {
-        body: "Secure voting, ledger, and eligibility backends remain future work.",
-        meta: "Backend needed",
-        title: "Fixture only"
+        title: "Split-runtime aligned"
       }
     ],
     metrics: [
-      { label: "Active", value: "2" },
-      { label: "Candidate queues", value: "8" },
-      { label: "Voter rolls", value: "3.8k" }
+      { label: "Runtime", value: "3011" },
+      { label: "Elections", value: "live" },
+      { label: "Audit", value: "connected" }
     ],
-    primaryAction: { href: "/admin/elections/new", label: "Create election" },
+    primaryAction: { href: "http://127.0.0.1:3011/elections", label: "Open admin console" },
     requiresAdmin: true,
     route: "/admin/elections",
     sourceExports: ["election_admin_dashboard"],
     table: {
       headers: ["Election", "Phase", "Action"],
       rows: [
-        ["Chapter council 2026", "Voting", "Monitor"],
-        ["Treasurer by-election", "Setup", "Review roll"],
-        ["Programs committee", "Closed", "Audit"]
+        ["Election queue", "Separate admin console", "live"],
+        ["Candidate review", "Election APIs", "live"],
+        ["Legacy route", "Secure handoff", "active"]
       ]
     },
     title: "Election admin dashboard",
-    workflow: ["Create election", "Review candidates", "Lock voter roll", "Publish audit"]
+    workflow: ["Authenticate as admin", "Redirect to admin console", "Review elections", "Open governance tools"]
   },
   adminElectionNew: {
     backendDependencyStatus: "not implemented",
