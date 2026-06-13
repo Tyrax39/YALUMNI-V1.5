@@ -194,12 +194,12 @@ export const screenParityRecords: ScreenParityRecord[] = [
     status: "route-complete prototype"
   },
   {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     exportFolder: "create_new_election_wizard",
-    notes: "Admin election wizard is visually available with disabled submit.",
+    notes: "Legacy member-app route now hands off to the separate live admin console election draft workflow.",
     route: "/admin/elections/new",
-    status: "route-complete prototype"
+    status: "live redirect"
   },
   {
     backendDependencyStatus: "implemented",
@@ -2179,47 +2179,47 @@ export const featureScreens = {
     workflow: ["Authenticate as admin", "Redirect to admin console", "Review elections", "Open governance tools"]
   },
   adminElectionNew: {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     description:
-      "Admin election creation wizard for role, eligibility, voting window, candidate rules, and privacy controls.",
+      "Legacy member-app route that now redirects election admins into the live separate admin console election draft workflow.",
     eyebrow: "Create election",
     highlights: [
       {
-        body: "Captures election basics, positions, voter eligibility, dates, and audit settings.",
-        meta: "Wizard",
-        title: "Governance setup"
+        body: "Election drafts are now created from the separate RBAC admin console.",
+        meta: "Live console",
+        title: "Operational draft creation"
       },
       {
-        body: "Submit remains disabled until elections backend and audit logging exist.",
-        meta: "Backend needed",
-        title: "Safe prototype"
+        body: "The live console already supports draft creation, candidate management, voter-roll updates, and audit export access.",
+        meta: "Live API",
+        title: "Governance workflow connected"
       },
       {
-        body: "Wizard links into candidate, voter roll, privacy, and audit surfaces.",
-        meta: "Workflow",
-        title: "End-to-end routes"
+        body: "This legacy route now exists as a secure handoff instead of a disabled prototype shell.",
+        meta: "Route parity",
+        title: "Split-runtime aligned"
       }
     ],
     metrics: [
-      { label: "Steps", value: "6" },
-      { label: "Privacy", value: "planned" },
-      { label: "Submit", value: "disabled" }
+      { label: "Runtime", value: "3011" },
+      { label: "Drafts", value: "live" },
+      { label: "Create", value: "enabled" }
     ],
-    primaryAction: { disabled: true, label: "Create election" },
+    primaryAction: { href: "http://127.0.0.1:3011/elections", label: "Open admin console" },
     requiresAdmin: true,
     route: "/admin/elections/new",
     sourceExports: ["create_new_election_wizard"],
     table: {
       headers: ["Step", "Purpose", "Status"],
       rows: [
-        ["Basics", "Name and positions", "ready"],
-        ["Eligibility", "Voter roll rules", "backend needed"],
-        ["Privacy", "Ballot controls", "ready"]
+        ["Draft creation", "Separate admin console", "live"],
+        ["Candidate and voter setup", "Election APIs", "live"],
+        ["Legacy route", "Secure handoff", "active"]
       ]
     },
     title: "Create new election wizard",
-    workflow: ["Basics", "Positions", "Candidates", "Voter roll", "Privacy", "Review"]
+    workflow: ["Authenticate as admin", "Redirect to admin console", "Create draft", "Continue election setup"]
   },
   adminElectionConsole: {
     backendDependencyStatus: "not implemented",

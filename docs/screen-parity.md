@@ -34,7 +34,7 @@ Audit date: 2026-05-08
 | `contribution_campaign_detail` | `/contributions/[campaignId]` | route-complete prototype | fixture | not implemented | Contribution campaign detail. |
 | `contribution_receipt` | `/contributions/receipts/[receiptId]` | route-complete prototype | fixture | not implemented | Receipt preview route. |
 | `create_gathering_wizard` | `/events/new` | live route | live API | implemented | Event creation wizard publishes member events with optional agenda metadata. |
-| `create_new_election_wizard` | `/admin/elections/new` | route-complete prototype | fixture | not implemented | Admin election creation wizard. |
+| `create_new_election_wizard` | `/admin/elections/new` | live redirect | live API | implemented | Legacy member-app route now hands off to the separate live admin console election draft workflow. |
 | `direct_conversation` | `/messages/[conversationId]` | live route | live API | implemented | Wraps live direct messaging. |
 | `direct_message_detail_desktop` | `/messages/[conversationId]` | responsive reference | live API | implemented | Desktop detail maps to the same route. |
 | `election_admin_dashboard` | `/admin/elections` | live redirect | live API | implemented | Legacy member-app route now hands off to the separate live admin console elections surface. |
