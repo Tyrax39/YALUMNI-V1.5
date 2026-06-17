@@ -30,9 +30,9 @@ Audit date: 2026-05-08
 | `chapter_leader_dashboard` | `/communities/[communityId]/dashboard` | live route | live API | partially implemented | Dedicated leader dashboard now uses live community, roster, invitation, post, and report APIs. |
 | `complete_your_profile` | `/profile/setup` | live route | live API | implemented | Focused Step 4 setup screen uses current profile and photo APIs. |
 | `contribute_a_resource` | `/resources/new` | live route | live API | implemented | Resource contribution form submits member resources into the moderation workflow. |
-| `contribute_to_campaign` | `/contributions/[campaignId]/pay` | route-complete prototype | fixture | not implemented | Contribution checkout shell, no real payments. |
-| `contribution_campaign_detail` | `/contributions/[campaignId]` | route-complete prototype | fixture | not implemented | Contribution campaign detail. |
-| `contribution_receipt` | `/contributions/receipts/[receiptId]` | route-complete prototype | fixture | not implemented | Receipt preview route. |
+| `contribute_to_campaign` | `/contributions/[campaignId]/pay` | live route | live API | implemented | Contribution checkout now records live local-confirmed payments and issues receipts. |
+| `contribution_campaign_detail` | `/contributions/[campaignId]` | live route | live API | implemented | Campaign detail now reads the live contributions API and links into payment and receipt flows. |
+| `contribution_receipt` | `/contributions/receipts/[receiptId]` | live route | live API | implemented | Receipt route now reads the live contribution receipt API with download actions. |
 | `create_gathering_wizard` | `/events/new` | live route | live API | implemented | Event creation wizard publishes member events with optional agenda metadata. |
 | `create_new_election_wizard` | `/admin/elections/new` | live redirect | live API | implemented | Legacy member-app route now hands off to the separate live admin console election draft workflow. |
 | `direct_conversation` | `/messages/[conversationId]` | live route | live API | implemented | Wraps live direct messaging. |
@@ -89,6 +89,6 @@ These routes were necessary to map every export cleanly:
 
 ## Current Backend Gap Summary
 
-- Implemented live modules: auth, profile, program affiliation, verification, directory, MWF alumni directory cache, communities, direct messages, notifications, admin overview, admin verification, admin moderation, audit log, notification digests, opportunities, resources, success stories, events, initiatives, mentorship, member elections, and the separate admin-console election lifecycle, voter-roll, candidate review, and audit tools.
-- Missing backend modules: contributions/payments/receipts, chapter analytics, treasury, plus advanced election workflows such as nominations, signed/certified audit packets beyond the CSV export foundation, chapter/cohort voter-roll imports, richer candidate nomination states beyond draft approve/reject, and dedicated admin detail subroutes beyond the consolidated admin-console panel.
+- Implemented live modules: auth, profile, program affiliation, verification, directory, MWF alumni directory cache, communities, direct messages, notifications, admin overview, admin verification, admin moderation, audit log, notification digests, opportunities, resources, success stories, events, initiatives, mentorship, contributions with local confirmed payment and receipt flows, member elections, and the separate admin-console election lifecycle, voter-roll, candidate review, and audit tools.
+- Missing backend modules: chapter analytics, plus advanced election workflows such as nominations, signed/certified audit packets beyond the CSV export foundation, chapter/cohort voter-roll imports, richer candidate nomination states beyond draft approve/reject, dedicated admin detail subroutes beyond the consolidated admin-console panel, and external payment-provider hardening beyond the current local-confirmed contribution flow.
 - Current route parity status: frontend routes exist for all exported screens; data is live only where the backend already exists.

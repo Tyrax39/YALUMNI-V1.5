@@ -162,28 +162,28 @@ export const screenParityRecords: ScreenParityRecord[] = [
     status: "live route"
   },
   {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     exportFolder: "contribute_to_campaign",
-    notes: "Contribution checkout surface is disabled until payments backend lands.",
+    notes: "Contribution checkout now records live local-confirmed payments and issues receipts.",
     route: "/contributions/[campaignId]/pay",
-    status: "route-complete prototype"
+    status: "live route"
   },
   {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     exportFolder: "contribution_campaign_detail",
-    notes: "Campaign detail and ledger preview use internal fixture data.",
+    notes: "Campaign detail now reads the live contributions API and links into payment/receipt flows.",
     route: "/contributions/[campaignId]",
-    status: "route-complete prototype"
+    status: "live route"
   },
   {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     exportFolder: "contribution_receipt",
-    notes: "Receipt route renders a production-shaped receipt preview.",
+    notes: "Receipt route now reads the live contribution receipt API with download actions.",
     route: "/contributions/receipts/[receiptId]",
-    status: "route-complete prototype"
+    status: "live route"
   },
   {
     backendDependencyStatus: "not implemented",
@@ -1627,26 +1627,26 @@ export const featureScreens = {
     workflow: ["Draft story", "Add metrics", "Attach media", "Submit for review"]
   },
   contributionsHub: {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     description:
-      "Contribution campaigns, transparent ledgers, receipts, and treasurer workflows for chapter funding.",
+      "Contribution campaigns, receipts, and treasury-ready records backed by the live contributions API.",
     eyebrow: "Contributions",
     highlights: [
       {
-        body: "Browse active campaigns and see high-level funding progress.",
+        body: "Browse live campaigns and see current funding progress from the contributions API.",
         meta: "Campaigns",
         title: "Funding visibility"
       },
       {
-        body: "Campaign detail, pay, receipt, and treasury routes are all present.",
-        meta: "Route parity",
+        body: "Campaign detail, pay, and receipt routes all run on live backend records.",
+        meta: "Live API",
         title: "Contribution workflow"
       },
       {
-        body: "Payment processing and ledger persistence remain future backend work.",
-        meta: "Backend needed",
-        title: "No real payments"
+        body: "External provider hardening remains follow-up work, but local confirmed payment and receipt flows are implemented.",
+        meta: "Finance foundation",
+        title: "Current payment scope"
       }
     ],
     metrics: [
@@ -1669,26 +1669,26 @@ export const featureScreens = {
     workflow: ["Browse campaign", "Contribute", "Receive receipt", "Treasury audit"]
   },
   contributionCampaign: {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     description:
-      "Campaign detail route with goal, allocation plan, ledger preview, donor visibility, and contribution action.",
+      "Campaign detail route with live goal progress, donor visibility, and contribution actions.",
     eyebrow: "Campaign detail",
     highlights: [
       {
-        body: "Shows goal progress, allocation buckets, contributors, and governance notes.",
-        meta: "Ledger-ready",
+        body: "Shows live goal progress, contributors, and governance notes from the contributions API.",
+        meta: "Live campaign",
         title: "Transparent campaign"
       },
       {
-        body: "Payment action links to a route-complete checkout prototype.",
+        body: "Contribution actions route members into the live payment and receipt workflow.",
         meta: "Workflow",
         title: "Contribution path"
       },
       {
-        body: "Payment and ledger writes are disabled until finance backend exists.",
-        meta: "Backend needed",
-        title: "No real money movement"
+        body: "Local confirmed payments and receipts are implemented while provider hardening remains future work.",
+        meta: "Finance foundation",
+        title: "Payment scope"
       }
     ],
     metrics: [
@@ -1711,85 +1711,85 @@ export const featureScreens = {
     workflow: ["Review campaign", "Choose amount", "Confirm receipt", "Audit ledger"]
   },
   contributionPay: {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     description:
-      "Contribution checkout route with amount, donor details, payment method, and receipt preview.",
+      "Contribution checkout route with live amount capture, donor details, payment recording, and receipt issuance.",
     eyebrow: "Contribute",
     highlights: [
       {
-        body: "Checkout form is visible for design review but payment is disabled.",
+        body: "Members can record local confirmed contributions against live campaigns.",
         meta: "Payments",
-        title: "Safe checkout prototype"
+        title: "Live checkout foundation"
       },
       {
-        body: "Receipt route exists to review post-payment confirmation flow.",
+        body: "Receipt routes open on the live receipt API after a contribution is recorded.",
         meta: "Receipt",
-        title: "Receipt path ready"
+        title: "Receipt path live"
       },
       {
-        body: "Stripe or equivalent payment integration is a future implementation slice.",
-        meta: "Backend needed",
-        title: "No real charge"
+        body: "External processor hardening remains a follow-up slice beyond the current local-confirmed payment flow.",
+        meta: "Future",
+        title: "Provider hardening"
       }
     ],
     metrics: [
-      { label: "Suggested", value: "$50" },
-      { label: "Fees", value: "planned" },
-      { label: "Submit", value: "disabled" }
+      { label: "Suggested", value: "$25" },
+      { label: "Receipt", value: "live" },
+      { label: "Submit", value: "enabled" }
     ],
-    primaryAction: { disabled: true, label: "Confirm contribution" },
+    primaryAction: { href: "/contributions/[campaignId]/pay", label: "Record contribution" },
     route: "/contributions/[campaignId]/pay",
-    secondaryAction: { href: "/contributions/receipts/demo-receipt", label: "Preview receipt" },
+    secondaryAction: { href: "/contributions/receipts/demo-receipt", label: "Open receipt route" },
     sourceExports: ["contribute_to_campaign"],
     table: {
       headers: ["Step", "Detail", "Status"],
       rows: [
-        ["Amount", "Member selects amount", "ready"],
-        ["Payment", "Provider tokenization", "backend needed"],
-        ["Receipt", "Receipt and ledger entry", "prototype"]
+        ["Amount", "Member selects amount", "live"],
+        ["Payment", "Local confirmed payment", "live"],
+        ["Receipt", "Receipt and ledger entry", "live"]
       ]
     },
     title: "Contribute to campaign",
     workflow: ["Select amount", "Enter donor details", "Pay", "Receive receipt"]
   },
   contributionReceipt: {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     description:
-      "Contribution receipt route with donor, campaign, amount, transaction metadata, and ledger note.",
+      "Contribution receipt route with live donor, campaign, amount, and download actions.",
     eyebrow: "Receipt",
     highlights: [
       {
-        body: "Receipt layout is ready for future transaction records.",
+        body: "Receipt layout now reads the live contribution receipt record.",
         meta: "Finance",
         title: "Audit-friendly receipt"
       },
       {
-        body: "Print and download actions are disabled until PDF generation exists.",
-        meta: "Backend needed",
-        title: "Document generation pending"
+        body: "Text and PDF receipt download endpoints are implemented.",
+        meta: "Downloads",
+        title: "Document actions live"
       },
       {
-        body: "Designed to align with treasury dashboard and campaign ledger.",
+        body: "Receipts align with campaign contribution records and treasury review flows.",
         meta: "Governance",
         title: "Traceable contribution"
       }
     ],
     metrics: [
-      { label: "Amount", value: "$50" },
-      { label: "Receipt ID", value: "RCPT-001" },
-      { label: "Ledger", value: "pending" }
+      { label: "Amount", value: "live" },
+      { label: "Receipt ID", value: "live" },
+      { label: "Downloads", value: "enabled" }
     ],
-    primaryAction: { disabled: true, label: "Download PDF" },
+    primaryAction: { href: "/contributions/receipts/[receiptId]", label: "Download PDF" },
     route: "/contributions/receipts/[receiptId]",
     sourceExports: ["contribution_receipt"],
     table: {
       headers: ["Receipt field", "Value", "Status"],
       rows: [
-        ["Campaign", "Chapter innovation fund", "recorded"],
-        ["Payment provider", "Pending integration", "planned"],
-        ["Ledger reference", "Future transaction ID", "planned"]
+        ["Campaign", "Contribution campaign", "live"],
+        ["Payment provider", "Recorded method/reference", "live"],
+        ["Ledger reference", "Receipt-backed record", "live"]
       ]
     },
     title: "Contribution receipt",

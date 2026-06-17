@@ -8,6 +8,35 @@ The current Yalumni project is a useful Laravel 9 alumni management platform, bu
 
 The V1.5 implementation is active in `D:\YALUMNI-V1.5`. The new repository now contains a platform foundation with a FastAPI backend, Next.js web shell, Docker Compose, CI workflow, shared packages, copied YALUMNI logo assets, and documentation.
 
+## Current V1.5 Implementation Update: 2026-06-17 Contribution Parity Reconciliation Slice
+
+Completed after the election privacy live route slice:
+
+- Verified that `/contributions/[campaignId]`,
+  `/contributions/[campaignId]/pay`, and
+  `/contributions/receipts/[receiptId]` already run through live web surfaces
+  and implemented contribution APIs.
+- Reconciled stale parity metadata and status docs that were still reporting
+  those routes as fixture-backed prototypes even though the codebase already
+  serves live campaign, payment-recording, and receipt flows.
+- Corrected the current gap analysis so contributions are treated as
+  implemented platform foundation work, while external provider hardening
+  remains a follow-up slice.
+
+Current plan position:
+
+- Screen parity now stands at roughly 53 implemented routes, 4 partially
+  implemented routes, and 1 remaining prototype-backed route.
+- Overall 24-week MVP-plus implementation moves from roughly 91% to roughly 92%
+  complete as an estimate.
+
+Frozen/protected behavior:
+
+- Existing contribution hub, campaign detail, payment recording, receipt
+  downloads, treasury routes, and election/admin flows remain unchanged.
+- This slice only corrects parity/status drift to match the already-live
+  contribution implementation; no contribution API contract changed.
+
 ## Current V1.5 Implementation Update: 2026-06-17 Election Privacy Live Route Slice
 
 Completed after the legacy election voter-roll route handoff slice:
