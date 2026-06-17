@@ -17,7 +17,7 @@ Audit date: 2026-05-08
 
 | Export folder | Target route | Status | Data | Backend | Notes |
 | --- | --- | --- | --- | --- | --- |
-| `admin_election_console` | `/admin/elections/[electionId]` | route-complete prototype | fixture | not implemented | Admin election operations shell with fixture controls. |
+| `admin_election_console` | `/admin/elections/[electionId]` | live redirect | live API | implemented | Legacy member-app route now hands off to the separate live admin console election operations workflow. |
 | `admin_verification_queue` | `/admin/verification` | live route | live API | implemented | Wraps the live verification queue. |
 | `agenda_speaker_planner` | `/events/[eventId]/agenda` | live route | live API | implemented | Agenda and speaker planner route backed by event agenda records. |
 | `alumni_directory` | `/directory` | live route | live API | implemented | Uses current member directory API plus the member-only MWF Alumni cache tab. |

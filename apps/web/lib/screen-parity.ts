@@ -58,12 +58,12 @@ export const designExportRoot =
 
 export const screenParityRecords: ScreenParityRecord[] = [
   {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     exportFolder: "admin_election_console",
-    notes: "Admin election operations shell with fixture election controls.",
+    notes: "Legacy member-app route now hands off to the separate live admin console election operations workflow.",
     route: "/admin/elections/[electionId]",
-    status: "route-complete prototype"
+    status: "live redirect"
   },
   {
     backendDependencyStatus: "implemented",
@@ -2222,48 +2222,48 @@ export const featureScreens = {
     workflow: ["Authenticate as admin", "Redirect to admin console", "Create draft", "Continue election setup"]
   },
   adminElectionConsole: {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     description:
-      "Election operations console for one election, with candidate queue, roll status, privacy controls, and audit readiness.",
+      "Legacy member-app route that now redirects election admins into the live separate admin console election operations workflow.",
     eyebrow: "Election console",
     highlights: [
       {
-        body: "Centralized operational view for a single election.",
-        meta: "Admin",
-        title: "One-election console"
+        body: "Election operations now run in the separate RBAC admin console.",
+        meta: "Live console",
+        title: "Operational election console"
       },
       {
-        body: "Links to every exported admin election sub-screen.",
-        meta: "Routes",
-        title: "Connected controls"
+        body: "The live admin console already exposes draft creation, candidate review, voter-roll updates, status changes, and audit export access.",
+        meta: "Live API",
+        title: "Governance controls connected"
       },
       {
-        body: "All actions are disabled until the elections backend is built.",
-        meta: "Backend needed",
-        title: "Safe state"
+        body: "This legacy route now exists as a secure handoff instead of a fixture election shell.",
+        meta: "Route parity",
+        title: "Split-runtime aligned"
       }
     ],
     metrics: [
-      { label: "Candidates", value: "8" },
-      { label: "Roll status", value: "draft" },
-      { label: "Audit", value: "pending" }
+      { label: "Runtime", value: "3011" },
+      { label: "Election", value: "live" },
+      { label: "Governance", value: "enabled" }
     ],
-    primaryAction: { href: "/admin/elections/chapter-council-2026/candidates", label: "Review candidates" },
+    primaryAction: { href: "http://127.0.0.1:3011/elections", label: "Open admin console" },
     requiresAdmin: true,
     route: "/admin/elections/[electionId]",
-    secondaryAction: { href: "/admin/elections/chapter-council-2026/privacy", label: "Privacy controls" },
+    secondaryAction: { href: "http://127.0.0.1:3011/elections", label: "Open governance tools" },
     sourceExports: ["admin_election_console"],
     table: {
       headers: ["Control", "State", "Route"],
       rows: [
-        ["Candidate review", "8 pending", "/candidates"],
-        ["Voter roll", "draft", "/voter-roll"],
-        ["Audit report", "not generated", "/audit"]
+        ["Election workflow", "Separate admin console", "live"],
+        ["Candidate, roll, and audit tools", "Election APIs", "live"],
+        ["Legacy route", "Secure handoff", "active"]
       ]
     },
     title: "Admin election console",
-    workflow: ["Review candidates", "Lock voter roll", "Open voting", "Publish audit"]
+    workflow: ["Authenticate as admin", "Redirect to admin console", "Review election", "Operate governance tools"]
   },
   adminElectionCandidates: {
     backendDependencyStatus: "implemented",

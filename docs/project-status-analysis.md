@@ -8,6 +8,34 @@ The current Yalumni project is a useful Laravel 9 alumni management platform, bu
 
 The V1.5 implementation is active in `D:\YALUMNI-V1.5`. The new repository now contains a platform foundation with a FastAPI backend, Next.js web shell, Docker Compose, CI workflow, shared packages, copied YALUMNI logo assets, and documentation.
 
+## Current V1.5 Implementation Update: 2026-06-17 Legacy Election Console Route Handoff Slice
+
+Completed after the legacy election candidate route handoff slice:
+
+- Replaced the stale member-app prototype route for
+  `/admin/elections/[electionId]` with a guarded handoff into the separate
+  RBAC admin console election operations workflow.
+- The handoff preserves admin auth gating in the member app, then redirects to
+  the already-live admin-console elections surface where election lifecycle,
+  candidate, voter-roll, and audit controls already exist instead of rendering
+  the old fixture election shell.
+- Reconciled parity tracking so the per-election console route is now treated
+  as a live redirect instead of a remaining unimplemented prototype.
+
+Current plan position:
+
+- Route parity and runtime separation improve again because the legacy
+  per-election console route now terminates in live admin functionality.
+- Overall 24-week MVP-plus implementation moves from roughly 88% to roughly 89%
+  complete as an estimate.
+
+Frozen/protected behavior:
+
+- Existing admin-console election operations, candidate review, audit export,
+  and member election routes remain unchanged.
+- The member app now serves only as a secure bridge for the legacy
+  per-election console path; no election API contract changed.
+
 ## Current V1.5 Implementation Update: 2026-06-17 Legacy Election Candidate Route Handoff Slice
 
 Completed after the legacy election audit route handoff slice:

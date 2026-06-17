@@ -1,4 +1,4 @@
-import { PrototypeFeaturePage } from "@/components/platform/prototype-feature-page";
+import { AdminConsoleRedirectRoutePage } from "@/components/platform/live-route-pages";
 
 type AdminElectionPageProps = {
   params: Promise<{
@@ -7,8 +7,14 @@ type AdminElectionPageProps = {
 };
 
 export default async function AdminElectionPage({ params }: AdminElectionPageProps) {
-  const { electionId } = await params;
+  await params;
 
-  return <PrototypeFeaturePage recordId={electionId} screenKey="adminElectionConsole" />;
+  return (
+    <AdminConsoleRedirectRoutePage
+      description="Election operations now run in the separate RBAC admin console."
+      eyebrow="Election console"
+      targetPath="/elections"
+      title="Admin election console"
+    />
+  );
 }
-
