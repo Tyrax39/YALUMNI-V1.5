@@ -1,4 +1,4 @@
-import { PrototypeFeaturePage } from "@/components/platform/prototype-feature-page";
+import { ElectionPrivacySurface } from "@/components/elections/election-surfaces";
 
 type BallotPrivacyPageProps = {
   params: Promise<{
@@ -9,6 +9,5 @@ type BallotPrivacyPageProps = {
 export default async function BallotPrivacyPage({ params }: BallotPrivacyPageProps) {
   const { electionId } = await params;
 
-  return <PrototypeFeaturePage recordId={electionId} screenKey="adminElectionPrivacy" />;
+  return <ElectionPrivacySurface electionId={electionId} />;
 }
-

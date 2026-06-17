@@ -114,12 +114,12 @@ export const screenParityRecords: ScreenParityRecord[] = [
     status: "route-complete prototype"
   },
   {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     exportFolder: "ballot_privacy_integrity_controls",
-    notes: "Admin ballot integrity controls for future elections backend.",
+    notes: "Admin ballot privacy route now reads the live election privacy API.",
     route: "/admin/elections/[electionId]/privacy",
-    status: "route-complete prototype"
+    status: "live route"
   },
   {
     backendDependencyStatus: "implemented",
@@ -2352,47 +2352,47 @@ export const featureScreens = {
     workflow: ["Authenticate as admin", "Redirect to admin console", "Review voter roll", "Update eligibility"]
   },
   adminElectionPrivacy: {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     description:
-      "Ballot privacy and integrity controls for anonymous ballots, audit logs, and fraud checks.",
+      "Ballot privacy and integrity controls now read the live election admin privacy API.",
     eyebrow: "Ballot integrity",
     highlights: [
       {
-        body: "Separates voter identity, ballot receipt, and tally audit concepts.",
+        body: "Loads the election privacy mode and audit guidance directly from the backend.",
         meta: "Privacy",
-        title: "Integrity controls"
+        title: "Live controls"
       },
       {
-        body: "Controls are disabled until secure election architecture is implemented.",
-        meta: "Security",
-        title: "No unsafe toggles"
+        body: "Surfaces the current vote-recording guarantee used by the election foundation.",
+        meta: "Recording",
+        title: "Audit posture"
       },
       {
-        body: "Designed to make governance assumptions visible before backend build.",
-        meta: "Policy",
-        title: "Reviewable rules"
+        body: "Keeps future ballot-envelope hardening visible without pretending it is complete today.",
+        meta: "Future",
+        title: "Hardening note"
       }
     ],
     metrics: [
-      { label: "Anonymity", value: "planned" },
-      { label: "Audit trail", value: "planned" },
-      { label: "Fraud checks", value: "planned" }
+      { label: "Data", value: "live" },
+      { label: "Audit trail", value: "available" },
+      { label: "Mode", value: "active" }
     ],
-    primaryAction: { disabled: true, label: "Save controls" },
+    primaryAction: { href: "/admin/elections/[electionId]/audit", label: "Review audit route" },
     requiresAdmin: true,
     route: "/admin/elections/[electionId]/privacy",
     sourceExports: ["ballot_privacy_integrity_controls"],
     table: {
       headers: ["Control", "Current", "Status"],
       rows: [
-        ["Anonymous ballots", "required", "planned"],
-        ["Receipt hashes", "enabled", "planned"],
-        ["Duplicate detection", "strict", "planned"]
+        ["Privacy mode", "Election admin API", "live"],
+        ["Vote recording", "Uniqueness enforced", "live"],
+        ["Envelope hardening", "Future slice", "planned"]
       ]
     },
     title: "Ballot privacy integrity controls",
-    workflow: ["Review policy", "Set privacy", "Lock controls", "Audit"]
+    workflow: ["Load election", "Review privacy mode", "Inspect audit note", "Review audit route"]
   },
   adminElectionAudit: {
     backendDependencyStatus: "implemented",

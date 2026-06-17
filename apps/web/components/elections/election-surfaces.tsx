@@ -17,11 +17,13 @@ import {
   MEMBER_ACCESS_ROLES,
   type ElectionCandidate,
   type ElectionItem,
+  type ElectionPrivacyResponse,
   type ElectionResultsResponse,
   castElectionVote,
   createElection,
   fetchElection,
   fetchElectionCandidates,
+  fetchElectionPrivacy,
   fetchElectionResults,
   fetchElections
 } from "@yalumni/frontend-shared";
@@ -45,6 +47,11 @@ type ElectionDetailState =
 type ElectionResultsState =
   | { status: "loading" }
   | { results: ElectionResultsResponse; status: "ready" }
+  | { message: string; status: "error" };
+
+type ElectionPrivacyState =
+  | { status: "loading" }
+  | { privacy: ElectionPrivacyResponse; status: "ready" }
   | { message: string; status: "error" };
 
 type ElectionForm = {
@@ -469,6 +476,113 @@ export function ElectionResultsSurface({ electionId }: { electionId: string }) {
                       </p>
                     </div>
                   ))}
+                </div>
+              </section>
+            </div>
+          ) : null}
+        </>
+      )}
+    </AppShell>
+  );
+}
+
+export function ElectionPrivacySurface({ electionId }: { electionId: string }) {
+  const [state, setState] = useState<ElectionPrivacyState>({ status: "loading" });
+
+  useEffect(() => {
+    let isMounted = true;
+    fetchElectionPrivacy(electionId)
+      .then((privacy) => {
+        if (isMounted) {
+          setState({ privacy, status: "ready" });
+        }
+      })
+      .catch((caught) => {
+        if (isMounted) {
+          setState({
+            message:
+              caught instanceof Error ? caught.message : "Election privacy controls could not be loaded.",
+            status: "error"
+          });
+        }
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [electionId]);
+
+  return (
+    <AppShell
+      allowLocalAdminBootstrap
+      description="Review ballot privacy mode, vote recording guarantees, and audit guidance from the live election admin API."
+      requiredRoles={ADMIN_ROLES}
+      title="Ballot privacy integrity controls"
+    >
+      {() => (
+        <>
+          {state.status === "loading" ? <PanelMessage label="Loading privacy controls." /> : null}
+          {state.status === "error" ? <ErrorPanel message={state.message} /> : null}
+          {state.status === "ready" ? (
+            <div className="grid gap-6">
+              <ElectionOverview election={state.privacy.election} />
+              <section className="grid gap-4 md:grid-cols-4">
+                <MetricCard label="Privacy mode" value={formatStatus(state.privacy.privacy_mode)} />
+                <MetricCard
+                  label="Results visibility"
+                  value={formatStatus(state.privacy.election.results_visibility)}
+                />
+                <MetricCard label="Quorum" value={String(state.privacy.election.quorum_count)} />
+                <MetricCard label="Votes" value={String(state.privacy.election.vote_count)} />
+              </section>
+              <section className="rounded-lg border border-border bg-white p-5 shadow-soft sm:p-6">
+                <PanelHeader
+                  description="This route now reads the current privacy posture directly from the implemented election admin backend."
+                  icon={<Vote aria-hidden="true" className="h-5 w-5" />}
+                  title="Control summary"
+                />
+                <div className="mt-5 grid gap-5 xl:grid-cols-[1fr_320px]">
+                  <div className="grid gap-4">
+                    <article className="rounded-lg border border-border bg-surface p-4">
+                      <h3 className="text-sm font-bold uppercase tracking-[0.1em] text-muted">
+                        Audit note
+                      </h3>
+                      <p className="mt-3 text-sm leading-7 text-ink">{state.privacy.audit_note}</p>
+                    </article>
+                    <article className="rounded-lg border border-border bg-surface p-4">
+                      <h3 className="text-sm font-bold uppercase tracking-[0.1em] text-muted">
+                        Vote recording
+                      </h3>
+                      <p className="mt-3 text-sm leading-7 text-ink">
+                        {state.privacy.vote_recording}
+                      </p>
+                    </article>
+                  </div>
+                  <aside className="rounded-lg border border-border bg-surface p-4">
+                    <h3 className="text-sm font-bold uppercase tracking-[0.1em] text-muted">
+                      Current controls
+                    </h3>
+                    <div className="mt-4 grid gap-3">
+                      <StatusLine
+                        label="Election"
+                        value={formatStatus(state.privacy.election.status)}
+                      />
+                      <StatusLine
+                        label="Privacy mode"
+                        value={formatStatus(state.privacy.privacy_mode)}
+                      />
+                      <StatusLine
+                        label="Recording"
+                        value={state.privacy.vote_recording.includes("One vote") ? "enforced" : "review"}
+                      />
+                    </div>
+                    <NoticePanel message="Advanced anonymized ballot envelopes remain a future hardening slice." />
+                    <Link
+                      className="focus-ring mt-4 inline-flex min-h-11 w-full items-center justify-center rounded-lg border border-border bg-white px-4 text-sm font-bold text-ink"
+                      href={`/admin/elections/${state.privacy.election.id}/audit`}
+                    >
+                      Review audit route
+                    </Link>
+                  </aside>
                 </div>
               </section>
             </div>

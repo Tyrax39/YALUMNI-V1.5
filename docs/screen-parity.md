@@ -24,7 +24,7 @@ Audit date: 2026-05-08
 | `alumni_directory_mobile` | `/directory` | responsive reference | live API | implemented | Mobile behavior folded into canonical directory including YALUMNI/MWF tabs. |
 | `alumni_verification` | `/verification` | live route | live API | implemented | Focused Step 3 credentials submission screen uses current verification request and evidence APIs. |
 | `annual_gathering_hub` | `/events/[eventId]` | live route | live API | implemented | Event detail and gathering hub backed by live event records. |
-| `ballot_privacy_integrity_controls` | `/admin/elections/[electionId]/privacy` | route-complete prototype | fixture | not implemented | Ballot privacy and integrity controls. |
+| `ballot_privacy_integrity_controls` | `/admin/elections/[electionId]/privacy` | live route | live API | implemented | Admin ballot privacy route now reads the live election privacy API. |
 | `candidate_review_queue` | `/admin/elections/[electionId]/candidates` | live redirect | live API | implemented | Legacy member-app route now hands off to the separate live admin console candidate review workflow. |
 | `chapter_analytics_dashboard` | `/admin/chapters/[chapterId]/analytics` | route-complete prototype | fixture | not implemented | Chapter analytics shell. |
 | `chapter_leader_dashboard` | `/communities/[communityId]/dashboard` | live route | live API | partially implemented | Dedicated leader dashboard now uses live community, roster, invitation, post, and report APIs. |
