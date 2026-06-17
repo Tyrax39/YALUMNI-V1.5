@@ -1,4 +1,4 @@
-import { PrototypeFeaturePage } from "@/components/platform/prototype-feature-page";
+import { AdminConsoleRedirectRoutePage } from "@/components/platform/live-route-pages";
 
 type VoterRollPageProps = {
   params: Promise<{
@@ -7,8 +7,14 @@ type VoterRollPageProps = {
 };
 
 export default async function VoterRollPage({ params }: VoterRollPageProps) {
-  const { electionId } = await params;
+  await params;
 
-  return <PrototypeFeaturePage recordId={electionId} screenKey="adminElectionVoterRoll" />;
+  return (
+    <AdminConsoleRedirectRoutePage
+      description="Voter roll management now runs in the separate RBAC admin console."
+      eyebrow="Voter roll"
+      targetPath="/elections"
+      title="Voter roll management"
+    />
+  );
 }
-

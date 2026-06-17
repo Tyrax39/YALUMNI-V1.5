@@ -73,7 +73,7 @@ Audit date: 2026-05-08
 | `success_stories_hub_mobile` | `/success-stories` | responsive reference | live API | implemented | Mobile behavior is folded into the live success stories route. |
 | `success_story_moderation_queue` | `/admin/success-stories` | live redirect | live API | implemented | Legacy member-app route now hands off to the separate live admin console moderation queue. |
 | `treasurer_dashboard` | `/admin/treasury` | live redirect | live API | implemented | Legacy member-app route now hands off to the separate live admin console treasury surface. |
-| `voter_roll_management` | `/admin/elections/[electionId]/voter-roll` | route-complete prototype | fixture | not implemented | Voter roll management. |
+| `voter_roll_management` | `/admin/elections/[electionId]/voter-roll` | live redirect | live API | implemented | Legacy member-app route now hands off to the separate live admin console voter-roll workflow. |
 | `welcome_to_the_network` | `/verification/submitted` | code-native route | live API | implemented | Verification submitted screen reads live profile and verification status with first-action links into member routes. |
 
 ## Added Routes Beyond The Original List
@@ -89,6 +89,6 @@ These routes were necessary to map every export cleanly:
 
 ## Current Backend Gap Summary
 
-- Implemented live modules: auth, profile, program affiliation, verification, directory, MWF alumni directory cache, communities, direct messages, notifications, admin overview, admin verification, admin moderation, audit log, notification digests, opportunities, resources, success stories, events, initiatives, mentorship, member elections, and the separate admin-console election lifecycle/voter-roll tools.
+- Implemented live modules: auth, profile, program affiliation, verification, directory, MWF alumni directory cache, communities, direct messages, notifications, admin overview, admin verification, admin moderation, audit log, notification digests, opportunities, resources, success stories, events, initiatives, mentorship, member elections, and the separate admin-console election lifecycle, voter-roll, candidate review, and audit tools.
 - Missing backend modules: contributions/payments/receipts, chapter analytics, treasury, plus advanced election workflows such as nominations, signed/certified audit packets beyond the CSV export foundation, chapter/cohort voter-roll imports, richer candidate nomination states beyond draft approve/reject, and dedicated admin detail subroutes beyond the consolidated admin-console panel.
 - Current route parity status: frontend routes exist for all exported screens; data is live only where the backend already exists.

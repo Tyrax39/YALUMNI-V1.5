@@ -506,12 +506,12 @@ export const screenParityRecords: ScreenParityRecord[] = [
     status: "live redirect"
   },
   {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     exportFolder: "voter_roll_management",
-    notes: "Voter roll management shell until elections backend lands.",
+    notes: "Legacy member-app route now hands off to the separate live admin console voter-roll workflow.",
     route: "/admin/elections/[electionId]/voter-roll",
-    status: "route-complete prototype"
+    status: "live redirect"
   },
   {
     backendDependencyStatus: "implemented",
@@ -2309,47 +2309,47 @@ export const featureScreens = {
     workflow: ["Authenticate as admin", "Redirect to admin console", "Review candidate", "Approve or reject"]
   },
   adminElectionVoterRoll: {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     description:
-      "Voter roll management for election eligibility, verification status, exclusions, and roll locking.",
+      "Voter roll management now runs in the separate RBAC admin console election workflow.",
     eyebrow: "Voter roll",
     highlights: [
       {
-        body: "Shows eligibility rules and roll health before locking.",
-        meta: "Eligibility",
-        title: "Roll readiness"
+        body: "The legacy route now hands off to the live admin console voter-roll workflow.",
+        meta: "Live console",
+        title: "Secure handoff"
       },
       {
-        body: "Lock and export actions are disabled until elections backend exists.",
-        meta: "Backend needed",
-        title: "Safe controls"
+        body: "Eligibility review, roll updates, and lifecycle actions stay on the existing election APIs.",
+        meta: "Live API",
+        title: "Operational controls"
       },
       {
-        body: "Designed to coordinate with ballot privacy controls.",
-        meta: "Integrity",
-        title: "Ballot preparation"
+        body: "Admin auth still gates the legacy member-app path before redirecting to the RBAC console.",
+        meta: "RBAC",
+        title: "Protected route"
       }
     ],
     metrics: [
-      { label: "Eligible", value: "3,812" },
-      { label: "Excluded", value: "96" },
-      { label: "Status", value: "draft" }
+      { label: "Runtime", value: "admin app" },
+      { label: "Workflow", value: "live" },
+      { label: "Status", value: "redirect" }
     ],
-    primaryAction: { disabled: true, label: "Lock voter roll" },
+    primaryAction: { href: "/admin/elections", label: "Open admin console" },
     requiresAdmin: true,
     route: "/admin/elections/[electionId]/voter-roll",
     sourceExports: ["voter_roll_management"],
     table: {
-      headers: ["Segment", "Count", "Status"],
+      headers: ["Surface", "Destination", "Status"],
       rows: [
-        ["Verified alumni", "3,812", "eligible"],
-        ["Unverified accounts", "462", "excluded"],
-        ["Admin exclusions", "96", "review"]
+        ["Legacy route", "Separate admin console", "live"],
+        ["Voter roll actions", "Election APIs", "live"],
+        ["Access control", "Secure handoff", "active"]
       ]
     },
     title: "Voter roll management",
-    workflow: ["Set rules", "Review exclusions", "Resolve conflicts", "Lock roll"]
+    workflow: ["Authenticate as admin", "Redirect to admin console", "Review voter roll", "Update eligibility"]
   },
   adminElectionPrivacy: {
     backendDependencyStatus: "not implemented",
