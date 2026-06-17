@@ -226,12 +226,12 @@ export const screenParityRecords: ScreenParityRecord[] = [
     status: "live redirect"
   },
   {
-    backendDependencyStatus: "partially implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     exportFolder: "election_audit_results_report",
-    notes: "Legacy route remains a fixture reference; live admin-console election audit CSV export is available.",
+    notes: "Legacy member-app route now hands off to the separate live admin console election audit workflow.",
     route: "/admin/elections/[electionId]/audit",
-    status: "route-complete prototype"
+    status: "live redirect"
   },
   {
     backendDependencyStatus: "implemented",
@@ -2395,47 +2395,47 @@ export const featureScreens = {
     workflow: ["Review policy", "Set privacy", "Lock controls", "Audit"]
   },
   adminElectionAudit: {
-    backendDependencyStatus: "partially implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     description:
-      "Election audit report route for turnout, tally confirmation, privacy checks, and publication notes.",
+      "Legacy member-app route that now redirects election admins into the live separate admin console election audit workflow.",
     eyebrow: "Election audit",
     highlights: [
       {
-        body: "Summarizes turnout, ballot counts, exceptions, and audit notes.",
-        meta: "Audit",
-        title: "Results report"
+        body: "Election audit export now runs in the separate RBAC admin console.",
+        meta: "Live console",
+        title: "Operational audit access"
       },
       {
-        body: "The separate admin console can download a CSV export from live audit events.",
-        meta: "Live admin console",
+        body: "The live admin console already exposes CSV export from the election audit workflow.",
+        meta: "Live API",
         title: "CSV export available"
       },
       {
-        body: "Complements the member-facing results audit route.",
-        meta: "Transparency",
-        title: "Public trust"
+        body: "This legacy route now exists as a secure handoff instead of a fixture audit preview.",
+        meta: "Route parity",
+        title: "Split-runtime aligned"
       }
     ],
     metrics: [
-      { label: "Ballots", value: "2,318" },
-      { label: "Exceptions", value: "0" },
-      { label: "Status", value: "clean" }
+      { label: "Runtime", value: "3011" },
+      { label: "Audit", value: "live" },
+      { label: "Export", value: "enabled" }
     ],
-    primaryAction: { disabled: true, label: "Use admin console" },
+    primaryAction: { href: "http://127.0.0.1:3011/elections", label: "Open admin console" },
     requiresAdmin: true,
     route: "/admin/elections/[electionId]/audit",
     sourceExports: ["election_audit_results_report"],
     table: {
       headers: ["Audit item", "Result", "Status"],
       rows: [
-        ["Eligible voter count", "3,812", "matched"],
-        ["Ballots cast", "2,318", "matched"],
-        ["Duplicate attempts", "0", "clean"]
+        ["Audit export", "Separate admin console", "live"],
+        ["Election lifecycle", "Election APIs", "live"],
+        ["Legacy route", "Secure handoff", "active"]
       ]
     },
     title: "Election audit results report",
-    workflow: ["Close election", "Verify tally", "Resolve exceptions", "Publish report"]
+    workflow: ["Authenticate as admin", "Redirect to admin console", "Review audit", "Download CSV"]
   },
   adminChapters: {
     backendDependencyStatus: "partially implemented",

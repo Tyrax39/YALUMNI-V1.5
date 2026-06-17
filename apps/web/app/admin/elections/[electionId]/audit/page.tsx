@@ -1,4 +1,4 @@
-import { PrototypeFeaturePage } from "@/components/platform/prototype-feature-page";
+import { AdminConsoleRedirectRoutePage } from "@/components/platform/live-route-pages";
 
 type ElectionAuditPageProps = {
   params: Promise<{
@@ -7,8 +7,14 @@ type ElectionAuditPageProps = {
 };
 
 export default async function ElectionAuditPage({ params }: ElectionAuditPageProps) {
-  const { electionId } = await params;
+  await params;
 
-  return <PrototypeFeaturePage recordId={electionId} screenKey="adminElectionAudit" />;
+  return (
+    <AdminConsoleRedirectRoutePage
+      description="Election audit export now runs in the separate RBAC admin console."
+      eyebrow="Election audit"
+      targetPath="/elections"
+      title="Election audit results report"
+    />
+  );
 }
-
