@@ -122,12 +122,12 @@ export const screenParityRecords: ScreenParityRecord[] = [
     status: "route-complete prototype"
   },
   {
-    backendDependencyStatus: "partially implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     exportFolder: "candidate_review_queue",
-    notes: "Legacy route remains a fixture reference; live draft-only candidate approve/reject controls exist in the separate admin console.",
+    notes: "Legacy member-app route now hands off to the separate live admin console candidate review workflow.",
     route: "/admin/elections/[electionId]/candidates",
-    status: "route-complete prototype"
+    status: "live redirect"
   },
   {
     backendDependencyStatus: "not implemented",
@@ -2266,47 +2266,47 @@ export const featureScreens = {
     workflow: ["Review candidates", "Lock voter roll", "Open voting", "Publish audit"]
   },
   adminElectionCandidates: {
-    backendDependencyStatus: "partially implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     description:
-      "Candidate review queue for election admins, including eligibility checks, statements, and decision notes.",
+      "Legacy member-app route that now redirects election admins into the live separate admin console candidate review workflow.",
     eyebrow: "Candidate review",
     highlights: [
       {
-        body: "Queue candidates by pending, approved, needs info, and rejected states.",
-        meta: "Review",
-        title: "Candidate governance"
+        body: "Candidate review now runs in the separate RBAC admin console.",
+        meta: "Live console",
+        title: "Operational candidate review"
       },
       {
-        body: "The separate admin console can approve or reject draft candidates through the live election API.",
-        meta: "Live admin console",
+        body: "The live admin console already supports approve and reject actions for draft election candidates.",
+        meta: "Live API",
         title: "Draft review available"
       },
       {
-        body: "Designed for audit notes and candidate statement validation.",
-        meta: "Audit",
-        title: "Traceable decisions"
+        body: "This legacy route now exists as a secure handoff instead of a fixture review queue.",
+        meta: "Route parity",
+        title: "Split-runtime aligned"
       }
     ],
     metrics: [
-      { label: "Pending", value: "8" },
-      { label: "Approved", value: "14" },
-      { label: "Needs info", value: "3" }
+      { label: "Runtime", value: "3011" },
+      { label: "Candidates", value: "live" },
+      { label: "Review", value: "enabled" }
     ],
-    primaryAction: { disabled: true, label: "Use admin console" },
+    primaryAction: { href: "http://127.0.0.1:3011/elections", label: "Open admin console" },
     requiresAdmin: true,
     route: "/admin/elections/[electionId]/candidates",
     sourceExports: ["candidate_review_queue"],
     table: {
       headers: ["Candidate", "Position", "Status"],
       rows: [
-        ["Amina Mensah", "Chair", "pending"],
-        ["Jean Niyonzima", "Secretary", "needs info"],
-        ["Thandi Dlamini", "Treasurer", "approved"]
+        ["Candidate queue", "Separate admin console", "live"],
+        ["Approve/reject actions", "Election APIs", "live"],
+        ["Legacy route", "Secure handoff", "active"]
       ]
     },
     title: "Candidate review queue",
-    workflow: ["Review profile", "Check eligibility", "Add note", "Approve"]
+    workflow: ["Authenticate as admin", "Redirect to admin console", "Review candidate", "Approve or reject"]
   },
   adminElectionVoterRoll: {
     backendDependencyStatus: "not implemented",
