@@ -130,12 +130,12 @@ export const screenParityRecords: ScreenParityRecord[] = [
     status: "live redirect"
   },
   {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "partially implemented",
+    dataSource: "live API",
     exportFolder: "chapter_analytics_dashboard",
-    notes: "Analytics dashboard shell with fixture membership and activity metrics.",
+    notes: "Chapter analytics now derives live chapter health from current community, roster, invitation, post, and moderation APIs.",
     route: "/admin/chapters/[chapterId]/analytics",
-    status: "route-complete prototype"
+    status: "live route"
   },
   {
     backendDependencyStatus: "partially implemented",
@@ -2455,7 +2455,7 @@ export const featureScreens = {
         title: "Chapter layer needed"
       },
       {
-        body: "Route links to chapter analytics prototype for review.",
+        body: "Route links to the live chapter analytics surface derived from current community data.",
         meta: "Route parity",
         title: "Analytics surface present"
       }
@@ -2481,21 +2481,21 @@ export const featureScreens = {
     workflow: ["Review health", "Open analytics", "Assign leaders", "Audit activity"]
   },
   adminChapterAnalytics: {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "partially implemented",
+    dataSource: "live API",
     description:
-      "Chapter analytics dashboard for membership growth, activity, events, opportunities, and governance health.",
+      "Chapter analytics dashboard derived from live community, roster, invitation, post, and moderation data.",
     eyebrow: "Chapter analytics",
     highlights: [
       {
-        body: "Metrics are grouped for chapter leaders and platform admins.",
+        body: "Metrics are grouped for chapter leaders and platform admins using current live community APIs.",
         meta: "Analytics",
         title: "Health dashboard"
       },
       {
-        body: "Uses fixture data until analytics aggregation jobs and events exist.",
-        meta: "Backend needed",
-        title: "Data pipeline pending"
+        body: "Dedicated aggregation jobs, export pipelines, and richer event analytics remain partial follow-up work.",
+        meta: "Partial backend",
+        title: "Derived analytics"
       },
       {
         body: "Designed for quick scanning and repeated operational use.",
@@ -2504,20 +2504,20 @@ export const featureScreens = {
       }
     ],
     metrics: [
-      { label: "Members", value: "1,284" },
-      { label: "Active month", value: "72%" },
-      { label: "Events", value: "9" }
+      { label: "Roster", value: "live" },
+      { label: "Activity", value: "live" },
+      { label: "Reports", value: "live" }
     ],
-    primaryAction: { disabled: true, label: "Export analytics" },
+    primaryAction: { href: "/admin/chapters/demo-chapter/analytics", label: "Open analytics" },
     requiresAdmin: true,
     route: "/admin/chapters/[chapterId]/analytics",
     sourceExports: ["chapter_analytics_dashboard"],
     table: {
       headers: ["Metric", "Current", "Trend"],
       rows: [
-        ["New members", "84", "+12%"],
-        ["Event RSVPs", "486", "+8%"],
-        ["Open reports", "3", "-2"]
+        ["Active roster", "Community members API", "live"],
+        ["Recent activity", "Community posts API", "live"],
+        ["Open reports", "Moderation queue API", "live"]
       ]
     },
     title: "Chapter analytics dashboard",

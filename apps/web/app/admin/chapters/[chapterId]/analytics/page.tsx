@@ -1,4 +1,4 @@
-import { PrototypeFeaturePage } from "@/components/platform/prototype-feature-page";
+import { ChapterAnalyticsPage } from "@/components/communities/chapter-analytics-page";
 
 type ChapterAnalyticsPageProps = {
   params: Promise<{
@@ -6,9 +6,8 @@ type ChapterAnalyticsPageProps = {
   }>;
 };
 
-export default async function ChapterAnalyticsPage({ params }: ChapterAnalyticsPageProps) {
+export default async function ChapterAnalyticsRoute({ params }: ChapterAnalyticsPageProps) {
   const { chapterId } = await params;
 
-  return <PrototypeFeaturePage recordId={chapterId} screenKey="adminChapterAnalytics" />;
+  return <ChapterAnalyticsPage chapterId={chapterId} />;
 }
-

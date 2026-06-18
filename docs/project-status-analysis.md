@@ -8,6 +8,35 @@ The current Yalumni project is a useful Laravel 9 alumni management platform, bu
 
 The V1.5 implementation is active in `D:\YALUMNI-V1.5`. The new repository now contains a platform foundation with a FastAPI backend, Next.js web shell, Docker Compose, CI workflow, shared packages, copied YALUMNI logo assets, and documentation.
 
+## Current V1.5 Implementation Update: 2026-06-18 Chapter Analytics Live Route Slice
+
+Completed after the contribution parity reconciliation slice:
+
+- Replaced the stale prototype route for
+  `/admin/chapters/[chapterId]/analytics` with a live admin-only analytics
+  surface derived from the current community, roster, invitation, post, and
+  moderation APIs.
+- The route now shows real chapter health snapshots, operational metrics,
+  recent content, invitation backlog, and moderation queue signals instead of
+  fixture analytics text.
+- Reconciled parity tracking so the final exported prototype-backed route is
+  now treated as a live route, while the deeper chapter analytics aggregation
+  pipeline remains partial follow-up work.
+
+Current plan position:
+
+- Screen parity now stands at roughly 54 implemented routes and 4 partially
+  implemented routes, with no remaining prototype-backed exported routes.
+- Overall 24-week MVP-plus implementation moves from roughly 92% to roughly 93%
+  complete as an estimate.
+
+Frozen/protected behavior:
+
+- Existing community detail, leader dashboard, invitations, roster management,
+  post feeds, moderation queues, and admin auth rules remain unchanged.
+- This slice derives analytics from current live community APIs; it does not
+  add a new backend analytics contract or alter existing community endpoints.
+
 ## Current V1.5 Implementation Update: 2026-06-17 Contribution Parity Reconciliation Slice
 
 Completed after the election privacy live route slice:
