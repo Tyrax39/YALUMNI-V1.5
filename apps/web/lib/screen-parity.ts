@@ -2439,46 +2439,46 @@ export const featureScreens = {
   },
   adminChapters: {
     backendDependencyStatus: "partially implemented",
-    dataSource: "fixture",
+    dataSource: "live API",
     description:
-      "Admin chapter management hub for community health, leaders, approvals, and analytics links.",
+      "Admin chapter management hub backed by live community records with direct links into community detail, leader, and analytics routes.",
     eyebrow: "Admin chapters",
     highlights: [
       {
-        body: "Current communities backend supports many chapter-adjacent workflows.",
+        body: "Country and city chapter inventory now reads from the current live communities APIs.",
+        meta: "Live API",
+        title: "Chapter inventory is live"
+      },
+      {
+        body: "Admins can jump directly into the live community detail and leader dashboard routes from the hub.",
+        meta: "Workflow",
+        title: "Operational entry points"
+      },
+      {
+        body: "Dedicated chapter analytics and deeper aggregation/export pipelines remain follow-up work.",
         meta: "Partial backend",
-        title: "Community foundation exists"
-      },
-      {
-        body: "Dedicated chapter analytics and governance models remain future work.",
-        meta: "Next",
-        title: "Chapter layer needed"
-      },
-      {
-        body: "Route links to the live chapter analytics surface derived from current community data.",
-        meta: "Route parity",
-        title: "Analytics surface present"
+        title: "Analytics depth still partial"
       }
     ],
     metrics: [
-      { label: "Chapters", value: "49" },
-      { label: "Managers", value: "112" },
-      { label: "Health alerts", value: "7" }
+      { label: "Inventory", value: "live" },
+      { label: "Roster", value: "live" },
+      { label: "Analytics", value: "partial" }
     ],
-    primaryAction: { href: "/admin/chapters/demo-chapter/analytics", label: "Open analytics" },
+    primaryAction: { href: "/admin/chapters", label: "Open chapter hub" },
     requiresAdmin: true,
     route: "/admin/chapters",
     sourceExports: ["chapter_analytics_dashboard"],
     table: {
       headers: ["Chapter", "Members", "Health"],
       rows: [
-        ["Ghana", "1,284", "strong"],
-        ["Rwanda", "842", "stable"],
-        ["Kenya", "1,036", "watch"]
+        ["Inventory", "Live chapter records", "available"],
+        ["Leader routes", "Community dashboards", "available"],
+        ["Analytics", "Derived live route", "partial"]
       ]
     },
     title: "Chapter management",
-    workflow: ["Review health", "Open analytics", "Assign leaders", "Audit activity"]
+    workflow: ["Review chapters", "Open live route", "Inspect analytics", "Follow up with leaders"]
   },
   adminChapterAnalytics: {
     backendDependencyStatus: "partially implemented",

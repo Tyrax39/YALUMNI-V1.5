@@ -1,6 +1,5 @@
-import { PrototypeFeaturePage } from "@/components/platform/prototype-feature-page";
+import { AdminChaptersPage } from "@/components/communities/admin-chapters-page";
 
-export default function AdminChaptersPage() {
-  return <PrototypeFeaturePage screenKey="adminChapters" />;
+export default function AdminChaptersRoute() {
+  return <AdminChaptersPage />;
 }
-
