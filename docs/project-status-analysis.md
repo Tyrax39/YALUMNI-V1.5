@@ -8,6 +8,36 @@ The current Yalumni project is a useful Laravel 9 alumni management platform, bu
 
 The V1.5 implementation is active in `D:\YALUMNI-V1.5`. The new repository now contains a platform foundation with a FastAPI backend, Next.js web shell, Docker Compose, CI workflow, shared packages, copied YALUMNI logo assets, and documentation.
 
+## Current V1.5 Implementation Update: 2026-06-19 Admin Console Chapters Live Surface Slice
+
+Completed after the admin chapters live hub slice:
+
+- Replaced the stale placeholder behavior on the separate RBAC admin console
+  route `/chapters` with a live chapter operations surface backed by the
+  current communities APIs.
+- The `3011` admin console now loads live country and city chapter inventory,
+  shows current chapter counts and membership footprint, and links into the
+  existing detailed chapter routes.
+- Updated shared role metadata so the chapters surface is now labeled `partial`
+  instead of `prototype`, because the inventory layer is live while deeper
+  aggregation and governance tooling are still follow-up work.
+
+Current plan position:
+
+- Exported screen parity remains roughly 54 implemented routes and 4 partially
+  implemented routes, with no remaining prototype-backed exported routes.
+- Broader implementation progress moves from roughly 94% to roughly 95%
+  complete as an estimate because the separate admin-console chapter surface is
+  no longer static placeholder content.
+
+Frozen/protected behavior:
+
+- Existing admin-console RBAC gating, navigation, auth/session handling,
+  member-app chapter detail routes, leader dashboard, and chapter analytics
+  routes remain unchanged.
+- This slice only upgrades the `3011` chapter console surface and metadata; it
+  does not alter backend community contracts.
+
 ## Current V1.5 Implementation Update: 2026-06-19 Admin Chapters Live Hub Slice
 
 Completed after the chapter analytics live route slice:

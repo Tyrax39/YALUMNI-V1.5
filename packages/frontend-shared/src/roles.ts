@@ -124,7 +124,7 @@ export const ADMIN_SURFACES: readonly AdminSurface[] = [
     href: "/chapters",
     id: "chapters",
     label: "Chapters",
-    status: "prototype"
+    status: "partial"
   }
 ] as const;
 

@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 
 import { LiveModerationQueues, LiveVerificationQueue } from "./live-admin-surfaces";
+import { LiveChapterAdmin } from "./live-chapter-admin";
 import { LiveContributionAdmin } from "./live-contribution-admin";
 import { LiveElectionAdmin } from "./live-election-admin";
 import { LiveOpportunityReviewQueue } from "./live-opportunity-review";
@@ -74,11 +75,11 @@ const surfaceIcons = {
 
 const surfaceDetails = {
   chapters: {
-    cta: "Chapter analytics APIs are planned; this console is ready for routing and RBAC review.",
+    cta: "Live chapter inventory is available here, while deeper aggregation and governance tooling remain follow-up work.",
     rows: [
-      ["Ghana chapter", "1,284 members", "health strong"],
-      ["Rwanda chapter", "842 members", "leader handover due"],
-      ["Kenya chapter", "1,036 members", "activity watch"]
+      ["Chapter inventory", "live", "review records"],
+      ["Leader routes", "live", "open chapter dashboards"],
+      ["Analytics depth", "partial", "expand later"]
     ],
     title: "Chapter operations"
   },
@@ -322,6 +323,8 @@ export function AdminConsole({ surfaceId }: AdminConsoleProps) {
             <LiveContributionAdmin mode="campaigns" />
           ) : surfaceId === "treasury" ? (
             <LiveContributionAdmin mode="treasury" />
+          ) : surfaceId === "chapters" ? (
+            <LiveChapterAdmin />
           ) : (
             <OperationalScope detail={detail} surfaceId={surfaceId} />
           )}
