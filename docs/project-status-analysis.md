@@ -8,6 +8,36 @@ The current Yalumni project is a useful Laravel 9 alumni management platform, bu
 
 The V1.5 implementation is active in `D:\YALUMNI-V1.5`. The new repository now contains a platform foundation with a FastAPI backend, Next.js web shell, Docker Compose, CI workflow, shared packages, copied YALUMNI logo assets, and documentation.
 
+## Current V1.5 Implementation Update: 2026-06-19 Onboarding Live Progress Slice
+
+Completed after the introduction thread handoff slice:
+
+- Upgraded `/onboarding` so the member sees a live onboarding state instead of
+  a mostly static themed verification screen.
+- The route now derives its current step, checklist state, and primary next
+  action from real profile completion, program affiliation, and verification
+  request data.
+- Existing onboarding route paths, profile APIs, program affiliation APIs,
+  verification APIs, and verification submitted route behavior remain
+  unchanged.
+
+Current plan position:
+
+- Exported screen parity remains roughly 54 implemented routes and 4 partially
+  implemented routes because onboarding still does not persist a dedicated
+  multi-step workflow model.
+- Broader implementation progress remains roughly 95% complete as an estimate;
+  this slice improves a remaining partial route without closing one of the
+  larger missing backend modules.
+
+Frozen/protected behavior:
+
+- Existing auth guards, dashboard links, profile setup, program affiliation,
+  verification submission, and verification-submitted surfaces remain
+  unchanged.
+- This slice only improves live onboarding guidance and route handoff logic
+  inside `/onboarding`.
+
 ## Current V1.5 Implementation Update: 2026-06-19 Introduction Thread Handoff Slice
 
 Completed after the admin console chapters live surface slice:

@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
   Check,
@@ -66,9 +66,8 @@ function OnboardingFlowContent({
   displayName: string;
 }) {
   const snapshot = useOnboardingSnapshot(accessToken);
-  const statusLabel = snapshot.isLoading
-    ? "Loading"
-    : formatStatus(snapshot.latestRequest?.status ?? null);
+  const onboardingState = useMemo(() => buildOnboardingState(snapshot), [snapshot]);
+  const statusLabel = snapshot.isLoading ? "Loading" : onboardingState.verificationStatusLabel;
 
   return (
     <main className="min-h-screen bg-[#f9f9ff] text-[#191c21]">
@@ -99,17 +98,17 @@ function OnboardingFlowContent({
           <div className="mb-10">
             <div className="mb-4 flex items-center justify-between">
               <span className="text-xs font-bold uppercase tracking-[0.12em] text-primary">
-                Step 2 of 4
+                Step {onboardingState.currentStep} of 4
               </span>
               <span className="text-xs font-bold tracking-[0.12em] text-[#424751]">
-                Verification
+                {onboardingState.currentStepLabel}
               </span>
             </div>
             <div className="grid grid-cols-4 gap-2">
               {[0, 1, 2, 3].map((step) => (
                 <span
                   aria-hidden="true"
-                  className={`h-1.5 rounded-full ${step < 2 ? "bg-primary" : "bg-[#e2e2e9]"}`}
+                  className={`h-1.5 rounded-full ${step < onboardingState.currentStep ? "bg-primary" : "bg-[#e2e2e9]"}`}
                   key={step}
                 />
               ))}
@@ -150,6 +149,11 @@ function OnboardingFlowContent({
                     : formatCount(snapshot.profile?.program_affiliations.length ?? null)
                 }
               />
+            </div>
+            <div className="mt-4 grid gap-3">
+              {onboardingState.items.map((item) => (
+                <OnboardingChecklistRow item={item} key={item.label} />
+              ))}
             </div>
             {snapshot.error ? (
               <p className="mt-4 text-xs font-semibold text-danger">{snapshot.error}</p>
@@ -230,15 +234,15 @@ function OnboardingFlowContent({
         <div className="mx-auto flex max-w-md gap-4">
           <Link
             className="focus-ring inline-flex h-12 flex-1 items-center justify-center rounded-lg border border-primary text-base font-semibold text-primary transition hover:bg-[#d7e2ff]"
-            href="/profile/program-affiliation"
+            href={onboardingState.secondaryAction.href}
           >
-            Back
+            {onboardingState.secondaryAction.label}
           </Link>
           <Link
             className="focus-ring inline-flex h-12 flex-[2] items-center justify-center rounded-lg bg-primary text-base font-semibold text-white shadow-md transition hover:bg-[#003d7d]"
-            href="/verification"
+            href={onboardingState.primaryAction.href}
           >
-            Continue
+            {onboardingState.primaryAction.label}
           </Link>
         </div>
       </footer>
@@ -488,6 +492,43 @@ function LiveMetric({ label, value }: { label: string; value: string }) {
   );
 }
 
+type OnboardingChecklistItem = {
+  detail: string;
+  href: string;
+  label: string;
+  status: "complete" | "in-progress" | "todo";
+};
+
+function OnboardingChecklistRow({ item }: { item: OnboardingChecklistItem }) {
+  const toneClass =
+    item.status === "complete"
+      ? "bg-[#dff8ea] text-[#00714b]"
+      : item.status === "in-progress"
+        ? "bg-[#fff1d6] text-[#9a5c00]"
+        : "bg-[#eef0f5] text-[#5c6470]";
+  const statusLabel =
+    item.status === "complete"
+      ? "Complete"
+      : item.status === "in-progress"
+        ? "In progress"
+        : "Next";
+
+  return (
+    <Link
+      className="focus-ring flex items-center justify-between gap-3 rounded-lg border border-[#e5e7eb] bg-[#f8f8fc] px-4 py-3 transition hover:border-primary"
+      href={item.href}
+    >
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-[#191c21]">{item.label}</p>
+        <p className="mt-1 text-xs leading-5 text-[#5c6470]">{item.detail}</p>
+      </div>
+      <span className={`shrink-0 rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] ${toneClass}`}>
+        {statusLabel}
+      </span>
+    </Link>
+  );
+}
+
 function ProgressStep({ isLast, label }: { isLast: boolean; label: string }) {
   return (
     <>
@@ -567,4 +608,102 @@ function formatSubmittedDate(value: string | null) {
   }
 
   return new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(new Date(value));
+}
+
+function buildOnboardingState(snapshot: OnboardingLiveSnapshot) {
+  const completionPercentage = snapshot.profile?.completion_percentage ?? 0;
+  const programCount = snapshot.profile?.program_affiliations.length ?? 0;
+  const verificationStatus = snapshot.latestRequest?.status ?? null;
+
+  const profileComplete =
+    Boolean(snapshot.profile?.profile_completed_at) || completionPercentage >= 80;
+  const programComplete = programCount > 0;
+  const verificationSubmitted = Boolean(snapshot.latestRequest);
+  const verificationApproved = verificationStatus === "APPROVED";
+
+  const items: OnboardingChecklistItem[] = [
+    {
+      detail: profileComplete
+        ? `Profile completion is at ${formatPercent(completionPercentage)}.`
+        : completionPercentage > 0
+          ? `Profile completion is at ${formatPercent(completionPercentage)}.`
+          : "Add your career details, sector, skills, and profile photo.",
+      href: "/profile/setup",
+      label: "Complete profile",
+      status: profileComplete ? "complete" : completionPercentage > 0 ? "in-progress" : "todo"
+    },
+    {
+      detail: programComplete
+        ? `${formatCount(programCount)} program record${programCount === 1 ? "" : "s"} added.`
+        : "Add your YALI or partner-program affiliation before verification review.",
+      href: "/profile/program-affiliation",
+      label: "Add program affiliation",
+      status: programComplete ? "complete" : "todo"
+    },
+    {
+      detail: verificationSubmitted
+        ? `Latest request status: ${formatStatus(verificationStatus)}.`
+        : "Submit your certificate or other evidence so the trust team can review it.",
+      href: "/verification",
+      label: "Submit verification",
+      status: verificationApproved
+        ? "complete"
+        : verificationSubmitted
+          ? "in-progress"
+          : "todo"
+    },
+    {
+      detail: verificationSubmitted
+        ? "Browse next steps while the verification queue is in progress."
+        : "Unlock your first member actions after verification is underway.",
+      href: verificationSubmitted ? "/verification/submitted" : "/dashboard",
+      label: "Review first actions",
+      status: verificationSubmitted ? "in-progress" : "todo"
+    }
+  ];
+
+  if (!profileComplete) {
+    return {
+      currentStep: 1,
+      currentStepLabel: "Profile",
+      items,
+      primaryAction: { href: "/profile/setup", label: "Complete profile" },
+      secondaryAction: { href: "/dashboard", label: "Exit" },
+      verificationStatusLabel: formatStatus(verificationStatus)
+    };
+  }
+
+  if (!programComplete) {
+    return {
+      currentStep: 2,
+      currentStepLabel: "Program",
+      items,
+      primaryAction: { href: "/profile/program-affiliation", label: "Add program" },
+      secondaryAction: { href: "/profile/setup", label: "Back" },
+      verificationStatusLabel: formatStatus(verificationStatus)
+    };
+  }
+
+  if (!verificationSubmitted) {
+    return {
+      currentStep: 3,
+      currentStepLabel: "Verification",
+      items,
+      primaryAction: { href: "/verification", label: "Start verification" },
+      secondaryAction: { href: "/profile/program-affiliation", label: "Back" },
+      verificationStatusLabel: formatStatus(verificationStatus)
+    };
+  }
+
+  return {
+    currentStep: 4,
+    currentStepLabel: "First action",
+    items,
+    primaryAction: {
+      href: verificationApproved ? "/directory" : "/verification/submitted",
+      label: verificationApproved ? "Open directory" : "Review submission"
+    },
+    secondaryAction: { href: "/verification", label: "Back" },
+    verificationStatusLabel: formatStatus(verificationStatus)
+  };
 }
