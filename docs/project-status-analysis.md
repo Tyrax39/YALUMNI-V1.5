@@ -8,6 +8,33 @@ The current Yalumni project is a useful Laravel 9 alumni management platform, bu
 
 The V1.5 implementation is active in `D:\YALUMNI-V1.5`. The new repository now contains a platform foundation with a FastAPI backend, Next.js web shell, Docker Compose, CI workflow, shared packages, copied YALUMNI logo assets, and documentation.
 
+## Current V1.5 Implementation Update: 2026-06-19 Introduction Thread Handoff Slice
+
+Completed after the admin console chapters live surface slice:
+
+- Improved `/messages/introductions` so it now opens existing introduction
+  threads directly when a recent handoff already exists.
+- New introduction thread creation now lands the member in the actual
+  conversation route instead of sending them back to the generic inbox.
+- Recent handoff rows now deep-link into the specific live conversation route,
+  while the dedicated accept/decline introduction request workflow remains a
+  future backend slice.
+
+Current plan position:
+
+- Exported screen parity remains roughly 54 implemented routes and 4 partially
+  implemented routes.
+- Broader implementation progress remains roughly 95% complete as an estimate
+  because this slice improves an already-live route without closing the missing
+  request-state backend module.
+
+Frozen/protected behavior:
+
+- Existing direct-message APIs, route paths, directory search behavior, auth
+  guards, and conversation rendering remain unchanged.
+- This slice only improves thread handoff behavior inside the introductions
+  route; it does not alter messaging contracts.
+
 ## Current V1.5 Implementation Update: 2026-06-19 Admin Console Chapters Live Surface Slice
 
 Completed after the admin chapters live hub slice:

@@ -45,7 +45,7 @@ Audit date: 2026-05-08
 | `find_a_mentor` | `/mentorship/find` | live route | live API | implemented | Mentor discovery route uses live mentor profiles, filters, and paginated load-more behavior. |
 | `initiative_details` | `/initiatives/[initiativeId]` | live route | live API | implemented | Initiative detail route backed by live initiative and milestone records. |
 | `initiative_hub` | `/initiatives` | live route | live API | implemented | Initiative hub backed by live initiative search and current-user initiatives. |
-| `introduction_requests` | `/messages/introductions` | live route | live API | partially implemented | Introduction center now uses live member search and direct-message threads; dedicated request approval workflow remains future backend work. |
+| `introduction_requests` | `/messages/introductions` | live route | live API | partially implemented | Introduction center now uses live member search, direct-message threads, and direct thread handoffs; dedicated request approval workflow remains future backend work. |
 | `introduction_requests_desktop` | `/messages/introductions` | responsive reference | live API | partially implemented | Desktop reference folded into the same live introduction route. |
 | `member_dashboard` | `/dashboard` | live route | live API | implemented | High-level member hub now includes live profile, verification, notifications, communities, community feed highlights, messages, events, initiatives, sessions, and 2FA context. |
 | `mentor_settings_profile` | `/mentorship/settings` | live route | live API | implemented | Mentor settings route saves live mentor availability profiles. |

@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import { ArrowRight, Handshake, MessageSquare, Search, Send } from "lucide-react";
 
@@ -43,6 +44,7 @@ export function IntroductionRequestsPanel({
   accessToken,
   currentUserId
 }: IntroductionRequestsPanelProps) {
+  const router = useRouter();
   const [overviewState, setOverviewState] = useState<OverviewState>({ status: "loading" });
   const [searchState, setSearchState] = useState<SearchState>({ status: "idle" });
   const [searchQuery, setSearchQuery] = useState("");
@@ -63,6 +65,16 @@ export function IntroductionRequestsPanel({
     () => conversations.reduce((total, conversation) => total + conversation.unread_count, 0),
     [conversations]
   );
+  const recentConversationIdsByUserId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const conversation of conversations) {
+      const participant = conversation.participants.find((item) => item.user_id !== currentUserId);
+      if (participant) {
+        map.set(participant.user_id, conversation.id);
+      }
+    }
+    return map;
+  }, [conversations, currentUserId]);
 
   async function loadOverview() {
     setOverviewState({ status: "loading" });
@@ -111,15 +123,21 @@ export function IntroductionRequestsPanel({
   }
 
   async function handleStartConversation(profile: AlumniDirectoryProfile) {
+    const existingConversationId = recentConversationIdsByUserId.get(profile.user_id);
+    if (existingConversationId) {
+      router.push(`/messages/${existingConversationId}`);
+      return;
+    }
+
     setBusyProfileId(profile.user_id);
     setNotice(null);
     try {
-      await createDirectConversation(accessToken, {
+      const conversation = await createDirectConversation(accessToken, {
         initial_message: introNote.trim() || null,
         participant_user_id: profile.user_id
       });
       setIntroNote("");
-      setNotice(`Introduction thread is ready with ${profile.display_name}.`);
+      router.push(`/messages/${conversation.id}`);
       await loadOverview();
     } catch (caught) {
       setNotice(caught instanceof ApiError ? caught.message : "Introduction could not be started.");
@@ -208,6 +226,7 @@ export function IntroductionRequestsPanel({
 
           <ProfileResults
             busyProfileId={busyProfileId}
+            existingConversationIdsByUserId={recentConversationIdsByUserId}
             fallbackProfiles={suggestedProfiles}
             onStartConversation={handleStartConversation}
             searchState={searchState}
@@ -231,9 +250,9 @@ export function IntroductionRequestsPanel({
             </div>
             <Link
               className="focus-ring inline-flex min-h-10 items-center justify-center rounded-lg border border-border bg-white px-4 text-sm font-bold text-ink transition hover:border-primary hover:text-primary"
-              href="/messages"
+              href={conversations[0] ? `/messages/${conversations[0].id}` : "/messages"}
             >
-              Open inbox
+              {conversations[0] ? "Open latest thread" : "Open inbox"}
             </Link>
           </div>
 
@@ -304,11 +323,13 @@ function MetricCard({ detail, label, value }: { detail: string; label: string; v
 
 function ProfileResults({
   busyProfileId,
+  existingConversationIdsByUserId,
   fallbackProfiles,
   onStartConversation,
   searchState
 }: {
   busyProfileId: string | null;
+  existingConversationIdsByUserId: Map<string, string>;
   fallbackProfiles: AlumniDirectoryProfile[];
   onStartConversation: (profile: AlumniDirectoryProfile) => void;
   searchState: SearchState;
@@ -333,26 +354,13 @@ function ProfileResults({
         </p>
       ) : null}
       {profiles.map((profile) => (
-        <article
-          className="grid gap-3 rounded-lg border border-border bg-surface p-4 sm:grid-cols-[1fr_auto] sm:items-center"
+        <ProfileResultRow
+          busyProfileId={busyProfileId}
+          existingConversationId={existingConversationIdsByUserId.get(profile.user_id) ?? null}
           key={profile.user_id}
-        >
-          <div>
-            <h3 className="font-display text-lg font-semibold text-ink">{profile.display_name}</h3>
-            <p className="mt-1 text-sm leading-6 text-muted">
-              {formatProfileSummary(profile) || "Verified YALUMNI member"}
-            </p>
-          </div>
-          <button
-            className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-bold text-white transition hover:bg-[#003d7d] disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={busyProfileId === profile.user_id}
-            onClick={() => onStartConversation(profile)}
-            type="button"
-          >
-            <Send aria-hidden="true" className="h-4 w-4" />
-            {busyProfileId === profile.user_id ? "Starting..." : "Start thread"}
-          </button>
-        </article>
+          onStartConversation={onStartConversation}
+          profile={profile}
+        />
       ))}
     </div>
   );
@@ -391,9 +399,9 @@ function ConversationRow({
         </p>
         <Link
           className="focus-ring inline-flex min-h-9 items-center gap-2 rounded-lg border border-border bg-white px-3 text-sm font-bold text-ink transition hover:border-primary hover:text-primary"
-          href="/messages"
+          href={`/messages/${conversation.id}`}
         >
-          Continue in inbox
+          Open thread
           <ArrowRight aria-hidden="true" className="h-4 w-4" />
         </Link>
       </div>
@@ -405,6 +413,58 @@ function formatProfileSummary(profile: AlumniDirectoryProfile) {
   return [profile.country, profile.sector, profile.headline, profile.organization]
     .filter(Boolean)
     .join(" - ");
+}
+
+function ProfileResultRow({
+  busyProfileId,
+  existingConversationId,
+  onStartConversation,
+  profile
+}: {
+  busyProfileId: string | null;
+  existingConversationId: string | null;
+  onStartConversation: (profile: AlumniDirectoryProfile) => void;
+  profile: AlumniDirectoryProfile;
+}) {
+  if (existingConversationId) {
+    return (
+      <article className="grid gap-3 rounded-lg border border-border bg-surface p-4 sm:grid-cols-[1fr_auto] sm:items-center">
+        <div>
+          <h3 className="font-display text-lg font-semibold text-ink">{profile.display_name}</h3>
+          <p className="mt-1 text-sm leading-6 text-muted">
+            {formatProfileSummary(profile) || "Verified YALUMNI member"}
+          </p>
+        </div>
+        <Link
+          className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-border bg-white px-4 text-sm font-bold text-ink transition hover:border-primary hover:text-primary"
+          href={`/messages/${existingConversationId}`}
+        >
+          <MessageSquare aria-hidden="true" className="h-4 w-4" />
+          Open thread
+        </Link>
+      </article>
+    );
+  }
+
+  return (
+    <article className="grid gap-3 rounded-lg border border-border bg-surface p-4 sm:grid-cols-[1fr_auto] sm:items-center">
+      <div>
+        <h3 className="font-display text-lg font-semibold text-ink">{profile.display_name}</h3>
+        <p className="mt-1 text-sm leading-6 text-muted">
+          {formatProfileSummary(profile) || "Verified YALUMNI member"}
+        </p>
+      </div>
+      <button
+        className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-bold text-white transition hover:bg-[#003d7d] disabled:cursor-not-allowed disabled:opacity-60"
+        disabled={busyProfileId === profile.user_id}
+        onClick={() => onStartConversation(profile)}
+        type="button"
+      >
+        <Send aria-hidden="true" className="h-4 w-4" />
+        {busyProfileId === profile.user_id ? "Starting..." : "Start thread"}
+      </button>
+    </article>
+  );
 }
 
 function formatDateTime(value: string | null) {

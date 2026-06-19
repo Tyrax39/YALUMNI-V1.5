@@ -285,7 +285,7 @@ export const screenParityRecords: ScreenParityRecord[] = [
     backendDependencyStatus: "partially implemented",
     dataSource: "live API",
     exportFolder: "introduction_requests",
-    notes: "Introduction center uses live member search and direct-message threads; dedicated request approval workflow remains future backend work.",
+    notes: "Introduction center uses live member search, direct-message threads, and direct thread handoffs; dedicated request approval workflow remains future backend work.",
     route: "/messages/introductions",
     status: "live route"
   },
@@ -1340,7 +1340,7 @@ export const featureScreens = {
     eyebrow: "Introductions",
     highlights: [
       {
-        body: "Uses the live member directory and direct-message APIs to start verified handoff conversations.",
+        body: "Uses the live member directory and direct-message APIs to start or reopen verified handoff conversations.",
         meta: "Live API",
         title: "Directory handoff"
       },
