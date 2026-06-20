@@ -162,9 +162,34 @@ function ChapterAnalyticsContent({
   const totalOpenReportsOnPosts = posts.posts.reduce((sum, post) => sum + post.open_report_count, 0);
   const engagementRate =
     activeMembers.total > 0 ? `${Math.round((uniqueAuthors / activeMembers.total) * 100)}%` : "0%";
+  const pendingBacklog = invitations.total + pendingMembers.total;
+  const averageEngagementPerPost =
+    posts.total > 0 ? `${((totalComments + totalReactions) / posts.total).toFixed(1)}` : "0.0";
+  const invitePressure =
+    activeMembers.total > 0 ? `${Math.round((pendingBacklog / activeMembers.total) * 100)}%` : "0%";
+  const moderationRiskLabel =
+    reports.total > 5 ? "High" : reports.total > 0 ? "Active" : "Low";
 
   const healthLabel =
     reports.total > 5 ? "watch" : pendingMembers.total > 0 || invitations.total > 0 ? "active" : "stable";
+  const analyticsPriorities = buildAnalyticsPriorities({
+    communityHref: `/communities/${community.id}`,
+    engagementRate,
+    healthLabel,
+    invitePressure,
+    moderationRiskLabel,
+    pendingBacklog,
+    reportsTotal: reports.total
+  });
+  const chapterSignals = buildChapterSignals({
+    activeMembers: activeMembers.total,
+    averageEngagementPerPost,
+    healthLabel,
+    invitePressure,
+    moderationRiskLabel,
+    postsTotal: posts.total,
+    uniqueAuthors
+  });
 
   return (
     <div className="grid gap-6">
@@ -205,7 +230,7 @@ function ChapterAnalyticsContent({
           detail="Pending invites plus approval queue"
           icon={<MailPlus aria-hidden="true" className="h-5 w-5" />}
           label="Growth backlog"
-          value={String(invitations.total + pendingMembers.total)}
+          value={String(pendingBacklog)}
         />
         <MetricCard
           detail="Open moderation items"
@@ -213,6 +238,37 @@ function ChapterAnalyticsContent({
           label="Risk signals"
           value={String(reports.total)}
         />
+      </section>
+
+      <section className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
+        <div className="rounded-lg border border-border bg-white p-5 shadow-soft sm:p-6">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h3 className="font-display text-2xl font-semibold text-ink">Priority reads</h3>
+              <p className="mt-2 text-sm leading-6 text-muted">
+                Interpreted next-step signals from the live chapter roster, feed, invitations, and moderation queues.
+              </p>
+            </div>
+            <StatusBadge label={healthLabel} tone={healthLabel === "watch" ? "warning" : "primary"} />
+          </div>
+          <div className="mt-5 grid gap-3">
+            {analyticsPriorities.map((item) => (
+              <PriorityRow item={item} key={item.title} />
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-border bg-white p-5 shadow-soft sm:p-6">
+          <h3 className="font-display text-2xl font-semibold text-ink">Analytics signals</h3>
+          <p className="mt-2 text-sm leading-6 text-muted">
+            Quick-read indicators derived from the same live chapter data already loaded on this route.
+          </p>
+          <div className="mt-5 grid gap-3">
+            {chapterSignals.map((signal) => (
+              <SnapshotRow key={signal.label} label={signal.label} value={signal.value} />
+            ))}
+          </div>
+        </div>
       </section>
 
       <section className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
@@ -235,6 +291,7 @@ function ChapterAnalyticsContent({
             <SnapshotRow label="Unique authors in sample" value={String(uniqueAuthors)} />
             <SnapshotRow label="Comment activity" value={String(totalComments)} />
             <SnapshotRow label="Reaction activity" value={String(totalReactions)} />
+            <SnapshotRow label="Average engagement per post" value={averageEngagementPerPost} />
             <SnapshotRow label="Open reports on sampled posts" value={String(totalOpenReportsOnPosts)} />
             <SnapshotRow label="Pending approvals" value={String(pendingMembers.total)} />
           </div>
@@ -433,6 +490,29 @@ function StatusBadge({
   return <span className={className}>{label}</span>;
 }
 
+type PriorityItem = {
+  body: string;
+  href: string;
+  label: string;
+  title: string;
+  tone: "neutral" | "warning";
+};
+
+function PriorityRow({ item }: { item: PriorityItem }) {
+  return (
+    <Link
+      className="focus-ring flex items-center justify-between gap-3 rounded-lg border border-border bg-surface px-4 py-3 transition hover:border-primary hover:bg-white"
+      href={item.href}
+    >
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-ink">{item.title}</p>
+        <p className="mt-1 text-xs leading-5 text-muted">{item.body}</p>
+      </div>
+      <StatusBadge label={item.label} tone={item.tone} />
+    </Link>
+  );
+}
+
 function formatLabel(value: string): string {
   return value
     .toLowerCase()
@@ -455,4 +535,101 @@ function truncateText(value: string, maxLength: number): string {
   }
 
   return `${value.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`;
+}
+
+function buildAnalyticsPriorities({
+  communityHref,
+  engagementRate,
+  healthLabel,
+  invitePressure,
+  moderationRiskLabel,
+  pendingBacklog,
+  reportsTotal
+}: {
+  communityHref: string;
+  engagementRate: string;
+  healthLabel: string;
+  invitePressure: string;
+  moderationRiskLabel: string;
+  pendingBacklog: number;
+  reportsTotal: number;
+}): PriorityItem[] {
+  const items: PriorityItem[] = [];
+
+  if (reportsTotal > 0) {
+    items.push({
+      body: `${reportsTotal} open moderation item${reportsTotal === 1 ? "" : "s"} keep the chapter in ${moderationRiskLabel.toLowerCase()} review mode.`,
+      href: communityHref,
+      label: "Trust",
+      title: "Triage moderation queue",
+      tone: reportsTotal > 5 ? "warning" : "neutral"
+    });
+  }
+
+  if (pendingBacklog > 0) {
+    items.push({
+      body: `${pendingBacklog} invitation or approval item${pendingBacklog === 1 ? "" : "s"} remain open, representing ${invitePressure} of the active roster.`,
+      href: communityHref,
+      label: "Growth",
+      title: "Work the membership backlog",
+      tone: pendingBacklog >= 5 ? "warning" : "neutral"
+    });
+  }
+
+  if (engagementRate === "0%") {
+    items.push({
+      body: "No recent member authors were detected in the sampled post feed.",
+      href: communityHref,
+      label: "Engagement",
+      title: "Reactivate chapter publishing",
+      tone: "warning"
+    });
+  } else if (engagementRate !== "0%" && Number.parseInt(engagementRate, 10) < 25) {
+    items.push({
+      body: `Only ${engagementRate} of the active roster appears in the recent author sample.`,
+      href: communityHref,
+      label: "Engagement",
+      title: "Broaden participation",
+      tone: "neutral"
+    });
+  }
+
+  if (!items.length) {
+    items.push({
+      body: `Current chapter health reads as ${healthLabel} with no immediate live queue pressure.`,
+      href: communityHref,
+      label: "Stable",
+      title: "Maintain current operating rhythm",
+      tone: "neutral"
+    });
+  }
+
+  return items.slice(0, 4);
+}
+
+function buildChapterSignals({
+  activeMembers,
+  averageEngagementPerPost,
+  healthLabel,
+  invitePressure,
+  moderationRiskLabel,
+  postsTotal,
+  uniqueAuthors
+}: {
+  activeMembers: number;
+  averageEngagementPerPost: string;
+  healthLabel: string;
+  invitePressure: string;
+  moderationRiskLabel: string;
+  postsTotal: number;
+  uniqueAuthors: number;
+}) {
+  return [
+    { label: "Health state", value: healthLabel },
+    { label: "Moderation risk", value: moderationRiskLabel },
+    { label: "Invite pressure", value: invitePressure },
+    { label: "Recent authors", value: `${uniqueAuthors} of ${activeMembers}` },
+    { label: "Recent posts sampled", value: String(postsTotal) },
+    { label: "Average engagement per post", value: averageEngagementPerPost }
+  ];
 }
