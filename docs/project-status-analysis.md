@@ -8,6 +8,36 @@ The current Yalumni project is a useful Laravel 9 alumni management platform, bu
 
 The V1.5 implementation is active in `D:\YALUMNI-V1.5`. The new repository now contains a platform foundation with a FastAPI backend, Next.js web shell, Docker Compose, CI workflow, shared packages, copied YALUMNI logo assets, and documentation.
 
+## Current V1.5 Implementation Update: 2026-06-20 Community Moderation Backlog Slice
+
+Completed after the chapter analytics signals slice:
+
+- Upgraded `/communities/[communityId]/dashboard` to include removed-post and
+  removed-comment backlog visibility using the already-live community
+  moderation APIs.
+- The leader route now surfaces a fuller moderation footprint instead of
+  showing only open reports, giving community owners and managers a clearer
+  recovery/follow-up picture.
+- Existing community routes, membership actions, invitations, reporting, and
+  moderation controls remain unchanged.
+
+Current plan position:
+
+- Exported screen parity remains roughly 54 implemented routes and 4 partially
+  implemented routes because the chapter leader route still does not include
+  deeper governance workflows, chapter event planning context, or dedicated
+  historical analytics.
+- Broader implementation progress remains roughly 95% complete as an estimate;
+  this slice deepens another remaining partial route without closing one of the
+  larger missing backend modules.
+
+Frozen/protected behavior:
+
+- Existing community detail, join/leave, membership approvals, invitation
+  management, post activity, and moderation review flows remain unchanged.
+- This slice only improves the leadership dashboard visibility layer inside
+  `/communities/[communityId]/dashboard`.
+
 ## Current V1.5 Implementation Update: 2026-06-20 Chapter Analytics Signals Slice
 
 Completed after the community leader priorities slice:

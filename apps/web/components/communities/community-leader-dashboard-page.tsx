@@ -12,12 +12,16 @@ import {
   CommunityMemberListResponse,
   CommunityPostListResponse,
   CommunityPostReportQueueResponse,
+  CommunityRemovedCommentQueueResponse,
+  CommunityRemovedPostQueueResponse,
   adminRoles,
   getCommunity,
   listCommunityInvitations,
   listCommunityMembers,
   listCommunityPostReportQueue,
-  listCommunityPosts
+  listCommunityPosts,
+  listCommunityRemovedComments,
+  listCommunityRemovedPosts
 } from "@/lib/api";
 import { AppShell } from "@/components/platform/app-shell";
 
@@ -36,6 +40,8 @@ type LeaderSnapshot =
       pendingMembers: CommunityMemberListResponse | null;
       recentPosts: CommunityPostListResponse | null;
       reports: CommunityPostReportQueueResponse | null;
+      removedComments: CommunityRemovedCommentQueueResponse | null;
+      removedPosts: CommunityRemovedPostQueueResponse | null;
     };
 
 const activeMemberPageSize = 8;
@@ -43,6 +49,8 @@ const pendingMemberPageSize = 6;
 const invitationPageSize = 6;
 const recentPostPageSize = 4;
 const reportPageSize = 6;
+const removedPostPageSize = 4;
+const removedCommentPageSize = 4;
 
 export function CommunityLeaderDashboardPage({
   communityId
@@ -88,7 +96,7 @@ function CommunityLeaderDashboardContent({
         const canManage = canManageCommunity(currentRoles, community);
         const canReadPosts = canAccessCommunityPosts(currentRoles, community);
 
-        const [activeMembers, pendingMembers, invitations, recentPosts, reports] =
+        const [activeMembers, pendingMembers, invitations, recentPosts, reports, removedPosts, removedComments] =
           await Promise.all([
             listCommunityMembers(accessToken, communityId, {
               limit: activeMemberPageSize,
@@ -122,6 +130,18 @@ function CommunityLeaderDashboardContent({
                   offset: 0,
                   status: "OPEN"
                 })
+              : Promise.resolve(null),
+            canManage
+              ? listCommunityRemovedPosts(accessToken, communityId, {
+                  limit: removedPostPageSize,
+                  offset: 0
+                })
+              : Promise.resolve(null),
+            canManage
+              ? listCommunityRemovedComments(accessToken, communityId, {
+                  limit: removedCommentPageSize,
+                  offset: 0
+                })
               : Promise.resolve(null)
           ]);
 
@@ -136,6 +156,8 @@ function CommunityLeaderDashboardContent({
           pendingMembers,
           recentPosts,
           reports,
+          removedComments,
+          removedPosts,
           status: "ready"
         });
       } catch (caught) {
@@ -170,12 +192,14 @@ function CommunityLeaderDashboardContent({
     );
   }
 
-  const { activeMembers, community, invitations, pendingMembers, recentPosts, reports } = state;
+  const { activeMembers, community, invitations, pendingMembers, recentPosts, removedComments, removedPosts, reports } = state;
   const canManage = canManageCommunity(userRoles, community);
   const location = [community.city, community.country].filter(Boolean).join(", ");
   const pendingCount = pendingMembers?.total ?? 0;
   const invitationCount = invitations?.total ?? 0;
   const openReportCount = reports?.total ?? 0;
+  const removedPostCount = removedPosts?.total ?? 0;
+  const removedCommentCount = removedComments?.total ?? 0;
   const activePostCount = recentPosts?.posts.length ?? 0;
   const engagementCount =
     recentPosts?.posts.reduce((total, post) => total + post.comment_count + post.reaction_count, 0) ?? 0;
@@ -188,7 +212,9 @@ function CommunityLeaderDashboardContent({
     engagementCount,
     invitationCount,
     openReportCount,
-    pendingCount
+    pendingCount,
+    removedCommentCount,
+    removedPostCount
   });
 
   return (
@@ -308,6 +334,8 @@ function CommunityLeaderDashboardContent({
             <SnapshotRow label="New members" value={String(leadershipCoverage.recentJoins)} />
             <SnapshotRow label="Recent posts loaded" value={String(activePostCount)} />
             <SnapshotRow label="Engagement touchpoints" value={String(engagementCount)} />
+            <SnapshotRow label="Removed posts" value={String(removedPostCount)} />
+            <SnapshotRow label="Removed comments" value={String(removedCommentCount)} />
             <SnapshotRow label="Coverage signal" value={leadershipCoverage.coverageLabel} />
           </div>
         </div>
@@ -362,6 +390,72 @@ function CommunityLeaderDashboardContent({
               ))
             ) : (
               <EmptyState message="No live community posts are available yet for this leadership view." />
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
+        <div className="rounded-lg border border-border bg-white p-5 shadow-soft sm:p-6">
+          <h3 className="font-display text-2xl font-semibold text-ink">Moderation footprint</h3>
+          <p className="mt-2 text-sm leading-6 text-muted">
+            Live moderation backlog across open reports and recently removed chapter content.
+          </p>
+          <div className="mt-5 grid gap-3">
+            <SnapshotRow label="Open reports" value={String(openReportCount)} />
+            <SnapshotRow label="Removed posts" value={String(removedPostCount)} />
+            <SnapshotRow label="Removed comments" value={String(removedCommentCount)} />
+            <SnapshotRow
+              label="Moderation backlog"
+              value={String(openReportCount + removedPostCount + removedCommentCount)}
+            />
+            <SnapshotRow
+              label="Recovery signal"
+              value={
+                openReportCount + removedPostCount + removedCommentCount > 0
+                  ? "Needs review"
+                  : "Clear"
+              }
+            />
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-border bg-white p-5 shadow-soft sm:p-6">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h3 className="font-display text-2xl font-semibold text-ink">Removed content review</h3>
+              <p className="mt-2 text-sm leading-6 text-muted">
+                Recently removed posts and comments that may need follow-up or restoration decisions.
+              </p>
+            </div>
+            <Link className="focus-ring text-sm font-bold text-primary" href={communityDetailHref}>
+              Open moderation
+            </Link>
+          </div>
+          <div className="mt-5 grid gap-3">
+            {removedPosts?.posts.length || removedComments?.comments.length ? (
+              <>
+                {removedPosts?.posts.slice(0, 2).map((post) => (
+                  <article className="rounded-lg border border-border bg-surface p-4" key={post.id}>
+                    <p className="text-xs font-bold uppercase tracking-[0.12em] text-secondary">
+                      Removed post
+                    </p>
+                    <p className="mt-2 text-sm font-bold text-ink">{post.author_display_name}</p>
+                    <p className="mt-1 text-sm leading-6 text-muted">{truncateText(post.body, 120)}</p>
+                  </article>
+                ))}
+                {removedComments?.comments.slice(0, 2).map((comment) => (
+                  <article className="rounded-lg border border-border bg-surface p-4" key={comment.id}>
+                    <p className="text-xs font-bold uppercase tracking-[0.12em] text-secondary">
+                      Removed comment
+                    </p>
+                    <p className="mt-2 text-sm font-bold text-ink">{comment.author_display_name}</p>
+                    <p className="mt-1 text-sm leading-6 text-muted">{truncateText(comment.body, 120)}</p>
+                  </article>
+                ))}
+              </>
+            ) : (
+              <EmptyState message="No removed posts or comments are currently queued for this chapter." />
             )}
           </div>
         </div>
@@ -670,7 +764,9 @@ function buildOperationalPriorities({
   engagementCount,
   invitationCount,
   openReportCount,
-  pendingCount
+  pendingCount,
+  removedCommentCount,
+  removedPostCount
 }: {
   activeMembers: number;
   activePosts: number;
@@ -679,8 +775,12 @@ function buildOperationalPriorities({
   invitationCount: number;
   openReportCount: number;
   pendingCount: number;
+  removedCommentCount: number;
+  removedPostCount: number;
 }): PriorityItem[] {
   const items: PriorityItem[] = [];
+
+  const removedBacklog = removedPostCount + removedCommentCount;
 
   if (openReportCount > 0) {
     items.push({
@@ -689,6 +789,16 @@ function buildOperationalPriorities({
       label: "Trust",
       title: "Resolve open reports",
       tone: "warning"
+    });
+  }
+
+  if (removedBacklog > 0) {
+    items.push({
+      body: `${removedBacklog} removed content item${removedBacklog === 1 ? "" : "s"} may still need restoration or escalation follow-up.`,
+      href: communityHref,
+      label: "Recovery",
+      title: "Review removed content backlog",
+      tone: removedBacklog >= 3 ? "warning" : "neutral"
     });
   }
 
