@@ -176,6 +176,20 @@ function CommunityLeaderDashboardContent({
   const pendingCount = pendingMembers?.total ?? 0;
   const invitationCount = invitations?.total ?? 0;
   const openReportCount = reports?.total ?? 0;
+  const activePostCount = recentPosts?.posts.length ?? 0;
+  const engagementCount =
+    recentPosts?.posts.reduce((total, post) => total + post.comment_count + post.reaction_count, 0) ?? 0;
+  const communityDetailHref = `/communities/${community.id}`;
+  const leadershipCoverage = summarizeLeadershipCoverage(activeMembers.members);
+  const operationalPriorities = buildOperationalPriorities({
+    activeMembers: activeMembers.total,
+    activePosts: activePostCount,
+    communityHref: communityDetailHref,
+    engagementCount,
+    invitationCount,
+    openReportCount,
+    pendingCount
+  });
 
   return (
     <div className="grid gap-6">
@@ -262,6 +276,43 @@ function CommunityLeaderDashboardContent({
         />
       </section>
 
+      <section className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
+        <div className="rounded-lg border border-border bg-white p-5 shadow-soft sm:p-6">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h3 className="font-display text-2xl font-semibold text-ink">Operational priorities</h3>
+              <p className="mt-2 text-sm leading-6 text-muted">
+                Actionable signals derived from the live roster, invitation, post, and moderation queues.
+              </p>
+            </div>
+            <StatusBadge
+              label={operationalPriorities[0]?.tone === "warning" ? "Needs attention" : "Stable"}
+              tone={operationalPriorities[0]?.tone === "warning" ? "warning" : "neutral"}
+            />
+          </div>
+          <div className="mt-5 grid gap-3">
+            {operationalPriorities.map((item) => (
+              <PriorityRow item={item} key={item.title} />
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-border bg-white p-5 shadow-soft sm:p-6">
+          <h3 className="font-display text-2xl font-semibold text-ink">Leadership coverage</h3>
+          <p className="mt-2 text-sm leading-6 text-muted">
+            Live leadership capacity, roster health, and feed activity across this chapter space.
+          </p>
+          <div className="mt-5 grid gap-3">
+            <SnapshotRow label="Owners" value={String(leadershipCoverage.owners)} />
+            <SnapshotRow label="Managers" value={String(leadershipCoverage.managers)} />
+            <SnapshotRow label="New members" value={String(leadershipCoverage.recentJoins)} />
+            <SnapshotRow label="Recent posts loaded" value={String(activePostCount)} />
+            <SnapshotRow label="Engagement touchpoints" value={String(engagementCount)} />
+            <SnapshotRow label="Coverage signal" value={leadershipCoverage.coverageLabel} />
+          </div>
+        </div>
+      </section>
+
       <section className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
         <div className="rounded-lg border border-border bg-white p-5 shadow-soft sm:p-6">
           <h3 className="font-display text-2xl font-semibold text-ink">Leadership snapshot</h3>
@@ -271,6 +322,7 @@ function CommunityLeaderDashboardContent({
             <SnapshotRow label="Join policy" value={formatLabel(community.join_policy)} />
             <SnapshotRow label="Sector focus" value={community.sector ?? community.program_name ?? "General"} />
             <SnapshotRow label="Location" value={location || "Network-wide"} />
+            <SnapshotRow label="Engagement pulse" value={engagementCount ? `${engagementCount} interactions` : "Quiet"} />
             <SnapshotRow label="Created" value={formatDate(community.created_at)} />
           </div>
         </div>
@@ -508,14 +560,39 @@ function StatusBadge({
   tone
 }: {
   label: string;
-  tone: "neutral" | "primary";
+  tone: "neutral" | "primary" | "warning";
 }) {
   const className =
     tone === "primary"
       ? "inline-flex min-h-9 items-center rounded-lg bg-primary px-3 text-xs font-bold uppercase tracking-[0.1em] text-white"
+      : tone === "warning"
+        ? "inline-flex min-h-9 items-center rounded-lg bg-amber-100 px-3 text-xs font-bold uppercase tracking-[0.1em] text-amber-900"
       : "inline-flex min-h-9 items-center rounded-lg border border-border bg-surface px-3 text-xs font-bold uppercase tracking-[0.1em] text-muted";
 
   return <span className={className}>{label}</span>;
+}
+
+type PriorityItem = {
+  body: string;
+  href: string;
+  label: string;
+  title: string;
+  tone: "neutral" | "warning";
+};
+
+function PriorityRow({ item }: { item: PriorityItem }) {
+  return (
+    <Link
+      className="focus-ring flex items-center justify-between gap-3 rounded-lg border border-border bg-surface px-4 py-3 transition hover:border-primary hover:bg-white"
+      href={item.href}
+    >
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-ink">{item.title}</p>
+        <p className="mt-1 text-xs leading-5 text-muted">{item.body}</p>
+      </div>
+      <StatusBadge label={item.label} tone={item.tone} />
+    </Link>
+  );
 }
 
 function canManageCommunity(userRoles: string[], community: Community): boolean {
@@ -555,4 +632,113 @@ function truncateText(value: string, maxLength: number): string {
   }
 
   return `${value.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`;
+}
+
+function summarizeLeadershipCoverage(members: CommunityMemberListResponse["members"]) {
+  const now = Date.now();
+  let owners = 0;
+  let managers = 0;
+  let recentJoins = 0;
+
+  for (const member of members) {
+    if (member.role === "OWNER") {
+      owners += 1;
+    }
+    if (member.role === "MANAGER") {
+      managers += 1;
+    }
+
+    const joinedAt = member.joined_at ?? member.created_at;
+    const joinedDate = new Date(joinedAt).getTime();
+    if (!Number.isNaN(joinedDate) && now - joinedDate <= 1000 * 60 * 60 * 24 * 30) {
+      recentJoins += 1;
+    }
+  }
+
+  return {
+    coverageLabel: owners > 0 && managers > 0 ? "Distributed" : owners > 0 ? "Owner-led" : "Needs review",
+    managers,
+    owners,
+    recentJoins
+  };
+}
+
+function buildOperationalPriorities({
+  activeMembers,
+  activePosts,
+  communityHref,
+  engagementCount,
+  invitationCount,
+  openReportCount,
+  pendingCount
+}: {
+  activeMembers: number;
+  activePosts: number;
+  communityHref: string;
+  engagementCount: number;
+  invitationCount: number;
+  openReportCount: number;
+  pendingCount: number;
+}): PriorityItem[] {
+  const items: PriorityItem[] = [];
+
+  if (openReportCount > 0) {
+    items.push({
+      body: `${openReportCount} live report${openReportCount === 1 ? "" : "s"} need moderator attention in the community feed.`,
+      href: communityHref,
+      label: "Trust",
+      title: "Resolve open reports",
+      tone: "warning"
+    });
+  }
+
+  if (pendingCount > 0) {
+    items.push({
+      body: `${pendingCount} membership request${pendingCount === 1 ? "" : "s"} are waiting for a leader decision.`,
+      href: communityHref,
+      label: "Approvals",
+      title: "Review pending members",
+      tone: pendingCount >= 3 ? "warning" : "neutral"
+    });
+  }
+
+  if (invitationCount > 0) {
+    items.push({
+      body: `${invitationCount} invitation${invitationCount === 1 ? "" : "s"} are still open and may need follow-up.`,
+      href: communityHref,
+      label: "Invites",
+      title: "Track invitation uptake",
+      tone: "neutral"
+    });
+  }
+
+  if (activePosts === 0) {
+    items.push({
+      body: "No recent live posts were loaded for this chapter feed. A fresh update may help reactivate the space.",
+      href: communityHref,
+      label: "Engagement",
+      title: "Publish a chapter update",
+      tone: "warning"
+    });
+  } else if (engagementCount < 5) {
+    items.push({
+      body: `Recent feed activity is live but still light at ${engagementCount} interaction${engagementCount === 1 ? "" : "s"}.`,
+      href: communityHref,
+      label: "Engagement",
+      title: "Strengthen member participation",
+      tone: "neutral"
+    });
+  }
+
+  if (!items.length) {
+    items.push({
+      body: `${activeMembers} active member${activeMembers === 1 ? "" : "s"} are visible and the current queues are clear.`,
+      href: communityHref,
+      label: "Stable",
+      title: "Leadership queues are under control",
+      tone: "neutral"
+    });
+  }
+
+  return items.slice(0, 4);
 }
