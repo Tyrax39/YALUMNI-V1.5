@@ -75,6 +75,27 @@ export function IntroductionRequestsPanel({
     }
     return map;
   }, [conversations, currentUserId]);
+  const reusedThreadCount = useMemo(
+    () =>
+      suggestedProfiles.filter((profile) => recentConversationIdsByUserId.has(profile.user_id)).length,
+    [recentConversationIdsByUserId, suggestedProfiles]
+  );
+  const freshReachCount = useMemo(
+    () =>
+      suggestedProfiles.filter((profile) => !recentConversationIdsByUserId.has(profile.user_id)).length,
+    [recentConversationIdsByUserId, suggestedProfiles]
+  );
+  const introductionPriorities = useMemo(
+    () =>
+      buildIntroductionPriorities({
+        freshReachCount,
+        suggestedProfilesCount: suggestedProfiles.length,
+        totalConversations:
+          overviewState.status === "ready" ? overviewState.totalConversations : 0,
+        unreadCount
+      }),
+    [freshReachCount, overviewState, suggestedProfiles.length, unreadCount]
+  );
 
   async function loadOverview() {
     setOverviewState({ status: "loading" });
@@ -287,6 +308,51 @@ export function IntroductionRequestsPanel({
         </div>
       </section>
 
+      <section className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
+        <div className="rounded-lg border border-border bg-white p-5 shadow-soft sm:p-6">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h2 className="font-display text-2xl font-semibold text-ink">Handoff priorities</h2>
+              <p className="mt-2 text-sm leading-6 text-muted">
+                Live readiness signals from the current thread list and verified alumni suggestions.
+              </p>
+            </div>
+            <span className="rounded-md border border-border bg-surface px-3 py-1 text-xs font-bold uppercase tracking-[0.1em] text-muted">
+              Live
+            </span>
+          </div>
+          <div className="mt-5 grid gap-3">
+            {introductionPriorities.map((item) => (
+              <PriorityRow item={item} key={item.title} />
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-border bg-white p-5 shadow-soft sm:p-6">
+          <h2 className="font-display text-2xl font-semibold text-ink">Introduction signals</h2>
+          <p className="mt-2 text-sm leading-6 text-muted">
+            Quick-read counts showing where this route can reuse existing threads versus start fresh handoffs.
+          </p>
+          <div className="mt-5 grid gap-3">
+            <SignalRow label="Reusable live threads" value={String(reusedThreadCount)} />
+            <SignalRow label="Fresh outreach targets" value={String(freshReachCount)} />
+            <SignalRow label="Unread follow-ups" value={String(unreadCount)} />
+            <SignalRow
+              label="Suggested verified alumni"
+              value={overviewState.status === "ready" ? String(suggestedProfiles.length) : "..."}
+            />
+            <SignalRow
+              label="Introduction coverage"
+              value={
+                suggestedProfiles.length > 0
+                  ? `${Math.round((reusedThreadCount / suggestedProfiles.length) * 100)}%`
+                  : "0%"
+              }
+            />
+          </div>
+        </div>
+      </section>
+
       <section className="rounded-lg border border-border bg-white p-5 shadow-soft sm:p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -318,6 +384,42 @@ function MetricCard({ detail, label, value }: { detail: string; label: string; v
       <p className="mt-3 font-display text-3xl font-bold text-primary">{value}</p>
       <p className="mt-2 text-sm leading-6 text-muted">{detail}</p>
     </article>
+  );
+}
+
+type PriorityItem = {
+  body: string;
+  label: string;
+  title: string;
+  tone: "neutral" | "warning";
+};
+
+function PriorityRow({ item }: { item: PriorityItem }) {
+  return (
+    <article className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface px-4 py-3">
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-ink">{item.title}</p>
+        <p className="mt-1 text-xs leading-5 text-muted">{item.body}</p>
+      </div>
+      <span
+        className={
+          item.tone === "warning"
+            ? "inline-flex min-h-9 items-center rounded-lg bg-amber-100 px-3 text-xs font-bold uppercase tracking-[0.1em] text-amber-900"
+            : "inline-flex min-h-9 items-center rounded-lg border border-border bg-white px-3 text-xs font-bold uppercase tracking-[0.1em] text-muted"
+        }
+      >
+        {item.label}
+      </span>
+    </article>
+  );
+}
+
+function SignalRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-surface px-4 py-3">
+      <span className="text-sm font-semibold text-muted">{label}</span>
+      <span className="text-sm font-bold text-ink">{value}</span>
+    </div>
   );
 }
 
@@ -481,4 +583,65 @@ function formatDateTime(value: string | null) {
     dateStyle: "medium",
     timeStyle: "short"
   }).format(date);
+}
+
+function buildIntroductionPriorities({
+  freshReachCount,
+  suggestedProfilesCount,
+  totalConversations,
+  unreadCount
+}: {
+  freshReachCount: number;
+  suggestedProfilesCount: number;
+  totalConversations: number;
+  unreadCount: number;
+}): PriorityItem[] {
+  const items: PriorityItem[] = [];
+
+  if (unreadCount > 0) {
+    items.push({
+      body: `${unreadCount} unread repl${unreadCount === 1 ? "y is" : "ies are"} waiting across current introduction threads.`,
+      label: "Follow-up",
+      title: "Reply to active handoffs",
+      tone: "warning"
+    });
+  }
+
+  if (freshReachCount > 0) {
+    items.push({
+      body: `${freshReachCount} suggested verified alumn${freshReachCount === 1 ? "us is" : "i are"} available without an existing live thread.`,
+      label: "Outreach",
+      title: "Start fresh introductions",
+      tone: "neutral"
+    });
+  }
+
+  if (suggestedProfilesCount > 0 && freshReachCount === 0) {
+    items.push({
+      body: "Current suggested alumni already have live threads, so reuse and deepen existing conversations first.",
+      label: "Reuse",
+      title: "Continue current relationships",
+      tone: "neutral"
+    });
+  }
+
+  if (totalConversations === 0 && suggestedProfilesCount === 0) {
+    items.push({
+      body: "No recent conversations or suggested alumni are loaded yet for this member workspace.",
+      label: "Waiting",
+      title: "Refresh when directory data is available",
+      tone: "warning"
+    });
+  }
+
+  if (!items.length) {
+    items.push({
+      body: "Live thread coverage and directory suggestions are currently balanced for this introductions workspace.",
+      label: "Stable",
+      title: "Maintain introduction flow",
+      tone: "neutral"
+    });
+  }
+
+  return items.slice(0, 4);
 }
