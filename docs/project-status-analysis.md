@@ -36,6 +36,36 @@ Frozen/protected behavior:
 - This slice only improves live moderation visibility and removed-content
   analytics inside `/admin/chapters/[chapterId]/analytics`.
 
+## Current V1.5 Implementation Update: 2026-06-27 Leader Pressure Signals Slice
+
+Completed after the chapter moderation footprint slice:
+
+- Upgraded `/communities/[communityId]/dashboard` with live member-backlog,
+  queue-pressure, recent-author, and engagement-rate signals using the
+  existing live community roster, invitation, post, and moderation APIs.
+- The leader route now surfaces chapter pressure more clearly without changing
+  any membership, invitation, moderation, or posting actions.
+- Existing community routes, leader actions, and moderation contracts remain
+  unchanged.
+
+Current plan position:
+
+- Exported screen parity remains roughly 54 implemented routes and 4 partially
+  implemented routes because the leader dashboard still lacks deeper
+  governance history, event-planning context, and dedicated chapter analytics
+  timelines.
+- Broader implementation progress remains roughly 95% complete as an estimate;
+  this slice deepens another partial route without closing one of the larger
+  remaining backend/reporting gaps.
+
+Frozen/protected behavior:
+
+- Existing community detail, roster management, invitations, pending-member
+  approvals, reports, removed-content review, and post activity flows remain
+  unchanged.
+- This slice only improves live pressure visibility inside
+  `/communities/[communityId]/dashboard`.
+
 ## Current V1.5 Implementation Update: 2026-06-27 Onboarding Readiness Slice
 
 Completed after the introduction readiness slice:

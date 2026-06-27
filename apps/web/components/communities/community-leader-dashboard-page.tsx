@@ -201,8 +201,17 @@ function CommunityLeaderDashboardContent({
   const removedPostCount = removedPosts?.total ?? 0;
   const removedCommentCount = removedComments?.total ?? 0;
   const activePostCount = recentPosts?.posts.length ?? 0;
+  const uniqueAuthors = new Set(
+    recentPosts?.posts.map((post) => post.author_user_id ?? post.author_display_name) ?? []
+  ).size;
   const engagementCount =
     recentPosts?.posts.reduce((total, post) => total + post.comment_count + post.reaction_count, 0) ?? 0;
+  const membershipBacklog = pendingCount + invitationCount;
+  const moderationBacklog = openReportCount + removedPostCount + removedCommentCount;
+  const engagementRate =
+    activeMembers.total > 0 ? `${Math.round((uniqueAuthors / activeMembers.total) * 100)}%` : "0%";
+  const queuePressure =
+    activeMembers.total > 0 ? `${Math.round((membershipBacklog / activeMembers.total) * 100)}%` : "0%";
   const communityDetailHref = `/communities/${community.id}`;
   const leadershipCoverage = summarizeLeadershipCoverage(activeMembers.members);
   const operationalPriorities = buildOperationalPriorities({
@@ -333,9 +342,14 @@ function CommunityLeaderDashboardContent({
             <SnapshotRow label="Managers" value={String(leadershipCoverage.managers)} />
             <SnapshotRow label="New members" value={String(leadershipCoverage.recentJoins)} />
             <SnapshotRow label="Recent posts loaded" value={String(activePostCount)} />
+            <SnapshotRow label="Recent authors" value={`${uniqueAuthors} of ${activeMembers.total}`} />
+            <SnapshotRow label="Engagement rate" value={engagementRate} />
             <SnapshotRow label="Engagement touchpoints" value={String(engagementCount)} />
+            <SnapshotRow label="Member backlog" value={String(membershipBacklog)} />
+            <SnapshotRow label="Queue pressure" value={queuePressure} />
             <SnapshotRow label="Removed posts" value={String(removedPostCount)} />
             <SnapshotRow label="Removed comments" value={String(removedCommentCount)} />
+            <SnapshotRow label="Moderation backlog" value={String(moderationBacklog)} />
             <SnapshotRow label="Coverage signal" value={leadershipCoverage.coverageLabel} />
           </div>
         </div>
@@ -351,6 +365,7 @@ function CommunityLeaderDashboardContent({
             <SnapshotRow label="Sector focus" value={community.sector ?? community.program_name ?? "General"} />
             <SnapshotRow label="Location" value={location || "Network-wide"} />
             <SnapshotRow label="Engagement pulse" value={engagementCount ? `${engagementCount} interactions` : "Quiet"} />
+            <SnapshotRow label="Backlog pressure" value={queuePressure} />
             <SnapshotRow label="Created" value={formatDate(community.created_at)} />
           </div>
         </div>
