@@ -8,6 +8,34 @@ The current Yalumni project is a useful Laravel 9 alumni management platform, bu
 
 The V1.5 implementation is active in `D:\YALUMNI-V1.5`. The new repository now contains a platform foundation with a FastAPI backend, Next.js web shell, Docker Compose, CI workflow, shared packages, copied YALUMNI logo assets, and documentation.
 
+## Current V1.5 Implementation Update: 2026-06-27 Onboarding Readiness Slice
+
+Completed after the introduction readiness slice:
+
+- Upgraded `/onboarding` with live readiness signals and explicit current
+  blockers derived from the existing profile and verification snapshot.
+- The route now shows whether the member is blocked on profile completion,
+  program affiliation, verification submission, or review state, instead of
+  relying only on the checklist and primary button.
+- Existing onboarding routes, profile APIs, verification APIs, and verification
+  submitted flow remain unchanged.
+
+Current plan position:
+
+- Exported screen parity remains roughly 54 implemented routes and 4 partially
+  implemented routes because onboarding still lacks a dedicated persisted
+  workflow model beyond the current derived live state.
+- Broader implementation progress remains roughly 95% complete as an estimate;
+  this slice deepens another partial route without closing the missing
+  workflow-state backend gap.
+
+Frozen/protected behavior:
+
+- Existing onboarding progress logic, profile setup, program affiliation,
+  verification submission, and verification submitted routes remain unchanged.
+- This slice only improves live readiness visibility and blocker guidance
+  inside `/onboarding`.
+
 ## Current V1.5 Implementation Update: 2026-06-21 Introduction Readiness Slice
 
 Completed after the community moderation backlog slice:

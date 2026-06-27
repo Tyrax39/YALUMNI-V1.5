@@ -68,6 +68,8 @@ function OnboardingFlowContent({
   const snapshot = useOnboardingSnapshot(accessToken);
   const onboardingState = useMemo(() => buildOnboardingState(snapshot), [snapshot]);
   const statusLabel = snapshot.isLoading ? "Loading" : onboardingState.verificationStatusLabel;
+  const readinessSignals = useMemo(() => buildOnboardingSignals(snapshot), [snapshot]);
+  const readinessPriorities = useMemo(() => buildOnboardingPriorities(snapshot), [snapshot]);
 
   return (
     <main className="min-h-screen bg-[#f9f9ff] text-[#191c21]">
@@ -158,6 +160,40 @@ function OnboardingFlowContent({
             {snapshot.error ? (
               <p className="mt-4 text-xs font-semibold text-danger">{snapshot.error}</p>
             ) : null}
+          </div>
+
+          <div className="mt-6 grid gap-4">
+            <div className="rounded-xl border border-[#d8dce8] bg-white p-4 shadow-sm">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary">
+                    Readiness signals
+                  </p>
+                  <p className="mt-1 text-sm leading-6 text-[#424751]">
+                    Live onboarding state from your current profile and verification records.
+                  </p>
+                </div>
+                <span className="rounded-full bg-[#eef0f5] px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-[#5c6470]">
+                  Live
+                </span>
+              </div>
+              <div className="mt-4 grid gap-3">
+                {readinessSignals.map((signal) => (
+                  <OnboardingSignalRow key={signal.label} label={signal.label} value={signal.value} />
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-[#d8dce8] bg-white p-4 shadow-sm">
+              <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary">
+                Current blockers
+              </p>
+              <div className="mt-4 grid gap-3">
+                {readinessPriorities.map((item) => (
+                  <OnboardingPriorityRow item={item} key={item.title} />
+                ))}
+              </div>
+            </div>
           </div>
 
           <div className="mt-8 grid gap-6">
@@ -499,6 +535,14 @@ type OnboardingChecklistItem = {
   status: "complete" | "in-progress" | "todo";
 };
 
+type OnboardingPriorityItem = {
+  detail: string;
+  href: string;
+  label: string;
+  title: string;
+  tone: "complete" | "in-progress" | "todo";
+};
+
 function OnboardingChecklistRow({ item }: { item: OnboardingChecklistItem }) {
   const toneClass =
     item.status === "complete"
@@ -524,6 +568,39 @@ function OnboardingChecklistRow({ item }: { item: OnboardingChecklistItem }) {
       </div>
       <span className={`shrink-0 rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] ${toneClass}`}>
         {statusLabel}
+      </span>
+    </Link>
+  );
+}
+
+function OnboardingSignalRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-4 rounded-lg border border-[#e5e7eb] bg-[#f8f8fc] px-4 py-3">
+      <span className="text-sm font-semibold text-[#5c6470]">{label}</span>
+      <span className="text-sm font-bold text-[#191c21]">{value}</span>
+    </div>
+  );
+}
+
+function OnboardingPriorityRow({ item }: { item: OnboardingPriorityItem }) {
+  const toneClass =
+    item.tone === "complete"
+      ? "bg-[#dff8ea] text-[#00714b]"
+      : item.tone === "in-progress"
+        ? "bg-[#fff1d6] text-[#9a5c00]"
+        : "bg-[#eef0f5] text-[#5c6470]";
+
+  return (
+    <Link
+      className="focus-ring flex items-center justify-between gap-3 rounded-lg border border-[#e5e7eb] bg-[#f8f8fc] px-4 py-3 transition hover:border-primary"
+      href={item.href}
+    >
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-[#191c21]">{item.title}</p>
+        <p className="mt-1 text-xs leading-5 text-[#5c6470]">{item.detail}</p>
+      </div>
+      <span className={`shrink-0 rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] ${toneClass}`}>
+        {item.label}
       </span>
     </Link>
   );
@@ -706,4 +783,91 @@ function buildOnboardingState(snapshot: OnboardingLiveSnapshot) {
     secondaryAction: { href: "/verification", label: "Back" },
     verificationStatusLabel: formatStatus(verificationStatus)
   };
+}
+
+function buildOnboardingSignals(snapshot: OnboardingLiveSnapshot) {
+  const completionPercentage = snapshot.profile?.completion_percentage ?? 0;
+  const programCount = snapshot.profile?.program_affiliations.length ?? 0;
+  const evidenceCount = snapshot.latestRequest?.evidence.length ?? 0;
+  const verificationStatus = snapshot.latestRequest?.status ?? null;
+
+  return [
+    { label: "Profile completion", value: snapshot.isLoading ? "Loading" : formatPercent(completionPercentage) },
+    { label: "Program records", value: snapshot.isLoading ? "Loading" : formatCount(programCount) },
+    { label: "Verification status", value: snapshot.isLoading ? "Loading" : formatStatus(verificationStatus) },
+    { label: "Evidence files", value: snapshot.isLoading ? "Loading" : formatCount(evidenceCount) },
+    {
+      label: "Readiness state",
+      value: snapshot.isLoading
+        ? "Loading"
+        : completionPercentage >= 80 && programCount > 0
+          ? verificationStatus === "APPROVED"
+            ? "Network ready"
+            : verificationStatus
+              ? "Awaiting decision"
+              : "Ready to submit"
+          : "Needs setup"
+    }
+  ];
+}
+
+function buildOnboardingPriorities(snapshot: OnboardingLiveSnapshot): OnboardingPriorityItem[] {
+  const completionPercentage = snapshot.profile?.completion_percentage ?? 0;
+  const programCount = snapshot.profile?.program_affiliations.length ?? 0;
+  const evidenceCount = snapshot.latestRequest?.evidence.length ?? 0;
+  const verificationStatus = snapshot.latestRequest?.status ?? null;
+  const items: OnboardingPriorityItem[] = [];
+
+  if (completionPercentage < 80) {
+    items.push({
+      detail: `Profile completion is ${formatPercent(completionPercentage)}. Add missing career and identity details first.`,
+      href: "/profile/setup",
+      label: "Profile",
+      title: "Finish profile setup",
+      tone: completionPercentage > 0 ? "in-progress" : "todo"
+    });
+  }
+
+  if (programCount === 0) {
+    items.push({
+      detail: "No program affiliation is on file yet for this member record.",
+      href: "/profile/program-affiliation",
+      label: "Program",
+      title: "Add program affiliation",
+      tone: "todo"
+    });
+  }
+
+  if (!snapshot.latestRequest) {
+    items.push({
+      detail: "Verification has not been submitted yet. Upload certificate evidence to start review.",
+      href: "/verification",
+      label: "Verify",
+      title: "Submit verification evidence",
+      tone: "todo"
+    });
+  } else if (verificationStatus !== "APPROVED") {
+    items.push({
+      detail:
+        evidenceCount > 0
+          ? `${formatCount(evidenceCount)} evidence file${evidenceCount === 1 ? "" : "s"} uploaded. Track the review outcome next.`
+          : "A verification request exists, but no evidence files are attached yet.",
+      href: "/verification/submitted",
+      label: verificationStatus === "PENDING" ? "Review" : "Action",
+      title: verificationStatus === "PENDING" ? "Track verification review" : "Review verification status",
+      tone: evidenceCount > 0 ? "in-progress" : "todo"
+    });
+  }
+
+  if (!items.length) {
+    items.push({
+      detail: "Your current onboarding records indicate that the member account is ready for normal network use.",
+      href: "/directory",
+      label: "Ready",
+      title: "Open the alumni network",
+      tone: "complete"
+    });
+  }
+
+  return items.slice(0, 4);
 }

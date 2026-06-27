@@ -51,7 +51,7 @@ Audit date: 2026-05-08
 | `mentor_settings_profile` | `/mentorship/settings` | live route | live API | implemented | Mentor settings route saves live mentor availability profiles. |
 | `messages_inbox` | `/messages` | live route | live API | implemented | Wraps live messaging APIs. |
 | `messages_mobile` | `/messages` | responsive reference | live API | implemented | Mobile messaging reference. |
-| `mobile_onboarding_flow` | `/onboarding` | code-native route | live API | partially implemented | Mirrors the mobile onboarding export, now derives live progress, checklist status, and next actions from profile, affiliation, and verification data. |
+| `mobile_onboarding_flow` | `/onboarding` | code-native route | live API | partially implemented | Mirrors the mobile onboarding export, now derives live progress, checklist status, next actions, readiness signals, and blocker guidance from profile, affiliation, and verification data. |
 | `my_mentorships` | `/mentorship` | live route | live API | implemented | Mentorship hub uses live mentor summary, incoming requests, outgoing requests, and recommended mentors. |
 | `new_message` | `/messages/new` | live route | live API | implemented | Live member search and conversation composer. |
 | `opportunities_marketplace` | `/opportunities` | live route | live API | implemented | Opportunities marketplace uses live API filters, member submissions, and paginated load-more behavior. |
