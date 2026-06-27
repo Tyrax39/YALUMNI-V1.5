@@ -13,11 +13,15 @@ import {
   type CommunityMemberListResponse,
   type CommunityPostListResponse,
   type CommunityPostReportQueueResponse,
+  type CommunityRemovedCommentQueueResponse,
+  type CommunityRemovedPostQueueResponse,
   getCommunity,
   listCommunityInvitations,
   listCommunityMembers,
   listCommunityPostReportQueue,
-  listCommunityPosts
+  listCommunityPosts,
+  listCommunityRemovedComments,
+  listCommunityRemovedPosts
 } from "@/lib/api";
 import { AppShell } from "@/components/platform/app-shell";
 
@@ -36,6 +40,8 @@ type AnalyticsSnapshot =
       invitations: CommunityInvitationListResponse;
       posts: CommunityPostListResponse;
       reports: CommunityPostReportQueueResponse;
+      removedComments: CommunityRemovedCommentQueueResponse;
+      removedPosts: CommunityRemovedPostQueueResponse;
     };
 
 const activeMemberPageSize = 50;
@@ -43,6 +49,8 @@ const pendingMemberPageSize = 25;
 const invitationPageSize = 25;
 const recentPostPageSize = 20;
 const reportPageSize = 20;
+const removedPostPageSize = 10;
+const removedCommentPageSize = 10;
 
 export function ChapterAnalyticsPage({ chapterId }: ChapterAnalyticsPageProps) {
   return (
@@ -76,7 +84,7 @@ function ChapterAnalyticsContent({
       setState({ status: "loading" });
 
       try {
-        const [community, activeMembers, pendingMembers, invitations, posts, reports] =
+        const [community, activeMembers, pendingMembers, invitations, posts, reports, removedPosts, removedComments] =
           await Promise.all([
             getCommunity(accessToken, chapterId),
             listCommunityMembers(accessToken, chapterId, {
@@ -103,6 +111,14 @@ function ChapterAnalyticsContent({
               limit: reportPageSize,
               offset: 0,
               status: "OPEN"
+            }),
+            listCommunityRemovedPosts(accessToken, chapterId, {
+              limit: removedPostPageSize,
+              offset: 0
+            }),
+            listCommunityRemovedComments(accessToken, chapterId, {
+              limit: removedCommentPageSize,
+              offset: 0
             })
           ]);
 
@@ -117,6 +133,8 @@ function ChapterAnalyticsContent({
           invitations,
           posts,
           reports,
+          removedComments,
+          removedPosts,
           status: "ready"
         });
       } catch (caught) {
@@ -151,7 +169,7 @@ function ChapterAnalyticsContent({
     );
   }
 
-  const { activeMembers, community, invitations, pendingMembers, posts, reports } = state;
+  const { activeMembers, community, invitations, pendingMembers, posts, removedComments, removedPosts, reports } = state;
   const location = [community.city, community.country].filter(Boolean).join(", ");
 
   const uniqueAuthors = new Set(
@@ -169,6 +187,9 @@ function ChapterAnalyticsContent({
     activeMembers.total > 0 ? `${Math.round((pendingBacklog / activeMembers.total) * 100)}%` : "0%";
   const moderationRiskLabel =
     reports.total > 5 ? "High" : reports.total > 0 ? "Active" : "Low";
+  const removedPostCount = removedPosts.total;
+  const removedCommentCount = removedComments.total;
+  const moderationBacklog = reports.total + removedPostCount + removedCommentCount;
 
   const healthLabel =
     reports.total > 5 ? "watch" : pendingMembers.total > 0 || invitations.total > 0 ? "active" : "stable";
@@ -188,6 +209,8 @@ function ChapterAnalyticsContent({
     invitePressure,
     moderationRiskLabel,
     postsTotal: posts.total,
+    removedCommentCount,
+    removedPostCount,
     uniqueAuthors
   });
 
@@ -233,10 +256,10 @@ function ChapterAnalyticsContent({
           value={String(pendingBacklog)}
         />
         <MetricCard
-          detail="Open moderation items"
+          detail="Open reports plus removed content backlog"
           icon={<Flag aria-hidden="true" className="h-5 w-5" />}
           label="Risk signals"
-          value={String(reports.total)}
+          value={String(moderationBacklog)}
         />
       </section>
 
@@ -293,7 +316,68 @@ function ChapterAnalyticsContent({
             <SnapshotRow label="Reaction activity" value={String(totalReactions)} />
             <SnapshotRow label="Average engagement per post" value={averageEngagementPerPost} />
             <SnapshotRow label="Open reports on sampled posts" value={String(totalOpenReportsOnPosts)} />
+            <SnapshotRow label="Removed posts" value={String(removedPostCount)} />
+            <SnapshotRow label="Removed comments" value={String(removedCommentCount)} />
             <SnapshotRow label="Pending approvals" value={String(pendingMembers.total)} />
+          </div>
+        </div>
+      </section>
+
+      <section className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
+        <div className="rounded-lg border border-border bg-white p-5 shadow-soft sm:p-6">
+          <h3 className="font-display text-2xl font-semibold text-ink">Moderation footprint</h3>
+          <p className="mt-2 text-sm leading-6 text-muted">
+            Live moderation pressure across open reports and removed chapter content.
+          </p>
+          <div className="mt-5 grid gap-3">
+            <SnapshotRow label="Open reports" value={String(reports.total)} />
+            <SnapshotRow label="Removed posts" value={String(removedPostCount)} />
+            <SnapshotRow label="Removed comments" value={String(removedCommentCount)} />
+            <SnapshotRow label="Moderation backlog" value={String(moderationBacklog)} />
+            <SnapshotRow
+              label="Recovery state"
+              value={moderationBacklog > 0 ? "Needs review" : "Clear"}
+            />
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-border bg-white p-5 shadow-soft sm:p-6">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h3 className="font-display text-2xl font-semibold text-ink">Removed content review</h3>
+              <p className="mt-2 text-sm leading-6 text-muted">
+                Recently removed posts and comments that still affect chapter health and moderation load.
+              </p>
+            </div>
+            <Link className="focus-ring text-sm font-bold text-primary" href={`/communities/${community.id}`}>
+              Open moderation
+            </Link>
+          </div>
+          <div className="mt-5 grid gap-3">
+            {removedPosts.posts.length || removedComments.comments.length ? (
+              <>
+                {removedPosts.posts.slice(0, 2).map((post) => (
+                  <article className="rounded-lg border border-border bg-surface p-4" key={post.id}>
+                    <p className="text-xs font-bold uppercase tracking-[0.12em] text-secondary">
+                      Removed post
+                    </p>
+                    <p className="mt-2 text-sm font-bold text-ink">{post.author_display_name}</p>
+                    <p className="mt-1 text-sm leading-6 text-muted">{truncateText(post.body, 120)}</p>
+                  </article>
+                ))}
+                {removedComments.comments.slice(0, 2).map((comment) => (
+                  <article className="rounded-lg border border-border bg-surface p-4" key={comment.id}>
+                    <p className="text-xs font-bold uppercase tracking-[0.12em] text-secondary">
+                      Removed comment
+                    </p>
+                    <p className="mt-2 text-sm font-bold text-ink">{comment.author_display_name}</p>
+                    <p className="mt-1 text-sm leading-6 text-muted">{truncateText(comment.body, 120)}</p>
+                  </article>
+                ))}
+              </>
+            ) : (
+              <EmptyState message="No removed posts or comments are currently affecting this chapter." />
+            )}
           </div>
         </div>
       </section>
@@ -614,6 +698,8 @@ function buildChapterSignals({
   invitePressure,
   moderationRiskLabel,
   postsTotal,
+  removedCommentCount,
+  removedPostCount,
   uniqueAuthors
 }: {
   activeMembers: number;
@@ -622,6 +708,8 @@ function buildChapterSignals({
   invitePressure: string;
   moderationRiskLabel: string;
   postsTotal: number;
+  removedCommentCount: number;
+  removedPostCount: number;
   uniqueAuthors: number;
 }) {
   return [
@@ -630,6 +718,8 @@ function buildChapterSignals({
     { label: "Invite pressure", value: invitePressure },
     { label: "Recent authors", value: `${uniqueAuthors} of ${activeMembers}` },
     { label: "Recent posts sampled", value: String(postsTotal) },
+    { label: "Removed posts", value: String(removedPostCount) },
+    { label: "Removed comments", value: String(removedCommentCount) },
     { label: "Average engagement per post", value: averageEngagementPerPost }
   ];
 }
