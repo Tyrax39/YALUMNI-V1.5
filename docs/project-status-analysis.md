@@ -36,6 +36,33 @@ Frozen/protected behavior:
 - This slice only improves live moderation visibility and removed-content
   analytics inside `/admin/chapters/[chapterId]/analytics`.
 
+## Current V1.5 Implementation Update: 2026-06-29 Onboarding Review Clock Slice
+
+Completed after the leader pressure signals slice:
+
+- Upgraded `/onboarding` with live verification request age and next-milestone
+  signals derived from the existing verification request timestamp and status.
+- The onboarding route now gives members clearer review timing context without
+  changing profile, verification, or navigation behavior.
+- Existing onboarding routes, profile APIs, verification APIs, and submission
+  flow remain unchanged.
+
+Current plan position:
+
+- Exported screen parity remains roughly 54 implemented routes and 4 partially
+  implemented routes because onboarding still lacks a dedicated persisted
+  workflow model beyond the current derived live state.
+- Broader implementation progress remains roughly 95% complete as an estimate;
+  this slice deepens another partial route without closing the missing
+  workflow-state backend gap.
+
+Frozen/protected behavior:
+
+- Existing onboarding checklist logic, profile setup, program affiliation,
+  verification submission, verification submitted routing, and primary actions
+  remain unchanged.
+- This slice only improves live review-timing visibility inside `/onboarding`.
+
 ## Current V1.5 Implementation Update: 2026-06-27 Leader Pressure Signals Slice
 
 Completed after the chapter moderation footprint slice:

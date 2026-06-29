@@ -687,6 +687,45 @@ function formatSubmittedDate(value: string | null) {
   return new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(new Date(value));
 }
 
+function formatRequestAge(value: string | null) {
+  if (!value) {
+    return "Not submitted";
+  }
+
+  const createdAt = new Date(value);
+  if (Number.isNaN(createdAt.getTime())) {
+    return "Date pending";
+  }
+
+  const diffMs = Date.now() - createdAt.getTime();
+  if (diffMs < 1000 * 60 * 60 * 24) {
+    return "<1 day";
+  }
+
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  return `${diffDays} day${diffDays === 1 ? "" : "s"}`;
+}
+
+function getNextMilestone(request: VerificationRequest | null) {
+  if (!request) {
+    return "Submit verification";
+  }
+
+  if (request.status === "APPROVED") {
+    return "Open member network";
+  }
+
+  if (request.status === "PENDING") {
+    return "Await trust-team decision";
+  }
+
+  if (request.status === "REJECTED") {
+    return "Refresh evidence";
+  }
+
+  return "Review latest request update";
+}
+
 function buildOnboardingState(snapshot: OnboardingLiveSnapshot) {
   const completionPercentage = snapshot.profile?.completion_percentage ?? 0;
   const programCount = snapshot.profile?.program_affiliations.length ?? 0;
@@ -790,12 +829,16 @@ function buildOnboardingSignals(snapshot: OnboardingLiveSnapshot) {
   const programCount = snapshot.profile?.program_affiliations.length ?? 0;
   const evidenceCount = snapshot.latestRequest?.evidence.length ?? 0;
   const verificationStatus = snapshot.latestRequest?.status ?? null;
+  const requestAge = formatRequestAge(snapshot.latestRequest?.created_at ?? null);
+  const nextMilestone = getNextMilestone(snapshot.latestRequest);
 
   return [
     { label: "Profile completion", value: snapshot.isLoading ? "Loading" : formatPercent(completionPercentage) },
     { label: "Program records", value: snapshot.isLoading ? "Loading" : formatCount(programCount) },
     { label: "Verification status", value: snapshot.isLoading ? "Loading" : formatStatus(verificationStatus) },
     { label: "Evidence files", value: snapshot.isLoading ? "Loading" : formatCount(evidenceCount) },
+    { label: "Request age", value: snapshot.isLoading ? "Loading" : requestAge },
+    { label: "Next milestone", value: snapshot.isLoading ? "Loading" : nextMilestone },
     {
       label: "Readiness state",
       value: snapshot.isLoading
@@ -816,6 +859,7 @@ function buildOnboardingPriorities(snapshot: OnboardingLiveSnapshot): Onboarding
   const programCount = snapshot.profile?.program_affiliations.length ?? 0;
   const evidenceCount = snapshot.latestRequest?.evidence.length ?? 0;
   const verificationStatus = snapshot.latestRequest?.status ?? null;
+  const requestAge = formatRequestAge(snapshot.latestRequest?.created_at ?? null);
   const items: OnboardingPriorityItem[] = [];
 
   if (completionPercentage < 80) {
@@ -850,7 +894,7 @@ function buildOnboardingPriorities(snapshot: OnboardingLiveSnapshot): Onboarding
     items.push({
       detail:
         evidenceCount > 0
-          ? `${formatCount(evidenceCount)} evidence file${evidenceCount === 1 ? "" : "s"} uploaded. Track the review outcome next.`
+          ? `${formatCount(evidenceCount)} evidence file${evidenceCount === 1 ? "" : "s"} uploaded. Current review age: ${requestAge}.`
           : "A verification request exists, but no evidence files are attached yet.",
       href: "/verification/submitted",
       label: verificationStatus === "PENDING" ? "Review" : "Action",
