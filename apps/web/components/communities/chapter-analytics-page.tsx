@@ -190,6 +190,11 @@ function ChapterAnalyticsContent({
   const removedPostCount = removedPosts.total;
   const removedCommentCount = removedComments.total;
   const moderationBacklog = reports.total + removedPostCount + removedCommentCount;
+  const latestPostAge = formatNewestAge(posts.posts.map((post) => post.created_at));
+  const latestPostAgeDays = getNewestAgeDays(posts.posts.map((post) => post.created_at));
+  const newestActiveJoinAge = formatNewestAge(
+    activeMembers.members.map((member) => member.joined_at ?? member.created_at)
+  );
 
   const healthLabel =
     reports.total > 5 ? "watch" : pendingMembers.total > 0 || invitations.total > 0 ? "active" : "stable";
@@ -198,6 +203,7 @@ function ChapterAnalyticsContent({
     engagementRate,
     healthLabel,
     invitePressure,
+    latestPostAgeDays,
     moderationRiskLabel,
     pendingBacklog,
     reportsTotal: reports.total
@@ -207,7 +213,9 @@ function ChapterAnalyticsContent({
     averageEngagementPerPost,
     healthLabel,
     invitePressure,
+    latestPostAge,
     moderationRiskLabel,
+    newestActiveJoinAge,
     postsTotal: posts.total,
     removedCommentCount,
     removedPostCount,
@@ -311,6 +319,8 @@ function ChapterAnalyticsContent({
           <h3 className="font-display text-2xl font-semibold text-ink">Operational metrics</h3>
           <div className="mt-5 grid gap-3">
             <SnapshotRow label="Recent posts" value={String(posts.total)} />
+            <SnapshotRow label="Latest post age" value={latestPostAge} />
+            <SnapshotRow label="Newest active join" value={newestActiveJoinAge} />
             <SnapshotRow label="Unique authors in sample" value={String(uniqueAuthors)} />
             <SnapshotRow label="Comment activity" value={String(totalComments)} />
             <SnapshotRow label="Reaction activity" value={String(totalReactions)} />
@@ -613,6 +623,33 @@ function formatDate(value: string): string {
   }).format(new Date(value));
 }
 
+function getNewestAgeDays(values: string[]): number | null {
+  const validDates = values
+    .map((value) => new Date(value).getTime())
+    .filter((value) => !Number.isNaN(value));
+
+  if (!validDates.length) {
+    return null;
+  }
+
+  const newestTimestamp = Math.max(...validDates);
+  return Math.floor((Date.now() - newestTimestamp) / (1000 * 60 * 60 * 24));
+}
+
+function formatNewestAge(values: string[]) {
+  const ageDays = getNewestAgeDays(values);
+
+  if (ageDays === null) {
+    return "No recent activity";
+  }
+
+  if (ageDays < 1) {
+    return "<1 day";
+  }
+
+  return `${ageDays} day${ageDays === 1 ? "" : "s"}`;
+}
+
 function truncateText(value: string, maxLength: number): string {
   if (value.length <= maxLength) {
     return value;
@@ -626,6 +663,7 @@ function buildAnalyticsPriorities({
   engagementRate,
   healthLabel,
   invitePressure,
+  latestPostAgeDays,
   moderationRiskLabel,
   pendingBacklog,
   reportsTotal
@@ -634,6 +672,7 @@ function buildAnalyticsPriorities({
   engagementRate: string;
   healthLabel: string;
   invitePressure: string;
+  latestPostAgeDays: number | null;
   moderationRiskLabel: string;
   pendingBacklog: number;
   reportsTotal: number;
@@ -678,6 +717,16 @@ function buildAnalyticsPriorities({
     });
   }
 
+  if (latestPostAgeDays !== null && latestPostAgeDays >= 14) {
+    items.push({
+      body: `The latest sampled chapter post is ${latestPostAgeDays} day${latestPostAgeDays === 1 ? "" : "s"} old, which suggests the publishing rhythm may be slowing.`,
+      href: communityHref,
+      label: "Rhythm",
+      title: "Refresh chapter activity",
+      tone: latestPostAgeDays >= 30 ? "warning" : "neutral"
+    });
+  }
+
   if (!items.length) {
     items.push({
       body: `Current chapter health reads as ${healthLabel} with no immediate live queue pressure.`,
@@ -696,7 +745,9 @@ function buildChapterSignals({
   averageEngagementPerPost,
   healthLabel,
   invitePressure,
+  latestPostAge,
   moderationRiskLabel,
+  newestActiveJoinAge,
   postsTotal,
   removedCommentCount,
   removedPostCount,
@@ -706,7 +757,9 @@ function buildChapterSignals({
   averageEngagementPerPost: string;
   healthLabel: string;
   invitePressure: string;
+  latestPostAge: string;
   moderationRiskLabel: string;
+  newestActiveJoinAge: string;
   postsTotal: number;
   removedCommentCount: number;
   removedPostCount: number;
@@ -716,6 +769,8 @@ function buildChapterSignals({
     { label: "Health state", value: healthLabel },
     { label: "Moderation risk", value: moderationRiskLabel },
     { label: "Invite pressure", value: invitePressure },
+    { label: "Latest post age", value: latestPostAge },
+    { label: "Newest active join", value: newestActiveJoinAge },
     { label: "Recent authors", value: `${uniqueAuthors} of ${activeMembers}` },
     { label: "Recent posts sampled", value: String(postsTotal) },
     { label: "Removed posts", value: String(removedPostCount) },

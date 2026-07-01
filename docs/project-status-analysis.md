@@ -36,6 +36,36 @@ Frozen/protected behavior:
 - This slice only improves live moderation visibility and removed-content
   analytics inside `/admin/chapters/[chapterId]/analytics`.
 
+## Current V1.5 Implementation Update: 2026-07-01 Chapter Activity Timing Slice
+
+Completed after the introduction handoff aging slice:
+
+- Upgraded `/admin/chapters/[chapterId]/analytics` with live latest-post age,
+  newest-active-join age, and chapter-rhythm timing reads derived from the
+  existing chapter post and roster timestamps.
+- The analytics route now gives admins clearer timing context for chapter
+  activity without changing any moderation, roster, invitation, or route
+  behavior.
+- Existing chapter routes, community APIs, moderation flows, and admin access
+  controls remain unchanged.
+
+Current plan position:
+
+- Exported screen parity remains roughly 54 implemented routes and 4 partially
+  implemented routes because chapter analytics still lacks dedicated trend
+  history, exports, and deeper governance aggregation.
+- Broader implementation progress remains roughly 95% complete as an estimate;
+  this slice deepens another partial route without closing the historical
+  analytics backend gap.
+
+Frozen/protected behavior:
+
+- Existing chapter listing, community detail navigation, invitations,
+  membership approvals, reports, removed-content review, and moderation logic
+  remain unchanged.
+- This slice only improves live timing visibility inside
+  `/admin/chapters/[chapterId]/analytics`.
+
 ## Current V1.5 Implementation Update: 2026-06-29 Onboarding Review Clock Slice
 
 Completed after the leader pressure signals slice:
