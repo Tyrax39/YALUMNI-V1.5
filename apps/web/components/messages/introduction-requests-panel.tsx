@@ -85,16 +85,42 @@ export function IntroductionRequestsPanel({
       suggestedProfiles.filter((profile) => !recentConversationIdsByUserId.has(profile.user_id)).length,
     [recentConversationIdsByUserId, suggestedProfiles]
   );
+  const staleConversationCount = useMemo(
+    () =>
+      conversations.filter((conversation) => {
+        const timestamp = conversation.last_message_at ?? conversation.created_at;
+        const ageDays = getConversationAgeDays(timestamp);
+        return ageDays !== null && ageDays >= 14;
+      }).length,
+    [conversations]
+  );
+  const newestConversationAge = useMemo(() => {
+    if (!conversations.length) {
+      return "No live threads";
+    }
+
+    const newestTimestamp = conversations.reduce<string | null>((latest, conversation) => {
+      const candidate = conversation.last_message_at ?? conversation.created_at;
+      if (!latest) {
+        return candidate;
+      }
+
+      return new Date(candidate).getTime() > new Date(latest).getTime() ? candidate : latest;
+    }, null);
+
+    return formatConversationAge(newestTimestamp);
+  }, [conversations]);
   const introductionPriorities = useMemo(
     () =>
       buildIntroductionPriorities({
         freshReachCount,
+        staleConversationCount,
         suggestedProfilesCount: suggestedProfiles.length,
         totalConversations:
           overviewState.status === "ready" ? overviewState.totalConversations : 0,
         unreadCount
       }),
-    [freshReachCount, overviewState, suggestedProfiles.length, unreadCount]
+    [freshReachCount, overviewState, staleConversationCount, suggestedProfiles.length, unreadCount]
   );
 
   async function loadOverview() {
@@ -336,6 +362,8 @@ export function IntroductionRequestsPanel({
           <div className="mt-5 grid gap-3">
             <SignalRow label="Reusable live threads" value={String(reusedThreadCount)} />
             <SignalRow label="Fresh outreach targets" value={String(freshReachCount)} />
+            <SignalRow label="Stale handoffs" value={String(staleConversationCount)} />
+            <SignalRow label="Newest thread age" value={newestConversationAge} />
             <SignalRow label="Unread follow-ups" value={String(unreadCount)} />
             <SignalRow
               label="Suggested verified alumni"
@@ -585,13 +613,42 @@ function formatDateTime(value: string | null) {
   }).format(date);
 }
 
+function getConversationAgeDays(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+function formatConversationAge(value: string | null) {
+  const ageDays = getConversationAgeDays(value);
+
+  if (ageDays === null) {
+    return "Date pending";
+  }
+
+  if (ageDays < 1) {
+    return "<1 day";
+  }
+
+  return `${ageDays} day${ageDays === 1 ? "" : "s"}`;
+}
+
 function buildIntroductionPriorities({
   freshReachCount,
+  staleConversationCount,
   suggestedProfilesCount,
   totalConversations,
   unreadCount
 }: {
   freshReachCount: number;
+  staleConversationCount: number;
   suggestedProfilesCount: number;
   totalConversations: number;
   unreadCount: number;
@@ -613,6 +670,15 @@ function buildIntroductionPriorities({
       label: "Outreach",
       title: "Start fresh introductions",
       tone: "neutral"
+    });
+  }
+
+  if (staleConversationCount > 0) {
+    items.push({
+      body: `${staleConversationCount} introduction thread${staleConversationCount === 1 ? " has" : "s have"} been quiet for at least 14 days and may need a follow-up or closeout.`,
+      label: "Aging",
+      title: "Re-engage stale handoffs",
+      tone: staleConversationCount >= 3 ? "warning" : "neutral"
     });
   }
 

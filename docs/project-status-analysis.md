@@ -63,6 +63,33 @@ Frozen/protected behavior:
   remain unchanged.
 - This slice only improves live review-timing visibility inside `/onboarding`.
 
+## Current V1.5 Implementation Update: 2026-07-01 Introduction Handoff Aging Slice
+
+Completed after the onboarding review clock slice:
+
+- Upgraded `/messages/introductions` with live stale-handoff and newest-thread
+  age signals derived from the existing direct-message conversation timestamps.
+- The route now gives members clearer follow-up timing context without
+  changing search, thread creation, or existing-thread reuse behavior.
+- Existing direct-message APIs, directory search APIs, and thread navigation
+  behavior remain unchanged.
+
+Current plan position:
+
+- Exported screen parity remains roughly 54 implemented routes and 4 partially
+  implemented routes because the introductions route still lacks the dedicated
+  request approval and accept/decline workflow backend.
+- Broader implementation progress remains roughly 95% complete as an estimate;
+  this slice deepens another partial route without closing one of the larger
+  missing workflow modules.
+
+Frozen/protected behavior:
+
+- Existing member search, conversation creation, existing-thread reuse,
+  unread follow-up logic, and introduction action paths remain unchanged.
+- This slice only improves live aging visibility inside
+  `/messages/introductions`.
+
 ## Current V1.5 Implementation Update: 2026-06-27 Leader Pressure Signals Slice
 
 Completed after the chapter moderation footprint slice:
