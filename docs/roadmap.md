@@ -1,5 +1,8 @@
 # Implementation Roadmap
 
+Status note: this file remains the roadmap/history reference. The canonical
+implementation tracker now lives in `../IMPLEMENTATION_STATUS.md`.
+
 ## Phase 1: Foundation
 
 Status: implemented foundation, CI passing.

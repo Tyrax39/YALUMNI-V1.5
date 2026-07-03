@@ -1,5 +1,8 @@
 # Project Status Analysis
 
+Status note: this file is preserved as historical audit detail. The canonical
+implementation tracker now lives in `../IMPLEMENTATION_STATUS.md`.
+
 Prepared on 2026-05-02 from local workspace `C:\xampp\htdocs\yalumni-v0` and rebuild target `D:\YALUMNI-V1.5`.
 
 ## Executive Summary

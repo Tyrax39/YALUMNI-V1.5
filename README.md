@@ -4,6 +4,9 @@ Modern rebuild foundation for the YALI Alumni Platform.
 
 This repository is a greenfield rebuild based on the legacy `Tyrax39/Yalumni_V0` domain model and the planning packet in `Yalumni_rebuild_docs`. The legacy Laravel app remains a reference and migration source; this codebase is intentionally a new monorepo.
 
+Current implementation status, frozen baseline, launch blockers, and next
+execution slices are tracked canonically in `IMPLEMENTATION_STATUS.md`.
+
 ## Stack
 
 - Web: Next.js, React, TypeScript, Tailwind CSS

@@ -1,5 +1,8 @@
 # Runtime Split Status
 
+Status note: this file is preserved as runtime-specific context. The canonical
+implementation tracker now lives in `../IMPLEMENTATION_STATUS.md`.
+
 ## Current Slice
 
 The project now has three isolated frontend runtimes backed by one FastAPI service:
