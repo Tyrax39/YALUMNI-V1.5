@@ -50,6 +50,26 @@ class AlumniProfile(Base, TimestampMixin):
     )
 
 
+class OnboardingWorkflowState(Base, TimestampMixin):
+    __tablename__ = "onboarding_workflow_states"
+    __table_args__ = (
+        Index("ix_onboarding_workflow_states_current_step", "current_step_key"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        unique=True,
+        nullable=False,
+    )
+    current_step_key: Mapped[str | None] = mapped_column(String(80))
+    completed_step_keys: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    last_viewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    user: Mapped[User] = relationship()
+
+
 class ProgramAffiliation(Base, TimestampMixin):
     __tablename__ = "program_affiliations"
     __table_args__ = (Index("ix_program_affiliations_program_year", "program_name", "cohort_year"),)

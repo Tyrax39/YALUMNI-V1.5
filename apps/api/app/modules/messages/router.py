@@ -15,6 +15,7 @@ from app.modules.messages.models import (
     ConversationParticipant,
     DirectMessage,
     DirectMessageReport,
+    IntroductionRequest,
     UserBlock,
 )
 from app.modules.messages.schemas import (
@@ -22,6 +23,10 @@ from app.modules.messages.schemas import (
     ConversationListResponse,
     ConversationParticipantResponse,
     ConversationResponse,
+    IntroductionRequestCreate,
+    IntroductionRequestListResponse,
+    IntroductionRequestResponse,
+    IntroductionRequestReview,
     MessageCreate,
     MessageListResponse,
     MessageModerationReviewUpdate,
@@ -137,6 +142,27 @@ def _serialize_report(
         resolved_at=report.resolved_at,
         created_at=report.created_at,
         updated_at=report.updated_at,
+    )
+
+
+def _serialize_introduction_request(
+    introduction_request: IntroductionRequest,
+) -> IntroductionRequestResponse:
+    return IntroductionRequestResponse(
+        id=introduction_request.id,
+        requester_user_id=introduction_request.requester_user_id,
+        requester_display_name=introduction_request.requester.display_name,
+        requester_email=introduction_request.requester.email,
+        recipient_user_id=introduction_request.recipient_user_id,
+        recipient_display_name=introduction_request.recipient.display_name,
+        recipient_email=introduction_request.recipient.email,
+        conversation_id=introduction_request.conversation_id,
+        note=introduction_request.note,
+        status=introduction_request.status,
+        responded_by_user_id=introduction_request.responded_by_user_id,
+        responded_at=introduction_request.responded_at,
+        created_at=introduction_request.created_at,
+        updated_at=introduction_request.updated_at,
     )
 
 
@@ -263,6 +289,14 @@ def _conversation_query():
     )
 
 
+def _introduction_request_query():
+    return select(IntroductionRequest).options(
+        joinedload(IntroductionRequest.requester),
+        joinedload(IntroductionRequest.recipient),
+        joinedload(IntroductionRequest.responder),
+    )
+
+
 def _get_conversation_for_user(
     db: Session,
     conversation_id: uuid.UUID,
@@ -302,6 +336,49 @@ def _find_direct_conversation(
             ConversationParticipant.user_id == participant_user_id,
         )
     )
+
+
+def _create_direct_conversation_record(
+    db: Session,
+    initiator_user: User,
+    participant_user: User,
+) -> Conversation:
+    now = utcnow()
+    conversation = Conversation(
+        conversation_type="DIRECT",
+        created_by_user_id=initiator_user.id,
+    )
+    db.add(conversation)
+    db.flush()
+    db.add_all(
+        [
+            ConversationParticipant(
+                conversation_id=conversation.id,
+                user_id=initiator_user.id,
+                last_read_at=now,
+            ),
+            ConversationParticipant(
+                conversation_id=conversation.id,
+                user_id=participant_user.id,
+            ),
+        ]
+    )
+    db.flush()
+    return (
+        db.scalar(_conversation_query().where(Conversation.id == conversation.id))
+        or conversation
+    )
+
+
+def _create_or_get_direct_conversation(
+    db: Session,
+    initiator_user: User,
+    participant_user: User,
+) -> tuple[Conversation, bool]:
+    conversation = _find_direct_conversation(db, initiator_user.id, participant_user.id)
+    if conversation is not None:
+        return conversation, False
+    return _create_direct_conversation_record(db, initiator_user, participant_user), True
 
 
 def _ensure_messaging_allowed(db: Session, user_id: uuid.UUID, other_user_id: uuid.UUID) -> None:
@@ -365,6 +442,30 @@ def _message_options():
         joinedload(DirectMessage.removed_by_user),
         joinedload(DirectMessage.escalated_by_user),
     )
+
+
+def _get_introduction_request_for_user(
+    db: Session,
+    introduction_request_id: uuid.UUID,
+    user: User,
+) -> IntroductionRequest:
+    introduction_request = db.scalar(
+        _introduction_request_query().where(IntroductionRequest.id == introduction_request_id)
+    )
+    if introduction_request is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Introduction request not found",
+        )
+    if user.id not in {
+        introduction_request.requester_user_id,
+        introduction_request.recipient_user_id,
+    }:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Introduction request not found",
+        )
+    return introduction_request
 
 
 def _report_options():
@@ -478,6 +579,232 @@ def list_my_conversations(
     )
 
 
+@router.get("/introduction-requests", response_model=IntroductionRequestListResponse)
+def list_my_introduction_requests(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> IntroductionRequestListResponse:
+    incoming = db.scalars(
+        _introduction_request_query()
+        .where(IntroductionRequest.recipient_user_id == current_user.id)
+        .order_by(IntroductionRequest.created_at.desc())
+    ).all()
+    outgoing = db.scalars(
+        _introduction_request_query()
+        .where(IntroductionRequest.requester_user_id == current_user.id)
+        .order_by(IntroductionRequest.created_at.desc())
+    ).all()
+    return IntroductionRequestListResponse(
+        incoming=[_serialize_introduction_request(item) for item in incoming],
+        outgoing=[_serialize_introduction_request(item) for item in outgoing],
+        actionable_count=sum(1 for item in incoming if item.status == "PENDING"),
+    )
+
+
+@router.post(
+    "/introduction-requests",
+    response_model=IntroductionRequestResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_introduction_request(
+    payload: IntroductionRequestCreate,
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> IntroductionRequestResponse:
+    if payload.recipient_user_id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot request an introduction with yourself",
+        )
+
+    recipient_user = db.scalar(select(User).where(User.id == payload.recipient_user_id))
+    if recipient_user is None or recipient_user.status != "ACTIVE":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    _ensure_messaging_allowed(db, current_user.id, recipient_user.id)
+
+    existing_pending_request = db.scalar(
+        _introduction_request_query().where(
+            IntroductionRequest.requester_user_id == current_user.id,
+            IntroductionRequest.recipient_user_id == recipient_user.id,
+            IntroductionRequest.status == "PENDING",
+        )
+    )
+    if existing_pending_request is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An introduction request is already pending for this member",
+        )
+
+    introduction_request = IntroductionRequest(
+        requester_user_id=current_user.id,
+        recipient_user_id=recipient_user.id,
+        note=payload.note,
+        status="PENDING",
+    )
+    db.add(introduction_request)
+    db.flush()
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "messages.introduction_requested",
+        {
+            "introduction_request_id": str(introduction_request.id),
+            "recipient_user_id": str(recipient_user.id),
+        },
+    )
+    notify_users(
+        db,
+        [recipient_user.id],
+        actor_user_id=current_user.id,
+        body=(payload.note or "A member asked to connect with you.")[:180],
+        event_type="messages.introduction_requested",
+        metadata={"introduction_request_id": str(introduction_request.id)},
+        target_url="/messages/introductions",
+        title=f"Introduction request from {current_user.display_name}",
+    )
+    db.commit()
+    introduction_request = _get_introduction_request_for_user(
+        db,
+        introduction_request.id,
+        current_user,
+    )
+    return _serialize_introduction_request(introduction_request)
+
+
+@router.post(
+    "/introduction-requests/{introduction_request_id}/accept",
+    response_model=IntroductionRequestResponse,
+)
+def accept_introduction_request(
+    introduction_request_id: uuid.UUID,
+    payload: IntroductionRequestReview,
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> IntroductionRequestResponse:
+    introduction_request = _get_introduction_request_for_user(
+        db,
+        introduction_request_id,
+        current_user,
+    )
+    if introduction_request.recipient_user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the requested member can accept this introduction",
+        )
+    if introduction_request.status != "PENDING":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only pending introduction requests can be accepted",
+        )
+
+    requester = db.scalar(select(User).where(User.id == introduction_request.requester_user_id))
+    recipient = db.scalar(select(User).where(User.id == introduction_request.recipient_user_id))
+    if requester is None or recipient is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    _ensure_messaging_allowed(db, requester.id, recipient.id)
+
+    conversation, _created = _create_or_get_direct_conversation(db, requester, recipient)
+    note_to_send = payload.note or introduction_request.note
+    if note_to_send and conversation.last_message_at is None:
+        _send_message(db, conversation, requester, note_to_send)
+
+    introduction_request.status = "ACCEPTED"
+    introduction_request.responded_by_user_id = current_user.id
+    introduction_request.responded_at = utcnow()
+    introduction_request.conversation_id = conversation.id
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "messages.introduction_accepted",
+        {
+            "conversation_id": str(conversation.id),
+            "introduction_request_id": str(introduction_request.id),
+        },
+    )
+    notify_users(
+        db,
+        [requester.id],
+        actor_user_id=current_user.id,
+        body=f"{current_user.display_name} accepted your introduction request.",
+        event_type="messages.introduction_accepted",
+        metadata={
+            "conversation_id": str(conversation.id),
+            "introduction_request_id": str(introduction_request.id),
+        },
+        target_url=f"/messages/{conversation.id}",
+        title="Introduction request accepted",
+    )
+    db.commit()
+    introduction_request = _get_introduction_request_for_user(
+        db,
+        introduction_request.id,
+        current_user,
+    )
+    return _serialize_introduction_request(introduction_request)
+
+
+@router.post(
+    "/introduction-requests/{introduction_request_id}/decline",
+    response_model=IntroductionRequestResponse,
+)
+def decline_introduction_request(
+    introduction_request_id: uuid.UUID,
+    payload: IntroductionRequestReview,
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> IntroductionRequestResponse:
+    introduction_request = _get_introduction_request_for_user(
+        db,
+        introduction_request_id,
+        current_user,
+    )
+    if introduction_request.recipient_user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the requested member can decline this introduction",
+        )
+    if introduction_request.status != "PENDING":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only pending introduction requests can be declined",
+        )
+
+    introduction_request.status = "DECLINED"
+    introduction_request.responded_by_user_id = current_user.id
+    introduction_request.responded_at = utcnow()
+    if payload.note:
+        introduction_request.note = payload.note
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "messages.introduction_declined",
+        {"introduction_request_id": str(introduction_request.id)},
+    )
+    notify_users(
+        db,
+        [introduction_request.requester_user_id],
+        actor_user_id=current_user.id,
+        body=f"{current_user.display_name} declined your introduction request.",
+        event_type="messages.introduction_declined",
+        metadata={"introduction_request_id": str(introduction_request.id)},
+        target_url="/messages/introductions",
+        title="Introduction request declined",
+    )
+    db.commit()
+    introduction_request = _get_introduction_request_for_user(
+        db,
+        introduction_request.id,
+        current_user,
+    )
+    return _serialize_introduction_request(introduction_request)
+
+
 @router.post(
     "/conversations",
     response_model=ConversationResponse,
@@ -500,32 +827,11 @@ def create_or_get_direct_conversation(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     _ensure_messaging_allowed(db, current_user.id, participant_user.id)
 
-    conversation = _find_direct_conversation(db, current_user.id, participant_user.id)
-    created = False
-    if conversation is None:
-        now = utcnow()
-        conversation = Conversation(
-            conversation_type="DIRECT",
-            created_by_user_id=current_user.id,
-        )
-        db.add(conversation)
-        db.flush()
-        db.add_all(
-            [
-                ConversationParticipant(
-                    conversation_id=conversation.id,
-                    user_id=current_user.id,
-                    last_read_at=now,
-                ),
-                ConversationParticipant(
-                    conversation_id=conversation.id,
-                    user_id=participant_user.id,
-                ),
-            ]
-        )
-        db.flush()
-        conversation = db.scalar(_conversation_query().where(Conversation.id == conversation.id))
-        created = True
+    conversation, created = _create_or_get_direct_conversation(
+        db,
+        current_user,
+        participant_user,
+    )
 
     if payload.initial_message:
         _send_message(db, conversation, current_user, payload.initial_message)

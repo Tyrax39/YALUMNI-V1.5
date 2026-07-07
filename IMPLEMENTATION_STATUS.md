@@ -1,6 +1,6 @@
 # YALUMNI V1.5 Implementation Status
 
-Last updated: 2026-07-03
+Last updated: 2026-07-08
 Canonical scope target: pilot alumni core launch
 Canonical runtime: `apps/web` (`3010`), `apps/admin-console` (`3011`), `apps/super-admin-console` (`3012`), `apps/api` (`8002`)
 
@@ -13,12 +13,13 @@ the documents disagree.
 
 ## Snapshot
 
-- Overall pilot-core completion estimate: `90-95%`
+- Overall pilot-core completion estimate: `93-96%`
 - Confidence: `medium-high`
 - Current branch at audit: `Tyrax0/yalumni-v1.5-foundation`
-- Current state: late-stage staging build with strong module coverage, a few
-  partial route/workflow gaps, real payment-provider work still open, and
-  production hardening/deployment parity still required
+- Current state: late-stage staging build with strong module coverage, pilot
+  route parity completed for the remaining partial member/admin surfaces, real
+  payment-provider work still open, and production hardening/deployment parity
+  still required
 
 ## Frozen Baseline
 
@@ -44,10 +45,10 @@ future task slice explicitly touches them:
 | Auth, session, RBAC | login, logout, sessions, route protection, role-aware consoles | Implemented with hardening follow-up | implemented | implemented | smoke and contract coverage present | hardening follow-up | yes |
 | Profile and verification | profile, affiliation, verification request, evidence, admin review | Implemented | implemented | implemented | covered and deployed locally/staging | complete | yes |
 | Directory and MWF alumni | member directory plus MWF alumni cache | Implemented | implemented | implemented | tests and super-admin sync controls present | complete | yes |
-| Communities | discovery, detail, memberships, invitations, leadership views | Implemented with one partial leadership route | partial on leader dashboard depth | implemented | local/staging ready | partial | no |
+| Communities | discovery, detail, memberships, invitations, leadership views | Implemented for pilot scope | implemented | implemented | local/staging ready | complete for pilot | yes |
 | Feed and moderation | posts, comments, likes, reports, admin moderation | Implemented | implemented | implemented | local/staging ready | complete | yes |
-| Messaging and notifications | inbox, direct conversations, reports, SSE notifications, intros | Implemented with one partial introductions route | partial on introductions workflow depth | partial on intro approval workflow | local/staging ready | partial | no |
-| Onboarding | guided readiness and verification handoff | Implemented with one partial workflow route | partial on workflow depth | partial on persisted workflow model | local/staging ready | partial | no |
+| Messaging and notifications | inbox, direct conversations, reports, SSE notifications, intros | Implemented for pilot scope | implemented | implemented | local/staging ready | complete for pilot | yes |
+| Onboarding | guided readiness and verification handoff | Implemented for pilot scope | implemented | implemented | local/staging ready | complete for pilot | yes |
 | Events | list, create, detail, agenda, attendees, RSVP | Implemented for pilot scope | implemented | implemented | local/staging ready | complete for pilot | yes |
 | Initiatives | list, create, detail, milestones | Implemented for pilot scope | implemented | implemented | local/staging ready | complete for pilot | yes |
 | Opportunities | list, create, detail, admin review | Implemented for pilot scope | implemented | implemented | local/staging ready | complete for pilot | yes |
@@ -56,7 +57,7 @@ future task slice explicitly touches them:
 | Mentorship | hub, discovery, requests, settings | Implemented foundation | implemented | implemented foundation | local/staging ready | complete for pilot foundation | yes |
 | Elections | member election hub plus admin lifecycle tools | Implemented foundation | implemented | implemented foundation | local/staging ready | hardening/final workflows open | yes |
 | Contributions and treasury | campaigns, pay flow, receipts, treasury, audits, refunds | Implemented foundation | implemented | implemented foundation | local/staging ready with local-test provider | production provider blocker | yes |
-| Chapter analytics | admin chapter analytics | Implemented shell with live reads | partial | partial on deeper analytics/export/history | local/staging ready | partial | no |
+| Chapter analytics | admin chapter analytics | Implemented for pilot scope | implemented | implemented via live reads | local/staging ready | complete for pilot | yes |
 | Super-admin diagnostics | system-level health and controls | Implemented read-focused console | implemented | partial for deeper action endpoints | local/staging ready | partial but not launch-blocking | yes |
 | Public landing and trust IA | home, sign-in/join framing, public trust/value surface | Implemented minimum | implemented | not backend-heavy | staging parity review still needed | complete for pilot minimum | yes |
 | Public informational/discovery breadth | broader public marketing/institutional breadth from long-form spec | intentionally reduced for pilot | partial | partial | not required for pilot launch | post-launch | no |
@@ -67,20 +68,14 @@ future task slice explicitly touches them:
 
 ## Active Partial Routes And Workflows
 
-These are the only known route-level pilot-core gaps that still need direct
-implementation depth:
+There are no longer any known route-level pilot-core gaps in the previously
+tracked member/admin surfaces. The remaining open work is now concentrated in
+cross-cutting launch blockers:
 
-1. `/admin/chapters/[chapterId]/analytics`
-   - still needs deeper trend history, export/read-only analytics polish, and
-     broader governance aggregation
-2. `/communities/[communityId]/dashboard`
-   - still needs deeper leader-operational context, chapter-history, and
-     governance/event-planning depth
-3. `/messages/introductions`
-   - still needs a dedicated request approval and accept/decline workflow
-4. `/onboarding`
-   - still needs persisted workflow-state depth beyond the current derived live
-     state
+1. Real payment-provider implementation (`Stripe + Flutterwave`)
+2. Security/session/2FA hardening
+3. Storage, worker, and runbook hardening
+4. Azure staging-to-release parity and release-gate enforcement
 
 ## Current Launch Blockers
 
@@ -145,12 +140,11 @@ Common local runtime commands:
 
 Execute in this order unless a user explicitly reprioritizes:
 
-1. Finish the four partial pilot routes listed above.
-2. Implement real `Stripe + Flutterwave` contribution checkout/provider flows.
-3. Close auth/session/security hardening gaps.
-4. Harden Azure staging to release parity with a formal deployment checklist.
-5. Finalize storage/worker/runbook production readiness.
-6. Add only the minimum remaining public informational surfaces needed for pilot
+1. Implement real `Stripe + Flutterwave` contribution checkout/provider flows.
+2. Close auth/session/security hardening gaps.
+3. Harden Azure staging to release parity with a formal deployment checklist.
+4. Finalize storage/worker/runbook production readiness.
+5. Add only the minimum remaining public informational surfaces needed for pilot
    credibility; defer broader public-marketing breadth post-launch.
 
 ## Explicit Post-Launch Deferrals

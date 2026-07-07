@@ -300,6 +300,38 @@ export type ConversationCreatePayload = {
   participant_user_id: string;
 };
 
+export type IntroductionRequest = {
+  id: string;
+  requester_user_id: string;
+  requester_display_name: string;
+  requester_email: string;
+  recipient_user_id: string;
+  recipient_display_name: string;
+  recipient_email: string;
+  conversation_id: string | null;
+  note: string | null;
+  status: string;
+  responded_by_user_id: string | null;
+  responded_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type IntroductionRequestListResponse = {
+  incoming: IntroductionRequest[];
+  outgoing: IntroductionRequest[];
+  actionable_count: number;
+};
+
+export type IntroductionRequestCreatePayload = {
+  recipient_user_id: string;
+  note?: string | null;
+};
+
+export type IntroductionRequestReviewPayload = {
+  note?: string | null;
+};
+
 export type MessageCreatePayload = {
   body: string;
 };
@@ -356,6 +388,23 @@ export type AlumniProfile = {
   profile_photo_file_size_bytes: number | null;
   profile_photo_updated_at: string | null;
   program_affiliations: ProgramAffiliation[];
+};
+
+export type OnboardingWorkflowState = {
+  id: string;
+  user_id: string;
+  current_step_key: string | null;
+  completed_step_keys: string[];
+  last_viewed_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type OnboardingWorkflowStateUpdate = {
+  current_step_key?: string | null;
+  completed_step_keys?: string[];
+  mark_complete?: boolean | null;
 };
 
 export type AlumniProfileUpdate = {
@@ -1214,6 +1263,55 @@ export function createDirectConversation(
   });
 }
 
+export function listIntroductionRequests(
+  accessToken: string
+): Promise<IntroductionRequestListResponse> {
+  return protectedApiFetch<IntroductionRequestListResponse>("/api/v1/messages/introduction-requests", {
+    headers: authHeaders(accessToken)
+  });
+}
+
+export function createIntroductionRequest(
+  accessToken: string,
+  payload: IntroductionRequestCreatePayload
+): Promise<IntroductionRequest> {
+  return protectedApiFetch<IntroductionRequest>("/api/v1/messages/introduction-requests", {
+    body: JSON.stringify(payload),
+    headers: authHeaders(accessToken),
+    method: "POST"
+  });
+}
+
+export function acceptIntroductionRequest(
+  accessToken: string,
+  introductionRequestId: string,
+  payload: IntroductionRequestReviewPayload = {}
+): Promise<IntroductionRequest> {
+  return protectedApiFetch<IntroductionRequest>(
+    `/api/v1/messages/introduction-requests/${encodeURIComponent(introductionRequestId)}/accept`,
+    {
+      body: JSON.stringify(payload),
+      headers: authHeaders(accessToken),
+      method: "POST"
+    }
+  );
+}
+
+export function declineIntroductionRequest(
+  accessToken: string,
+  introductionRequestId: string,
+  payload: IntroductionRequestReviewPayload = {}
+): Promise<IntroductionRequest> {
+  return protectedApiFetch<IntroductionRequest>(
+    `/api/v1/messages/introduction-requests/${encodeURIComponent(introductionRequestId)}/decline`,
+    {
+      body: JSON.stringify(payload),
+      headers: authHeaders(accessToken),
+      method: "POST"
+    }
+  );
+}
+
 export function listConversationMessages(
   accessToken: string,
   conversationId: string,
@@ -1519,6 +1617,25 @@ function parseSseData(eventText: string): string | null {
 export function getMyAlumniProfile(accessToken: string): Promise<AlumniProfile> {
   return protectedApiFetch<AlumniProfile>("/api/v1/alumni/me/profile", {
     headers: authHeaders(accessToken)
+  });
+}
+
+export function getMyOnboardingWorkflowState(
+  accessToken: string
+): Promise<OnboardingWorkflowState> {
+  return protectedApiFetch<OnboardingWorkflowState>("/api/v1/alumni/me/onboarding-state", {
+    headers: authHeaders(accessToken)
+  });
+}
+
+export function updateMyOnboardingWorkflowState(
+  accessToken: string,
+  payload: OnboardingWorkflowStateUpdate
+): Promise<OnboardingWorkflowState> {
+  return protectedApiFetch<OnboardingWorkflowState>("/api/v1/alumni/me/onboarding-state", {
+    body: JSON.stringify(payload),
+    headers: authHeaders(accessToken),
+    method: "PATCH"
   });
 }
 

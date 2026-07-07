@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 
-import { Activity, Flag, MailPlus, MessageSquare, ShieldCheck, Users } from "lucide-react";
+import { Activity, Download, Flag, MailPlus, MessageSquare, ShieldCheck, Users } from "lucide-react";
 import { ADMIN_ROLES } from "@yalumni/frontend-shared";
 
 import {
@@ -195,6 +195,13 @@ function ChapterAnalyticsContent({
   const newestActiveJoinAge = formatNewestAge(
     activeMembers.members.map((member) => member.joined_at ?? member.created_at)
   );
+  const governanceSignals = buildGovernanceSignals(activeMembers.members);
+  const activityTrendRows = buildTrendRows({
+    activeMembers,
+    invitations,
+    posts,
+    reports
+  });
 
   const healthLabel =
     reports.total > 5 ? "watch" : pendingMembers.total > 0 || invitations.total > 0 ? "active" : "stable";
@@ -238,6 +245,25 @@ function ChapterAnalyticsContent({
           </p>
         </div>
         <div className="flex flex-wrap gap-2 xl:justify-end">
+          <button
+            className="focus-ring inline-flex min-h-9 items-center gap-2 rounded-lg border border-border bg-surface px-3 text-xs font-bold uppercase tracking-[0.1em] text-muted transition hover:border-primary hover:text-primary"
+            onClick={() =>
+              downloadAnalyticsSnapshot(`${community.name}-chapter-analytics.json`, {
+                activeMembers: activeMembers.members,
+                community,
+                invitations: invitations.invitations,
+                pendingMembers: pendingMembers.members,
+                posts: posts.posts,
+                removedComments: removedComments.comments,
+                removedPosts: removedPosts.posts,
+                reports: reports.reports
+              })
+            }
+            type="button"
+          >
+            <Download aria-hidden="true" className="h-4 w-4" />
+            Export
+          </button>
           <StatusBadge label={healthLabel} tone={healthLabel === "watch" ? "warning" : "primary"} />
           <StatusBadge label={formatLabel(community.visibility)} tone="neutral" />
           {location ? <StatusBadge label={location} tone="neutral" /> : null}
@@ -329,6 +355,37 @@ function ChapterAnalyticsContent({
             <SnapshotRow label="Removed posts" value={String(removedPostCount)} />
             <SnapshotRow label="Removed comments" value={String(removedCommentCount)} />
             <SnapshotRow label="Pending approvals" value={String(pendingMembers.total)} />
+          </div>
+        </div>
+      </section>
+
+      <section className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
+        <div className="rounded-lg border border-border bg-white p-5 shadow-soft sm:p-6">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h3 className="font-display text-2xl font-semibold text-ink">Trend windows</h3>
+              <p className="mt-2 text-sm leading-6 text-muted">
+                Read-only 7, 30, and 90-day activity views derived from the live chapter sample already loaded on this route.
+              </p>
+            </div>
+            <StatusBadge label="Read only" tone="neutral" />
+          </div>
+          <div className="mt-5 grid gap-3">
+            {activityTrendRows.map((row) => (
+              <SnapshotRow key={row.label} label={row.label} value={row.value} />
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-border bg-white p-5 shadow-soft sm:p-6">
+          <h3 className="font-display text-2xl font-semibold text-ink">Governance coverage</h3>
+          <p className="mt-2 text-sm leading-6 text-muted">
+            Leadership and roster coverage derived from the current active member set for chapter-level readouts.
+          </p>
+          <div className="mt-5 grid gap-3">
+            {governanceSignals.map((row) => (
+              <SnapshotRow key={row.label} label={row.label} value={row.value} />
+            ))}
           </div>
         </div>
       </section>
@@ -777,4 +834,67 @@ function buildChapterSignals({
     { label: "Removed comments", value: String(removedCommentCount) },
     { label: "Average engagement per post", value: averageEngagementPerPost }
   ];
+}
+
+function buildGovernanceSignals(members: CommunityMemberListResponse["members"]) {
+  const owners = members.filter((member) => member.role === "OWNER").length;
+  const managers = members.filter((member) => member.role === "MANAGER").length;
+  const membersOnly = members.filter((member) => member.role === "MEMBER").length;
+  const recentJoins = members.filter((member) => {
+    const age = getNewestAgeDays([member.joined_at ?? member.created_at]);
+    return age !== null && age <= 30;
+  }).length;
+
+  return [
+    { label: "Owners", value: String(owners) },
+    { label: "Managers", value: String(managers) },
+    { label: "Members", value: String(membersOnly) },
+    { label: "Recent joins (30d)", value: String(recentJoins) },
+    {
+      label: "Coverage signal",
+      value: owners > 0 && managers > 0 ? "Distributed" : owners > 0 ? "Owner-led" : "Needs cover"
+    }
+  ];
+}
+
+function buildTrendRows({
+  activeMembers,
+  invitations,
+  posts,
+  reports
+}: {
+  activeMembers: CommunityMemberListResponse;
+  invitations: CommunityInvitationListResponse;
+  posts: CommunityPostListResponse;
+  reports: CommunityPostReportQueueResponse;
+}) {
+  const windows = [7, 30, 90];
+
+  return windows.map((days) => ({
+    label: `${days}-day window`,
+    value: [
+      `${countWithinDays(activeMembers.members.map((member) => member.joined_at ?? member.created_at), days)} joins`,
+      `${countWithinDays(invitations.invitations.map((invitation) => invitation.created_at), days)} invites`,
+      `${countWithinDays(posts.posts.map((post) => post.created_at), days)} posts`,
+      `${countWithinDays(reports.reports.map((report) => report.created_at), days)} reports`
+    ].join(" · ")
+  }));
+}
+
+function countWithinDays(values: string[], days: number) {
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+  return values.filter((value) => {
+    const timestamp = new Date(value).getTime();
+    return !Number.isNaN(timestamp) && timestamp >= cutoff;
+  }).length;
+}
+
+function downloadAnalyticsSnapshot(fileName: string, payload: unknown) {
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  anchor.click();
+  URL.revokeObjectURL(url);
 }

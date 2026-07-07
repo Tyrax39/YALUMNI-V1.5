@@ -18,9 +18,12 @@ import {
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import {
   AlumniProfile,
+  OnboardingWorkflowState,
   VerificationRequest,
+  getMyOnboardingWorkflowState,
   getMyAlumniProfile,
-  getMyVerificationRequests
+  getMyVerificationRequests,
+  updateMyOnboardingWorkflowState
 } from "@/lib/api";
 
 const progressSteps = ["Profile", "Regional", "Commitment", "Verification", "Complete"] as const;
@@ -30,6 +33,7 @@ type OnboardingLiveSnapshot = {
   isLoading: boolean;
   latestRequest: VerificationRequest | null;
   profile: AlumniProfile | null;
+  workflowState: OnboardingWorkflowState | null;
 };
 
 export function OnboardingFlowPage() {
@@ -70,6 +74,7 @@ function OnboardingFlowContent({
   const statusLabel = snapshot.isLoading ? "Loading" : onboardingState.verificationStatusLabel;
   const readinessSignals = useMemo(() => buildOnboardingSignals(snapshot), [snapshot]);
   const readinessPriorities = useMemo(() => buildOnboardingPriorities(snapshot), [snapshot]);
+  usePersistOnboardingWorkflowState(accessToken, snapshot);
 
   return (
     <main className="min-h-screen bg-[#f9f9ff] text-[#191c21]">
@@ -294,6 +299,7 @@ function VerificationSubmittedContent({
   displayName: string;
 }) {
   const snapshot = useOnboardingSnapshot(accessToken);
+  usePersistOnboardingWorkflowState(accessToken, snapshot);
   const requestStatus = snapshot.isLoading
     ? "Loading"
     : formatStatus(snapshot.latestRequest?.status ?? null);
@@ -475,16 +481,18 @@ function useOnboardingSnapshot(accessToken: string): OnboardingLiveSnapshot {
     error: null,
     isLoading: true,
     latestRequest: null,
-    profile: null
+    profile: null,
+    workflowState: null
   });
 
   useEffect(() => {
     let isMounted = true;
 
     async function loadSnapshot() {
-      const [profileResult, verificationResult] = await Promise.allSettled([
+      const [profileResult, verificationResult, workflowStateResult] = await Promise.allSettled([
         getMyAlumniProfile(accessToken),
-        getMyVerificationRequests(accessToken)
+        getMyVerificationRequests(accessToken),
+        getMyOnboardingWorkflowState(accessToken)
       ]);
 
       if (!isMounted) {
@@ -496,16 +504,21 @@ function useOnboardingSnapshot(accessToken: string): OnboardingLiveSnapshot {
         verificationResult.status === "fulfilled"
           ? verificationResult.value.requests[0] ?? null
           : null;
+      const workflowState =
+        workflowStateResult.status === "fulfilled" ? workflowStateResult.value : null;
       const error =
-        profileResult.status === "rejected" && verificationResult.status === "rejected"
-          ? "Live profile and verification status could not be loaded."
+        profileResult.status === "rejected" &&
+        verificationResult.status === "rejected" &&
+        workflowStateResult.status === "rejected"
+          ? "Live onboarding state could not be loaded."
           : null;
 
       setSnapshot({
         error,
         isLoading: false,
         latestRequest,
-        profile
+        profile,
+        workflowState
       });
     }
 
@@ -517,6 +530,50 @@ function useOnboardingSnapshot(accessToken: string): OnboardingLiveSnapshot {
   }, [accessToken]);
 
   return snapshot;
+}
+
+function usePersistOnboardingWorkflowState(
+  accessToken: string,
+  snapshot: OnboardingLiveSnapshot
+) {
+  const workflowDraft = useMemo(() => buildOnboardingWorkflowDraft(snapshot), [snapshot]);
+
+  useEffect(() => {
+    if (snapshot.isLoading) {
+      return;
+    }
+
+    const currentState = snapshot.workflowState;
+    const sameCurrentStep = currentState?.current_step_key === workflowDraft.current_step_key;
+    const sameCompletedSteps =
+      JSON.stringify(currentState?.completed_step_keys ?? []) ===
+      JSON.stringify(workflowDraft.completed_step_keys);
+    const sameCompletion =
+      Boolean(currentState?.completed_at) === Boolean(workflowDraft.mark_complete);
+
+    if (sameCurrentStep && sameCompletedSteps && sameCompletion) {
+      return;
+    }
+
+    let isMounted = true;
+
+    async function persistState() {
+      try {
+        await updateMyOnboardingWorkflowState(accessToken, workflowDraft);
+        if (!isMounted) {
+          return;
+        }
+      } catch {
+        // Keep onboarding resilient if the persisted-state endpoint is temporarily unavailable.
+      }
+    }
+
+    void persistState();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [accessToken, snapshot.isLoading, snapshot.workflowState, workflowDraft]);
 }
 
 function LiveMetric({ label, value }: { label: string; value: string }) {
@@ -687,6 +744,33 @@ function formatSubmittedDate(value: string | null) {
   return new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(new Date(value));
 }
 
+function formatShortDateTime(value: string | null) {
+  if (!value) {
+    return "Not synced";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "Not synced";
+  }
+
+  return new Intl.DateTimeFormat("en", {
+    dateStyle: "medium",
+    timeStyle: "short"
+  }).format(date);
+}
+
+function formatStepKey(value: string | null) {
+  if (!value) {
+    return "Not tracked";
+  }
+
+  return value
+    .split("-")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
+}
+
 function formatRequestAge(value: string | null) {
   if (!value) {
     return "Not submitted";
@@ -831,6 +915,8 @@ function buildOnboardingSignals(snapshot: OnboardingLiveSnapshot) {
   const verificationStatus = snapshot.latestRequest?.status ?? null;
   const requestAge = formatRequestAge(snapshot.latestRequest?.created_at ?? null);
   const nextMilestone = getNextMilestone(snapshot.latestRequest);
+  const persistedStep = snapshot.workflowState?.current_step_key ?? null;
+  const lastViewedAt = snapshot.workflowState?.last_viewed_at ?? null;
 
   return [
     { label: "Profile completion", value: snapshot.isLoading ? "Loading" : formatPercent(completionPercentage) },
@@ -839,6 +925,8 @@ function buildOnboardingSignals(snapshot: OnboardingLiveSnapshot) {
     { label: "Evidence files", value: snapshot.isLoading ? "Loading" : formatCount(evidenceCount) },
     { label: "Request age", value: snapshot.isLoading ? "Loading" : requestAge },
     { label: "Next milestone", value: snapshot.isLoading ? "Loading" : nextMilestone },
+    { label: "Persisted step", value: snapshot.isLoading ? "Loading" : formatStepKey(persistedStep) },
+    { label: "Last synced", value: snapshot.isLoading ? "Loading" : formatShortDateTime(lastViewedAt) },
     {
       label: "Readiness state",
       value: snapshot.isLoading
@@ -914,4 +1002,37 @@ function buildOnboardingPriorities(snapshot: OnboardingLiveSnapshot): Onboarding
   }
 
   return items.slice(0, 4);
+}
+
+function buildOnboardingWorkflowDraft(snapshot: OnboardingLiveSnapshot) {
+  const state = buildOnboardingState(snapshot);
+  const completedStepKeys: string[] = [];
+
+  if (snapshot.profile?.completion_percentage ?? 0 >= 80) {
+    completedStepKeys.push("profile");
+  }
+  if ((snapshot.profile?.program_affiliations.length ?? 0) > 0) {
+    completedStepKeys.push("program");
+  }
+  if (snapshot.latestRequest) {
+    completedStepKeys.push("verification");
+  }
+  if (snapshot.latestRequest?.status === "APPROVED") {
+    completedStepKeys.push("first-action", "complete");
+  }
+
+  return {
+    completed_step_keys: completedStepKeys,
+    current_step_key:
+      state.currentStepLabel === "Profile"
+        ? "profile"
+        : state.currentStepLabel === "Program"
+          ? "program"
+          : state.currentStepLabel === "Verification"
+            ? "verification"
+            : snapshot.latestRequest?.status === "APPROVED"
+              ? "complete"
+              : "first-action",
+    mark_complete: snapshot.latestRequest?.status === "APPROVED"
+  };
 }

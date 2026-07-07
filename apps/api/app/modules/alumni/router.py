@@ -25,6 +25,7 @@ from app.modules.alumni.models import (
     AlumniProfile,
     MwfAlumniProfile,
     MwfAlumniSyncRun,
+    OnboardingWorkflowState,
     ProgramAffiliation,
     VerificationEvidence,
     VerificationRequest,
@@ -46,6 +47,8 @@ from app.modules.alumni.schemas import (
     MwfAlumniSearchResponse,
     MwfAlumniSyncRunListResponse,
     MwfAlumniSyncStatusResponse,
+    OnboardingWorkflowStateResponse,
+    OnboardingWorkflowStateUpdate,
     ProgramAffiliationCreate,
     VerificationEvidenceResponse,
     VerificationRequestCreate,
@@ -93,6 +96,7 @@ VERIFICATION_REVIEWED_STATUSES = {
     "REJECTED",
     "MORE_INFO_REQUESTED",
 }
+ONBOARDING_STEP_KEYS = {"complete", "first-action", "profile", "program", "verification"}
 
 
 def _completion_percentage(profile: AlumniProfile) -> int:
@@ -144,6 +148,21 @@ def _serialize_profile(profile: AlumniProfile) -> AlumniProfileResponse:
         profile_photo_file_size_bytes=profile.profile_photo_file_size_bytes,
         profile_photo_updated_at=profile.profile_photo_updated_at,
         program_affiliations=profile.program_affiliations,
+    )
+
+
+def _serialize_onboarding_workflow_state(
+    state: OnboardingWorkflowState,
+) -> OnboardingWorkflowStateResponse:
+    return OnboardingWorkflowStateResponse(
+        id=state.id,
+        user_id=state.user_id,
+        current_step_key=state.current_step_key,
+        completed_step_keys=state.completed_step_keys or [],
+        last_viewed_at=state.last_viewed_at,
+        completed_at=state.completed_at,
+        created_at=state.created_at,
+        updated_at=state.updated_at,
     )
 
 
@@ -347,6 +366,25 @@ def _get_or_create_profile(db: Session, user: User) -> AlumniProfile:
     return db.scalar(_get_profile_query(user)) or profile
 
 
+def _get_or_create_onboarding_workflow_state(
+    db: Session,
+    user: User,
+) -> OnboardingWorkflowState:
+    state = db.scalar(
+        select(OnboardingWorkflowState).where(OnboardingWorkflowState.user_id == user.id)
+    )
+    if state is not None:
+        return state
+
+    state = OnboardingWorkflowState(user_id=user.id, completed_step_keys=[])
+    db.add(state)
+    db.commit()
+    return (
+        db.scalar(select(OnboardingWorkflowState).where(OnboardingWorkflowState.user_id == user.id))
+        or state
+    )
+
+
 def _delete_profile_photo_upload(storage_key: str | None, storage_provider: str | None) -> None:
     delete_upload(
         category=UploadCategory.PROFILE_PHOTO,
@@ -430,6 +468,58 @@ def get_my_profile(
 ) -> AlumniProfileResponse:
     profile = _get_or_create_profile(db, current_user)
     return _serialize_profile(profile)
+
+
+@router.get("/me/onboarding-state", response_model=OnboardingWorkflowStateResponse)
+def get_my_onboarding_workflow_state(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> OnboardingWorkflowStateResponse:
+    state = _get_or_create_onboarding_workflow_state(db, current_user)
+    return _serialize_onboarding_workflow_state(state)
+
+
+@router.patch("/me/onboarding-state", response_model=OnboardingWorkflowStateResponse)
+def update_my_onboarding_workflow_state(
+    payload: OnboardingWorkflowStateUpdate,
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> OnboardingWorkflowStateResponse:
+    state = _get_or_create_onboarding_workflow_state(db, current_user)
+    updates = payload.model_dump(exclude_unset=True)
+
+    if "current_step_key" in updates:
+        current_step_key = updates["current_step_key"]
+        if current_step_key is not None and current_step_key not in ONBOARDING_STEP_KEYS:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid onboarding step",
+            )
+        state.current_step_key = current_step_key
+
+    if "completed_step_keys" in updates and updates["completed_step_keys"] is not None:
+        invalid_step_keys = [
+            item for item in updates["completed_step_keys"] if item not in ONBOARDING_STEP_KEYS
+        ]
+        if invalid_step_keys:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid completed onboarding step",
+            )
+        state.completed_step_keys = updates["completed_step_keys"]
+
+    mark_complete = updates.get("mark_complete")
+    if mark_complete is True:
+        state.completed_at = utcnow()
+    elif mark_complete is False:
+        state.completed_at = None
+
+    state.last_viewed_at = utcnow()
+    _create_security_event(db, request, current_user, "alumni.onboarding_state_updated")
+    db.commit()
+    state = _get_or_create_onboarding_workflow_state(db, current_user)
+    return _serialize_onboarding_workflow_state(state)
 
 
 @router.patch("/me/profile", response_model=AlumniProfileResponse)

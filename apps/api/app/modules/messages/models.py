@@ -34,6 +34,9 @@ class Conversation(Base, TimestampMixin):
         cascade="all, delete-orphan",
         order_by="DirectMessage.created_at.asc()",
     )
+    introduction_requests: Mapped[list["IntroductionRequest"]] = relationship(
+        back_populates="conversation"
+    )
 
 
 class ConversationParticipant(Base, TimestampMixin):
@@ -182,3 +185,35 @@ class UserBlock(Base, TimestampMixin):
 
     blocker: Mapped[User] = relationship(foreign_keys=[blocker_user_id])
     blocked: Mapped[User] = relationship(foreign_keys=[blocked_user_id])
+
+
+class IntroductionRequest(Base, TimestampMixin):
+    __tablename__ = "introduction_requests"
+    __table_args__ = (
+        Index("ix_introduction_requests_recipient_status", "recipient_user_id", "status"),
+        Index("ix_introduction_requests_requester_status", "requester_user_id", "status"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    requester_user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    recipient_user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    conversation_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("conversations.id", ondelete="SET NULL"),
+    )
+    responded_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+    )
+    note: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(40), default="PENDING", nullable=False)
+    responded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    requester: Mapped[User] = relationship(foreign_keys=[requester_user_id])
+    recipient: Mapped[User] = relationship(foreign_keys=[recipient_user_id])
+    responder: Mapped[User | None] = relationship(foreign_keys=[responded_by_user_id])
+    conversation: Mapped[Conversation | None] = relationship(back_populates="introduction_requests")

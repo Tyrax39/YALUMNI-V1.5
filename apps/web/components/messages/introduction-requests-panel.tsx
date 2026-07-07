@@ -5,14 +5,26 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-import { ArrowRight, Handshake, MessageSquare, Search, Send } from "lucide-react";
+import {
+  ArrowRight,
+  Check,
+  Handshake,
+  MessageSquare,
+  Search,
+  Send,
+  X
+} from "lucide-react";
 
 import {
   AlumniDirectoryProfile,
   ApiError,
   Conversation,
-  createDirectConversation,
+  IntroductionRequest,
+  acceptIntroductionRequest,
+  createIntroductionRequest,
+  declineIntroductionRequest,
   listConversations,
+  listIntroductionRequests,
   searchAlumniDirectory
 } from "@/lib/api";
 
@@ -25,6 +37,7 @@ type OverviewState =
   | { status: "loading" }
   | {
       conversations: Conversation[];
+      introductionRequests: { incoming: IntroductionRequest[]; outgoing: IntroductionRequest[] };
       profiles: AlumniDirectoryProfile[];
       status: "ready";
       totalConversations: number;
@@ -39,6 +52,7 @@ type SearchState =
 
 const emptyConversations: Conversation[] = [];
 const emptyProfiles: AlumniDirectoryProfile[] = [];
+const emptyRequests = { incoming: [] as IntroductionRequest[], outgoing: [] as IntroductionRequest[] };
 
 export function IntroductionRequestsPanel({
   accessToken,
@@ -49,7 +63,7 @@ export function IntroductionRequestsPanel({
   const [searchState, setSearchState] = useState<SearchState>({ status: "idle" });
   const [searchQuery, setSearchQuery] = useState("");
   const [introNote, setIntroNote] = useState("");
-  const [busyProfileId, setBusyProfileId] = useState<string | null>(null);
+  const [busyKey, setBusyKey] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
@@ -61,6 +75,8 @@ export function IntroductionRequestsPanel({
     overviewState.status === "ready" ? overviewState.conversations : emptyConversations;
   const suggestedProfiles =
     overviewState.status === "ready" ? overviewState.profiles : emptyProfiles;
+  const requests =
+    overviewState.status === "ready" ? overviewState.introductionRequests : emptyRequests;
   const unreadCount = useMemo(
     () => conversations.reduce((total, conversation) => total + conversation.unread_count, 0),
     [conversations]
@@ -75,15 +91,29 @@ export function IntroductionRequestsPanel({
     }
     return map;
   }, [conversations, currentUserId]);
-  const reusedThreadCount = useMemo(
-    () =>
-      suggestedProfiles.filter((profile) => recentConversationIdsByUserId.has(profile.user_id)).length,
-    [recentConversationIdsByUserId, suggestedProfiles]
+  const pendingOutgoingByRecipientId = useMemo(() => {
+    const map = new Map<string, IntroductionRequest>();
+    for (const request of requests.outgoing) {
+      if (request.status === "PENDING") {
+        map.set(request.recipient_user_id, request);
+      }
+    }
+    return map;
+  }, [requests.outgoing]);
+  const incomingPendingCount = useMemo(
+    () => requests.incoming.filter((request) => request.status === "PENDING").length,
+    [requests.incoming]
   );
-  const freshReachCount = useMemo(
+  const outgoingPendingCount = useMemo(
+    () => requests.outgoing.filter((request) => request.status === "PENDING").length,
+    [requests.outgoing]
+  );
+  const acceptedRequestCount = useMemo(
     () =>
-      suggestedProfiles.filter((profile) => !recentConversationIdsByUserId.has(profile.user_id)).length,
-    [recentConversationIdsByUserId, suggestedProfiles]
+      [...requests.incoming, ...requests.outgoing].filter(
+        (request) => request.status === "ACCEPTED"
+      ).length,
+    [requests.incoming, requests.outgoing]
   );
   const staleConversationCount = useMemo(
     () =>
@@ -110,28 +140,51 @@ export function IntroductionRequestsPanel({
 
     return formatConversationAge(newestTimestamp);
   }, [conversations]);
+  const freshReachCount = useMemo(
+    () =>
+      suggestedProfiles.filter(
+        (profile) =>
+          !recentConversationIdsByUserId.has(profile.user_id) &&
+          !pendingOutgoingByRecipientId.has(profile.user_id)
+      ).length,
+    [pendingOutgoingByRecipientId, recentConversationIdsByUserId, suggestedProfiles]
+  );
   const introductionPriorities = useMemo(
     () =>
       buildIntroductionPriorities({
+        acceptedRequestCount,
         freshReachCount,
+        incomingPendingCount,
+        outgoingPendingCount,
         staleConversationCount,
-        suggestedProfilesCount: suggestedProfiles.length,
-        totalConversations:
-          overviewState.status === "ready" ? overviewState.totalConversations : 0,
+        totalConversations: overviewState.status === "ready" ? overviewState.totalConversations : 0,
         unreadCount
       }),
-    [freshReachCount, overviewState, staleConversationCount, suggestedProfiles.length, unreadCount]
+    [
+      acceptedRequestCount,
+      freshReachCount,
+      incomingPendingCount,
+      outgoingPendingCount,
+      overviewState,
+      staleConversationCount,
+      unreadCount
+    ]
   );
 
   async function loadOverview() {
     setOverviewState({ status: "loading" });
     try {
-      const [conversationResponse, profileResponse] = await Promise.all([
+      const [conversationResponse, profileResponse, introductionResponse] = await Promise.all([
         listConversations(accessToken, { limit: 6 }),
-        searchAlumniDirectory(accessToken, { limit: 6, sort: "recent" })
+        searchAlumniDirectory(accessToken, { limit: 6, sort: "recent" }),
+        listIntroductionRequests(accessToken)
       ]);
       setOverviewState({
         conversations: conversationResponse.conversations,
+        introductionRequests: {
+          incoming: introductionResponse.incoming,
+          outgoing: introductionResponse.outgoing
+        },
         profiles: profileResponse.profiles.filter((profile) => profile.user_id !== currentUserId),
         status: "ready",
         totalConversations: conversationResponse.total
@@ -169,27 +222,58 @@ export function IntroductionRequestsPanel({
     }
   }
 
-  async function handleStartConversation(profile: AlumniDirectoryProfile) {
+  async function handleCreateRequest(profile: AlumniDirectoryProfile) {
     const existingConversationId = recentConversationIdsByUserId.get(profile.user_id);
     if (existingConversationId) {
       router.push(`/messages/${existingConversationId}`);
       return;
     }
 
-    setBusyProfileId(profile.user_id);
+    setBusyKey(`request:${profile.user_id}`);
     setNotice(null);
     try {
-      const conversation = await createDirectConversation(accessToken, {
-        initial_message: introNote.trim() || null,
-        participant_user_id: profile.user_id
+      await createIntroductionRequest(accessToken, {
+        note: introNote.trim() || null,
+        recipient_user_id: profile.user_id
       });
       setIntroNote("");
-      router.push(`/messages/${conversation.id}`);
+      setNotice(`Introduction request sent to ${profile.display_name}.`);
       await loadOverview();
     } catch (caught) {
-      setNotice(caught instanceof ApiError ? caught.message : "Introduction could not be started.");
+      setNotice(caught instanceof ApiError ? caught.message : "Introduction could not be requested.");
     } finally {
-      setBusyProfileId(null);
+      setBusyKey(null);
+    }
+  }
+
+  async function handleAcceptRequest(request: IntroductionRequest) {
+    setBusyKey(`accept:${request.id}`);
+    setNotice(null);
+    try {
+      const updated = await acceptIntroductionRequest(accessToken, request.id);
+      setNotice(`Introduction request accepted for ${updated.requester_display_name}.`);
+      await loadOverview();
+      if (updated.conversation_id) {
+        router.push(`/messages/${updated.conversation_id}`);
+      }
+    } catch (caught) {
+      setNotice(caught instanceof ApiError ? caught.message : "Introduction could not be accepted.");
+    } finally {
+      setBusyKey(null);
+    }
+  }
+
+  async function handleDeclineRequest(request: IntroductionRequest) {
+    setBusyKey(`decline:${request.id}`);
+    setNotice(null);
+    try {
+      await declineIntroductionRequest(accessToken, request.id);
+      setNotice(`Introduction request declined for ${request.requester_display_name}.`);
+      await loadOverview();
+    } catch (caught) {
+      setNotice(caught instanceof ApiError ? caught.message : "Introduction could not be declined.");
+    } finally {
+      setBusyKey(null);
     }
   }
 
@@ -206,9 +290,9 @@ export function IntroductionRequestsPanel({
           }
         />
         <MetricCard
-          detail="Replies waiting across recent introduction conversations."
-          label="Unread replies"
-          value={overviewState.status === "ready" ? unreadCount.toLocaleString() : "..."}
+          detail="Requests waiting for your response in this workflow."
+          label="Incoming requests"
+          value={overviewState.status === "ready" ? incomingPendingCount.toLocaleString() : "..."}
         />
         <MetricCard
           detail="Verified members surfaced from the live directory."
@@ -227,10 +311,10 @@ export function IntroductionRequestsPanel({
             </span>
             <div>
               <h2 className="font-display text-2xl font-semibold text-ink">
-                Start an introduction
+                Request an introduction
               </h2>
               <p className="mt-1 text-sm leading-6 text-muted">
-                Use verified member search and open a direct-message thread for the handoff.
+                Search verified alumni, request a handoff, and let the recipient accept before a new thread opens.
               </p>
             </div>
           </div>
@@ -263,19 +347,20 @@ export function IntroductionRequestsPanel({
               Optional introduction note
               <textarea
                 className="min-h-24 rounded-lg border border-border bg-surface px-4 py-3 text-sm font-normal leading-6 text-ink outline-none transition focus:border-primary"
-                maxLength={2000}
+                maxLength={1200}
                 onChange={(event) => setIntroNote(event.target.value)}
-                placeholder="Add context for why you are reaching out."
+                placeholder="Add context for why you want to connect."
                 value={introNote}
               />
             </label>
           </form>
 
           <ProfileResults
-            busyProfileId={busyProfileId}
+            busyKey={busyKey}
             existingConversationIdsByUserId={recentConversationIdsByUserId}
             fallbackProfiles={suggestedProfiles}
-            onStartConversation={handleStartConversation}
+            onRequestIntroduction={handleCreateRequest}
+            pendingOutgoingByRecipientId={pendingOutgoingByRecipientId}
             searchState={searchState}
           />
         </div>
@@ -288,25 +373,25 @@ export function IntroductionRequestsPanel({
                   <MessageSquare aria-hidden="true" className="h-5 w-5" />
                 </span>
                 <h2 className="font-display text-2xl font-semibold text-ink">
-                  Recent handoffs
+                  Pending approvals
                 </h2>
               </div>
               <p className="mt-3 text-sm leading-6 text-muted">
-                These are live direct-message conversations that can carry introduction follow-ups.
+                Incoming requests need your decision, while accepted requests move into live direct-message threads.
               </p>
             </div>
             <Link
               className="focus-ring inline-flex min-h-10 items-center justify-center rounded-lg border border-border bg-white px-4 text-sm font-bold text-ink transition hover:border-primary hover:text-primary"
-              href={conversations[0] ? `/messages/${conversations[0].id}` : "/messages"}
+              href="/messages"
             >
-              {conversations[0] ? "Open latest thread" : "Open inbox"}
+              Open inbox
             </Link>
           </div>
 
-          <div className="mt-5">
+          <div className="mt-5 grid gap-3">
             {overviewState.status === "loading" ? (
               <p className="rounded-lg border border-border bg-surface px-4 py-4 text-sm font-semibold text-muted">
-                Loading introduction threads...
+                Loading introduction requests...
               </p>
             ) : null}
             {overviewState.status === "error" ? (
@@ -315,20 +400,21 @@ export function IntroductionRequestsPanel({
               </p>
             ) : null}
             {overviewState.status === "ready" ? (
-              <div className="grid gap-3">
-                {conversations.length === 0 ? (
-                  <p className="rounded-lg border border-border bg-surface px-4 py-4 text-sm font-semibold text-muted">
-                    No introduction threads yet. Search for a verified alumnus to start one.
-                  </p>
+              <>
+                {requests.incoming.length === 0 ? (
+                  <EmptyState message="No incoming introduction requests are waiting for review." />
                 ) : null}
-                {conversations.map((conversation) => (
-                  <ConversationRow
-                    conversation={conversation}
+                {requests.incoming.map((request) => (
+                  <IntroductionRequestRow
+                    busyKey={busyKey}
                     currentUserId={currentUserId}
-                    key={conversation.id}
+                    key={request.id}
+                    onAccept={handleAcceptRequest}
+                    onDecline={handleDeclineRequest}
+                    request={request}
                   />
                 ))}
-              </div>
+              </>
             ) : null}
           </div>
         </div>
@@ -340,7 +426,7 @@ export function IntroductionRequestsPanel({
             <div>
               <h2 className="font-display text-2xl font-semibold text-ink">Handoff priorities</h2>
               <p className="mt-2 text-sm leading-6 text-muted">
-                Live readiness signals from the current thread list and verified alumni suggestions.
+                Readiness signals from live request queues, active message threads, and verified alumni suggestions.
               </p>
             </div>
             <span className="rounded-md border border-border bg-surface px-3 py-1 text-xs font-bold uppercase tracking-[0.1em] text-muted">
@@ -357,48 +443,83 @@ export function IntroductionRequestsPanel({
         <div className="rounded-lg border border-border bg-white p-5 shadow-soft sm:p-6">
           <h2 className="font-display text-2xl font-semibold text-ink">Introduction signals</h2>
           <p className="mt-2 text-sm leading-6 text-muted">
-            Quick-read counts showing where this route can reuse existing threads versus start fresh handoffs.
+            Quick-read counts showing where this route can reuse threads, process pending approvals, and open fresh outreach.
           </p>
           <div className="mt-5 grid gap-3">
-            <SignalRow label="Reusable live threads" value={String(reusedThreadCount)} />
+            <SignalRow label="Incoming pending" value={String(incomingPendingCount)} />
+            <SignalRow label="Outgoing pending" value={String(outgoingPendingCount)} />
+            <SignalRow label="Accepted handoffs" value={String(acceptedRequestCount)} />
             <SignalRow label="Fresh outreach targets" value={String(freshReachCount)} />
             <SignalRow label="Stale handoffs" value={String(staleConversationCount)} />
             <SignalRow label="Newest thread age" value={newestConversationAge} />
             <SignalRow label="Unread follow-ups" value={String(unreadCount)} />
-            <SignalRow
-              label="Suggested verified alumni"
-              value={overviewState.status === "ready" ? String(suggestedProfiles.length) : "..."}
-            />
-            <SignalRow
-              label="Introduction coverage"
-              value={
-                suggestedProfiles.length > 0
-                  ? `${Math.round((reusedThreadCount / suggestedProfiles.length) * 100)}%`
-                  : "0%"
-              }
-            />
           </div>
         </div>
       </section>
 
-      <section className="rounded-lg border border-border bg-white p-5 shadow-soft sm:p-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.14em] text-secondary">
-              Backend status
-            </p>
-            <h2 className="mt-2 font-display text-2xl font-semibold text-ink">
-              Live messaging now powers this route
-            </h2>
-            <p className="mt-3 max-w-3xl text-sm leading-6 text-muted">
-              The dedicated introduction approval workflow still needs a future backend module.
-              This screen now avoids fixture rows and uses existing live directory and direct-message
-              APIs for the current member workflow.
-            </p>
+      <section className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
+        <div className="rounded-lg border border-border bg-white p-5 shadow-soft sm:p-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div className="flex items-center gap-3">
+                <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary/10 text-secondary">
+                  <MessageSquare aria-hidden="true" className="h-5 w-5" />
+                </span>
+                <h2 className="font-display text-2xl font-semibold text-ink">
+                  Recent handoffs
+                </h2>
+              </div>
+              <p className="mt-3 text-sm leading-6 text-muted">
+                Accepted introductions and reused relationships continue inside the live inbox.
+              </p>
+            </div>
+            <Link
+              className="focus-ring inline-flex min-h-10 items-center justify-center rounded-lg border border-border bg-white px-4 text-sm font-bold text-ink transition hover:border-primary hover:text-primary"
+              href={conversations[0] ? `/messages/${conversations[0].id}` : "/messages"}
+            >
+              {conversations[0] ? "Open latest thread" : "Open inbox"}
+            </Link>
           </div>
-          <span className="rounded-md border border-border bg-surface px-3 py-1 text-xs font-bold uppercase tracking-[0.1em] text-muted">
-            Partial backend
-          </span>
+          <div className="mt-5 grid gap-3">
+            {overviewState.status === "ready" && conversations.length === 0 ? (
+              <EmptyState message="No introduction threads yet. Request a new introduction or accept an incoming one." />
+            ) : null}
+            {conversations.map((conversation) => (
+              <ConversationRow
+                conversation={conversation}
+                currentUserId={currentUserId}
+                key={conversation.id}
+              />
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-border bg-white p-5 shadow-soft sm:p-6">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.14em] text-secondary">
+                Workflow status
+              </p>
+              <h2 className="mt-2 font-display text-2xl font-semibold text-ink">
+                Introduction approval flow is now live
+              </h2>
+              <p className="mt-3 text-sm leading-6 text-muted">
+                This route now uses a dedicated introduction-request workflow with accept and decline actions, while preserving existing direct-message threads for accepted or already-established relationships.
+              </p>
+            </div>
+            <span className="rounded-md border border-border bg-surface px-3 py-1 text-xs font-bold uppercase tracking-[0.1em] text-muted">
+              Live backend
+            </span>
+          </div>
+          <div className="mt-5 grid gap-3">
+            {requests.outgoing.length === 0 ? (
+              <EmptyState message="No outgoing requests have been sent from this workspace yet." />
+            ) : (
+              requests.outgoing.slice(0, 4).map((request) => (
+                <IntroductionRequestSummaryRow key={request.id} request={request} />
+              ))
+            )}
+          </div>
         </div>
       </section>
     </div>
@@ -451,17 +572,27 @@ function SignalRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+function EmptyState({ message }: { message: string }) {
+  return (
+    <p className="rounded-lg border border-border bg-surface px-4 py-4 text-sm font-semibold text-muted">
+      {message}
+    </p>
+  );
+}
+
 function ProfileResults({
-  busyProfileId,
+  busyKey,
   existingConversationIdsByUserId,
   fallbackProfiles,
-  onStartConversation,
+  onRequestIntroduction,
+  pendingOutgoingByRecipientId,
   searchState
 }: {
-  busyProfileId: string | null;
+  busyKey: string | null;
   existingConversationIdsByUserId: Map<string, string>;
   fallbackProfiles: AlumniDirectoryProfile[];
-  onStartConversation: (profile: AlumniDirectoryProfile) => void;
+  onRequestIntroduction: (profile: AlumniDirectoryProfile) => void;
+  pendingOutgoingByRecipientId: Map<string, IntroductionRequest>;
   searchState: SearchState;
 }) {
   if (searchState.status === "loading") {
@@ -479,16 +610,15 @@ function ProfileResults({
     <div className="mt-5 grid gap-3">
       <p className="text-xs font-bold uppercase tracking-[0.14em] text-secondary">{title}</p>
       {profiles.length === 0 ? (
-        <p className="rounded-lg border border-border bg-surface px-4 py-4 text-sm font-semibold text-muted">
-          No verified alumni are available for this view yet.
-        </p>
+        <EmptyState message="No verified alumni are available for this view yet." />
       ) : null}
       {profiles.map((profile) => (
         <ProfileResultRow
-          busyProfileId={busyProfileId}
+          busyKey={busyKey}
           existingConversationId={existingConversationIdsByUserId.get(profile.user_id) ?? null}
           key={profile.user_id}
-          onStartConversation={onStartConversation}
+          onRequestIntroduction={onRequestIntroduction}
+          pendingRequest={pendingOutgoingByRecipientId.get(profile.user_id) ?? null}
           profile={profile}
         />
       ))}
@@ -503,9 +633,7 @@ function ConversationRow({
   conversation: Conversation;
   currentUserId: string;
 }) {
-  const participant = conversation.participants.find(
-    (item) => item.user_id !== currentUserId
-  );
+  const participant = conversation.participants.find((item) => item.user_id !== currentUserId);
   return (
     <article className="rounded-lg border border-border bg-surface p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -539,6 +667,95 @@ function ConversationRow({
   );
 }
 
+function IntroductionRequestRow({
+  busyKey,
+  currentUserId,
+  onAccept,
+  onDecline,
+  request
+}: {
+  busyKey: string | null;
+  currentUserId: string;
+  onAccept: (request: IntroductionRequest) => void;
+  onDecline: (request: IntroductionRequest) => void;
+  request: IntroductionRequest;
+}) {
+  const isIncoming = request.recipient_user_id === currentUserId;
+  const counterpart = isIncoming ? request.requester_display_name : request.recipient_display_name;
+  const busyAccept = busyKey === `accept:${request.id}`;
+  const busyDecline = busyKey === `decline:${request.id}`;
+
+  return (
+    <article className="rounded-lg border border-border bg-surface p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="font-display text-lg font-semibold text-ink">{counterpart}</h3>
+            <span className="rounded-md border border-border bg-white px-2 py-1 text-[11px] font-bold uppercase tracking-[0.1em] text-muted">
+              {formatRequestStatus(request.status)}
+            </span>
+          </div>
+          <p className="mt-2 text-sm leading-6 text-muted">
+            {request.note || "No introduction note was attached to this request."}
+          </p>
+          <p className="mt-3 text-xs font-bold uppercase tracking-[0.12em] text-muted">
+            {formatDateTime(request.created_at)}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {request.status === "PENDING" && isIncoming ? (
+            <>
+              <button
+                className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-bold text-white transition hover:bg-[#003d7d] disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={busyAccept || busyDecline}
+                onClick={() => onAccept(request)}
+                type="button"
+              >
+                <Check aria-hidden="true" className="h-4 w-4" />
+                {busyAccept ? "Accepting..." : "Accept"}
+              </button>
+              <button
+                className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-border bg-white px-4 text-sm font-bold text-ink transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={busyAccept || busyDecline}
+                onClick={() => onDecline(request)}
+                type="button"
+              >
+                <X aria-hidden="true" className="h-4 w-4" />
+                {busyDecline ? "Declining..." : "Decline"}
+              </button>
+            </>
+          ) : null}
+          {request.status === "ACCEPTED" && request.conversation_id ? (
+            <Link
+              className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-border bg-white px-4 text-sm font-bold text-ink transition hover:border-primary hover:text-primary"
+              href={`/messages/${request.conversation_id}`}
+            >
+              <MessageSquare aria-hidden="true" className="h-4 w-4" />
+              Open thread
+            </Link>
+          ) : null}
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function IntroductionRequestSummaryRow({ request }: { request: IntroductionRequest }) {
+  return (
+    <article className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface px-4 py-3">
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-ink">{request.recipient_display_name}</p>
+        <p className="mt-1 text-xs leading-5 text-muted">
+          {request.note || "No note attached."}
+        </p>
+      </div>
+      <span className="rounded-md border border-border bg-white px-3 py-1 text-[11px] font-bold uppercase tracking-[0.1em] text-muted">
+        {formatRequestStatus(request.status)}
+      </span>
+    </article>
+  );
+}
+
 function formatProfileSummary(profile: AlumniDirectoryProfile) {
   return [profile.country, profile.sector, profile.headline, profile.organization]
     .filter(Boolean)
@@ -546,36 +763,18 @@ function formatProfileSummary(profile: AlumniDirectoryProfile) {
 }
 
 function ProfileResultRow({
-  busyProfileId,
+  busyKey,
   existingConversationId,
-  onStartConversation,
+  onRequestIntroduction,
+  pendingRequest,
   profile
 }: {
-  busyProfileId: string | null;
+  busyKey: string | null;
   existingConversationId: string | null;
-  onStartConversation: (profile: AlumniDirectoryProfile) => void;
+  onRequestIntroduction: (profile: AlumniDirectoryProfile) => void;
+  pendingRequest: IntroductionRequest | null;
   profile: AlumniDirectoryProfile;
 }) {
-  if (existingConversationId) {
-    return (
-      <article className="grid gap-3 rounded-lg border border-border bg-surface p-4 sm:grid-cols-[1fr_auto] sm:items-center">
-        <div>
-          <h3 className="font-display text-lg font-semibold text-ink">{profile.display_name}</h3>
-          <p className="mt-1 text-sm leading-6 text-muted">
-            {formatProfileSummary(profile) || "Verified YALUMNI member"}
-          </p>
-        </div>
-        <Link
-          className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-border bg-white px-4 text-sm font-bold text-ink transition hover:border-primary hover:text-primary"
-          href={`/messages/${existingConversationId}`}
-        >
-          <MessageSquare aria-hidden="true" className="h-4 w-4" />
-          Open thread
-        </Link>
-      </article>
-    );
-  }
-
   return (
     <article className="grid gap-3 rounded-lg border border-border bg-surface p-4 sm:grid-cols-[1fr_auto] sm:items-center">
       <div>
@@ -584,15 +783,29 @@ function ProfileResultRow({
           {formatProfileSummary(profile) || "Verified YALUMNI member"}
         </p>
       </div>
-      <button
-        className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-bold text-white transition hover:bg-[#003d7d] disabled:cursor-not-allowed disabled:opacity-60"
-        disabled={busyProfileId === profile.user_id}
-        onClick={() => onStartConversation(profile)}
-        type="button"
-      >
-        <Send aria-hidden="true" className="h-4 w-4" />
-        {busyProfileId === profile.user_id ? "Starting..." : "Start thread"}
-      </button>
+      {existingConversationId ? (
+        <Link
+          className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-border bg-white px-4 text-sm font-bold text-ink transition hover:border-primary hover:text-primary"
+          href={`/messages/${existingConversationId}`}
+        >
+          <MessageSquare aria-hidden="true" className="h-4 w-4" />
+          Open thread
+        </Link>
+      ) : pendingRequest ? (
+        <span className="inline-flex min-h-10 items-center justify-center rounded-lg border border-border bg-white px-4 text-sm font-bold text-muted">
+          Pending request
+        </span>
+      ) : (
+        <button
+          className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-bold text-white transition hover:bg-[#003d7d] disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={busyKey === `request:${profile.user_id}`}
+          onClick={() => onRequestIntroduction(profile)}
+          type="button"
+        >
+          <Send aria-hidden="true" className="h-4 w-4" />
+          {busyKey === `request:${profile.user_id}` ? "Sending..." : "Request intro"}
+        </button>
+      )}
     </article>
   );
 }
@@ -611,6 +824,13 @@ function formatDateTime(value: string | null) {
     dateStyle: "medium",
     timeStyle: "short"
   }).format(date);
+}
+
+function formatRequestStatus(value: string) {
+  return value
+    .split("_")
+    .map((part) => part.charAt(0) + part.slice(1).toLowerCase())
+    .join(" ");
 }
 
 function getConversationAgeDays(value: string | null) {
@@ -641,19 +861,32 @@ function formatConversationAge(value: string | null) {
 }
 
 function buildIntroductionPriorities({
+  acceptedRequestCount,
   freshReachCount,
+  incomingPendingCount,
+  outgoingPendingCount,
   staleConversationCount,
-  suggestedProfilesCount,
   totalConversations,
   unreadCount
 }: {
+  acceptedRequestCount: number;
   freshReachCount: number;
+  incomingPendingCount: number;
+  outgoingPendingCount: number;
   staleConversationCount: number;
-  suggestedProfilesCount: number;
   totalConversations: number;
   unreadCount: number;
 }): PriorityItem[] {
   const items: PriorityItem[] = [];
+
+  if (incomingPendingCount > 0) {
+    items.push({
+      body: `${incomingPendingCount} introduction request${incomingPendingCount === 1 ? " is" : "s are"} waiting for your review.`,
+      label: "Review",
+      title: "Respond to incoming requests",
+      tone: "warning"
+    });
+  }
 
   if (unreadCount > 0) {
     items.push({
@@ -666,43 +899,43 @@ function buildIntroductionPriorities({
 
   if (freshReachCount > 0) {
     items.push({
-      body: `${freshReachCount} suggested verified alumn${freshReachCount === 1 ? "us is" : "i are"} available without an existing live thread.`,
+      body: `${freshReachCount} suggested verified alumn${freshReachCount === 1 ? "us is" : "i are"} available without a live thread or pending request.`,
       label: "Outreach",
       title: "Start fresh introductions",
       tone: "neutral"
     });
   }
 
+  if (outgoingPendingCount > 0) {
+    items.push({
+      body: `${outgoingPendingCount} request${outgoingPendingCount === 1 ? " is" : "s are"} waiting on recipient approval.`,
+      label: "Pending",
+      title: "Track outbound handoffs",
+      tone: "neutral"
+    });
+  }
+
   if (staleConversationCount > 0) {
     items.push({
-      body: `${staleConversationCount} introduction thread${staleConversationCount === 1 ? " has" : "s have"} been quiet for at least 14 days and may need a follow-up or closeout.`,
+      body: `${staleConversationCount} accepted thread${staleConversationCount === 1 ? " has" : "s have"} been quiet for at least 14 days and may need a follow-up or closeout.`,
       label: "Aging",
       title: "Re-engage stale handoffs",
       tone: staleConversationCount >= 3 ? "warning" : "neutral"
     });
   }
 
-  if (suggestedProfilesCount > 0 && freshReachCount === 0) {
+  if (!items.length && totalConversations === 0 && acceptedRequestCount === 0) {
     items.push({
-      body: "Current suggested alumni already have live threads, so reuse and deepen existing conversations first.",
-      label: "Reuse",
-      title: "Continue current relationships",
-      tone: "neutral"
-    });
-  }
-
-  if (totalConversations === 0 && suggestedProfilesCount === 0) {
-    items.push({
-      body: "No recent conversations or suggested alumni are loaded yet for this member workspace.",
+      body: "No introduction requests or live handoff threads are active yet for this member workspace.",
       label: "Waiting",
-      title: "Refresh when directory data is available",
+      title: "Start the first handoff",
       tone: "warning"
     });
   }
 
   if (!items.length) {
     items.push({
-      body: "Live thread coverage and directory suggestions are currently balanced for this introductions workspace.",
+      body: "The live request queue and accepted handoff threads are currently balanced for this introductions workspace.",
       label: "Stable",
       title: "Maintain introduction flow",
       tone: "neutral"

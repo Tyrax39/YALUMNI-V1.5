@@ -380,3 +380,84 @@ def test_direct_message_report_requires_participant_and_admin_role(client: TestC
         headers=message_headers(kojo),
     )
     assert denied_queue.status_code == 403
+
+
+def test_introduction_request_accept_decline_and_thread_creation(client: TestClient) -> None:
+    requester = register_user(client, "intro.requester@example.com", "Intro Requester")
+    recipient = register_user(client, "intro.recipient@example.com", "Intro Recipient")
+    outsider = register_user(client, "intro.outsider@example.com", "Intro Outsider")
+
+    create_response = client.post(
+        "/api/v1/messages/introduction-requests",
+        headers=message_headers(requester),
+        json={
+            "recipient_user_id": recipient["user"]["id"],
+            "note": "Would love to compare chapter growth playbooks.",
+        },
+    )
+    assert create_response.status_code == 201
+    introduction_request = create_response.json()
+    assert introduction_request["status"] == "PENDING"
+
+    duplicate_response = client.post(
+        "/api/v1/messages/introduction-requests",
+        headers=message_headers(requester),
+        json={"recipient_user_id": recipient["user"]["id"]},
+    )
+    assert duplicate_response.status_code == 409
+
+    recipient_list = client.get(
+        "/api/v1/messages/introduction-requests",
+        headers=message_headers(recipient),
+    )
+    assert recipient_list.status_code == 200
+    assert recipient_list.json()["actionable_count"] == 1
+    assert recipient_list.json()["incoming"][0]["requester_display_name"] == "Intro Requester"
+
+    outsider_accept = client.post(
+        f"/api/v1/messages/introduction-requests/{introduction_request['id']}/accept",
+        headers=message_headers(outsider),
+        json={},
+    )
+    assert outsider_accept.status_code == 404
+
+    accept_response = client.post(
+        f"/api/v1/messages/introduction-requests/{introduction_request['id']}/accept",
+        headers=message_headers(recipient),
+        json={},
+    )
+    assert accept_response.status_code == 200
+    accepted_request = accept_response.json()
+    assert accepted_request["status"] == "ACCEPTED"
+    assert accepted_request["conversation_id"] is not None
+
+    requester_conversations = client.get(
+        "/api/v1/messages/conversations",
+        headers=message_headers(requester),
+    )
+    assert requester_conversations.status_code == 200
+    assert requester_conversations.json()["total"] == 1
+    assert (
+        requester_conversations.json()["conversations"][0]["last_message"]["body"]
+        == "Would love to compare chapter growth playbooks."
+    )
+
+    second_recipient = register_user(client, "intro.second@example.com", "Second Recipient")
+    decline_request = client.post(
+        "/api/v1/messages/introduction-requests",
+        headers=message_headers(requester),
+        json={
+            "recipient_user_id": second_recipient["user"]["id"],
+            "note": "Would you be open to a quick introduction?",
+        },
+    )
+    assert decline_request.status_code == 201
+
+    decline_response = client.post(
+        f"/api/v1/messages/introduction-requests/{decline_request.json()['id']}/decline",
+        headers=message_headers(second_recipient),
+        json={"note": "Not available right now."},
+    )
+    assert decline_response.status_code == 200
+    assert decline_response.json()["status"] == "DECLINED"
+    assert decline_response.json()["note"] == "Not available right now."

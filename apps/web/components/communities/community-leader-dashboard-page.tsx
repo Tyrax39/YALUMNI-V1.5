@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { type ReactNode, useEffect, useState } from "react";
 
-import { AlertCircle, ArrowLeft, Flag, MailPlus, MessageSquare, ShieldCheck, Users } from "lucide-react";
+import { AlertCircle, ArrowLeft, Download, Flag, MailPlus, MessageSquare, ShieldCheck, Users } from "lucide-react";
 
 import {
   ApiError,
@@ -214,6 +214,20 @@ function CommunityLeaderDashboardContent({
     activeMembers.total > 0 ? `${Math.round((membershipBacklog / activeMembers.total) * 100)}%` : "0%";
   const communityDetailHref = `/communities/${community.id}`;
   const leadershipCoverage = summarizeLeadershipCoverage(activeMembers.members);
+  const chapterHistoryRows = buildLeaderTrendRows({
+    activeMembers,
+    invitations,
+    pendingMembers,
+    recentPosts,
+    reports
+  });
+  const planningSignals = buildPlanningSignals({
+    activePostCount,
+    invitationCount,
+    moderationBacklog,
+    pendingCount,
+    recentPosts
+  });
   const operationalPriorities = buildOperationalPriorities({
     activeMembers: activeMembers.total,
     activePosts: activePostCount,
@@ -249,6 +263,25 @@ function CommunityLeaderDashboardContent({
           </p>
         </div>
         <div className="flex flex-wrap gap-2 xl:justify-end">
+          <button
+            className="focus-ring inline-flex min-h-9 items-center gap-2 rounded-lg border border-border bg-surface px-3 text-xs font-bold uppercase tracking-[0.1em] text-muted transition hover:border-primary hover:text-primary"
+            onClick={() =>
+              downloadLeaderSnapshot(`${community.name}-leader-dashboard.json`, {
+                activeMembers: activeMembers.members,
+                community,
+                invitations: invitations?.invitations ?? [],
+                pendingMembers: pendingMembers?.members ?? [],
+                recentPosts: recentPosts?.posts ?? [],
+                removedComments: removedComments?.comments ?? [],
+                removedPosts: removedPosts?.posts ?? [],
+                reports: reports?.reports ?? []
+              })
+            }
+            type="button"
+          >
+            <Download aria-hidden="true" className="h-4 w-4" />
+            Export
+          </button>
           <StatusBadge label={community.membership_role ?? "member"} tone="primary" />
           <StatusBadge label={community.membership_status ?? "not joined"} tone="neutral" />
           {location ? <StatusBadge label={location} tone="neutral" /> : null}
@@ -406,6 +439,37 @@ function CommunityLeaderDashboardContent({
             ) : (
               <EmptyState message="No live community posts are available yet for this leadership view." />
             )}
+          </div>
+        </div>
+      </section>
+
+      <section className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
+        <div className="rounded-lg border border-border bg-white p-5 shadow-soft sm:p-6">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h3 className="font-display text-2xl font-semibold text-ink">Chapter history</h3>
+              <p className="mt-2 text-sm leading-6 text-muted">
+                Short-window activity rollups derived from the live leader dashboard data already loaded here.
+              </p>
+            </div>
+            <StatusBadge label="Read only" tone="neutral" />
+          </div>
+          <div className="mt-5 grid gap-3">
+            {chapterHistoryRows.map((row) => (
+              <SnapshotRow key={row.label} label={row.label} value={row.value} />
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-border bg-white p-5 shadow-soft sm:p-6">
+          <h3 className="font-display text-2xl font-semibold text-ink">Planning window</h3>
+          <p className="mt-2 text-sm leading-6 text-muted">
+            Governance and operations signals that help leaders decide whether to publish, approve, moderate, or regroup next.
+          </p>
+          <div className="mt-5 grid gap-3">
+            {planningSignals.map((row) => (
+              <SnapshotRow key={row.label} label={row.label} value={row.value} />
+            ))}
           </div>
         </div>
       </section>
@@ -866,4 +930,107 @@ function buildOperationalPriorities({
   }
 
   return items.slice(0, 4);
+}
+
+function buildLeaderTrendRows({
+  activeMembers,
+  invitations,
+  pendingMembers,
+  recentPosts,
+  reports
+}: {
+  activeMembers: CommunityMemberListResponse;
+  invitations: CommunityInvitationListResponse | null;
+  pendingMembers: CommunityMemberListResponse | null;
+  recentPosts: CommunityPostListResponse | null;
+  reports: CommunityPostReportQueueResponse | null;
+}) {
+  const windows = [7, 30, 90];
+
+  return windows.map((days) => ({
+    label: `${days}-day window`,
+    value: [
+      `${countWithinDays(activeMembers.members.map((member) => member.joined_at ?? member.created_at), days)} joins`,
+      `${countWithinDays(pendingMembers?.members.map((member) => member.created_at) ?? [], days)} approvals`,
+      `${countWithinDays(invitations?.invitations.map((invitation) => invitation.created_at) ?? [], days)} invites`,
+      `${countWithinDays(recentPosts?.posts.map((post) => post.created_at) ?? [], days)} posts`,
+      `${countWithinDays(reports?.reports.map((report) => report.created_at) ?? [], days)} reports`
+    ].join(" · ")
+  }));
+}
+
+function buildPlanningSignals({
+  activePostCount,
+  invitationCount,
+  moderationBacklog,
+  pendingCount,
+  recentPosts
+}: {
+  activePostCount: number;
+  invitationCount: number;
+  moderationBacklog: number;
+  pendingCount: number;
+  recentPosts: CommunityPostListResponse | null;
+}) {
+  const upcomingActions = [
+    pendingCount > 0 ? "Review approvals" : null,
+    invitationCount > 0 ? "Follow up invites" : null,
+    moderationBacklog > 0 ? "Clear moderation queue" : null,
+    activePostCount === 0 ? "Publish chapter update" : null
+  ].filter(Boolean);
+
+  const latestPostAge = formatNewestAge(recentPosts?.posts.map((post) => post.created_at) ?? []);
+
+  return [
+    { label: "Immediate next move", value: upcomingActions[0] ?? "Keep current rhythm" },
+    {
+      label: "Leader operating stack",
+      value: upcomingActions.length ? upcomingActions.join(" · ") : "No urgent queues"
+    },
+    { label: "Latest post age", value: latestPostAge },
+    {
+      label: "Publishing signal",
+      value: activePostCount > 0 ? `${activePostCount} recent post${activePostCount === 1 ? "" : "s"}` : "Needs fresh update"
+    },
+    {
+      label: "Governance pressure",
+      value: moderationBacklog + pendingCount + invitationCount > 0 ? "Active" : "Stable"
+    }
+  ];
+}
+
+function countWithinDays(values: string[], days: number) {
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+  return values.filter((value) => {
+    const timestamp = new Date(value).getTime();
+    return !Number.isNaN(timestamp) && timestamp >= cutoff;
+  }).length;
+}
+
+function formatNewestAge(values: string[]) {
+  const validDates = values
+    .map((value) => new Date(value).getTime())
+    .filter((value) => !Number.isNaN(value));
+
+  if (!validDates.length) {
+    return "No recent activity";
+  }
+
+  const newestTimestamp = Math.max(...validDates);
+  const ageDays = Math.floor((Date.now() - newestTimestamp) / (1000 * 60 * 60 * 24));
+  if (ageDays < 1) {
+    return "<1 day";
+  }
+
+  return `${ageDays} day${ageDays === 1 ? "" : "s"}`;
+}
+
+function downloadLeaderSnapshot(fileName: string, payload: unknown) {
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  anchor.click();
+  URL.revokeObjectURL(url);
 }

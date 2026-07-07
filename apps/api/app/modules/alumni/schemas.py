@@ -110,6 +110,47 @@ class AlumniProfileResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class OnboardingWorkflowStateUpdate(BaseModel):
+    current_step_key: str | None = Field(default=None, max_length=80)
+    completed_step_keys: list[str] | None = Field(default=None, max_length=8)
+    mark_complete: bool | None = None
+
+    @field_validator("current_step_key")
+    @classmethod
+    def normalize_step_key(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip().lower().replace(" ", "-")
+        return normalized or None
+
+    @field_validator("completed_step_keys")
+    @classmethod
+    def normalize_completed_step_keys(cls, value: list[str] | None) -> list[str] | None:
+        if value is None:
+            return None
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for item in value:
+            cleaned = item.strip().lower().replace(" ", "-")
+            if cleaned and cleaned not in seen:
+                normalized.append(cleaned[:80])
+                seen.add(cleaned)
+        return normalized[:8]
+
+
+class OnboardingWorkflowStateResponse(BaseModel):
+    id: uuid.UUID
+    user_id: uuid.UUID
+    current_step_key: str | None
+    completed_step_keys: list[str]
+    last_viewed_at: datetime | None
+    completed_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class VerificationRequestCreate(BaseModel):
     request_type: str = Field(default="ALUMNI_IDENTITY", max_length=60)
     submitted_note: str | None = Field(default=None, max_length=1200)

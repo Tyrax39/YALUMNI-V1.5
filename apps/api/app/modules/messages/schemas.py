@@ -19,6 +19,31 @@ class ConversationCreate(BaseModel):
         return normalized
 
 
+class IntroductionRequestCreate(BaseModel):
+    recipient_user_id: uuid.UUID
+    note: str | None = Field(default=None, max_length=1200)
+
+    @field_validator("note")
+    @classmethod
+    def normalize_note(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+
+class IntroductionRequestReview(BaseModel):
+    note: str | None = Field(default=None, max_length=1200)
+
+    @field_validator("note")
+    @classmethod
+    def normalize_note(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+
 class MessageCreate(BaseModel):
     body: str = Field(min_length=1, max_length=2000)
 
@@ -213,3 +238,28 @@ class UserBlockResponse(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class IntroductionRequestResponse(BaseModel):
+    id: uuid.UUID
+    requester_user_id: uuid.UUID
+    requester_display_name: str
+    requester_email: str
+    recipient_user_id: uuid.UUID
+    recipient_display_name: str
+    recipient_email: str
+    conversation_id: uuid.UUID | None
+    note: str | None
+    status: str
+    responded_by_user_id: uuid.UUID | None
+    responded_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class IntroductionRequestListResponse(BaseModel):
+    incoming: list[IntroductionRequestResponse]
+    outgoing: list[IntroductionRequestResponse]
+    actionable_count: int
