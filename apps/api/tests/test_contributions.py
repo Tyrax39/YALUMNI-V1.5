@@ -20,6 +20,7 @@ from app.modules.auth import models as auth_models
 from app.modules.communities import models as community_models
 from app.modules.contributions import malware as contribution_malware
 from app.modules.contributions import models as contribution_models
+from app.modules.contributions import router as contribution_router
 from app.modules.contributions.models import Contribution
 from app.modules.elections import models as election_models
 from app.modules.events import models as event_models
@@ -182,10 +183,55 @@ def create_pending_contribution_for_test(
         db_iterator.close()
 
 
-def test_payment_intent_rejects_unimplemented_checkout_provider(client: TestClient) -> None:
+class MockHttpResponse:
+    def __init__(self, status_code: int, payload: dict) -> None:
+        self.status_code = status_code
+        self._payload = payload
+
+    def json(self) -> dict:
+        return self._payload
+
+
+class FakeProviderClient:
+    def __init__(self, post_handler):  # type: ignore[no-untyped-def]
+        self._post_handler = post_handler
+
+    def __enter__(self) -> "FakeProviderClient":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> bool:  # type: ignore[no-untyped-def]
+        return False
+
+    def post(self, url: str, **kwargs) -> MockHttpResponse:  # type: ignore[no-untyped-def]
+        return self._post_handler(url, **kwargs)
+
+
+def test_payment_intent_creates_stripe_checkout_session(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     settings = get_settings()
     previous_provider = settings.contribution_checkout_provider
+    previous_secret = settings.stripe_secret_key
     settings.contribution_checkout_provider = "stripe"
+    settings.stripe_secret_key = "sk_test_checkout"
+    captured_calls: list[dict] = []
+
+    def mock_post(url: str, **kwargs) -> MockHttpResponse:  # type: ignore[no-untyped-def]
+        captured_calls.append({"kwargs": kwargs, "url": url})
+        return MockHttpResponse(
+            200,
+            {
+                "id": "cs_test_123",
+                "url": "https://checkout.stripe.test/session/cs_test_123",
+            },
+        )
+
+    monkeypatch.setattr(
+        contribution_router.httpx,
+        "Client",
+        lambda *args, **kwargs: FakeProviderClient(mock_post),
+    )
     try:
         admin_headers = create_admin(client, "provider.boundary.finance@example.com")
         member = register_user(client, "provider.boundary.donor@example.com", "Boundary Donor")
@@ -204,19 +250,48 @@ def test_payment_intent_rejects_unimplemented_checkout_provider(client: TestClie
                 "payment_method": "CARD_TEST",
             },
         )
-        assert intent_response.status_code == 503
-        assert (
-            intent_response.json()["detail"]
-            == "Contribution checkout provider STRIPE is not implemented"
-        )
+        assert intent_response.status_code == 201
+        payment_intent = intent_response.json()
+        assert payment_intent["provider"] == "STRIPE"
+        assert payment_intent["checkout_url"] == "https://checkout.stripe.test/session/cs_test_123"
+        assert payment_intent["client_secret"] is None
+        assert payment_intent["provider_intent_id"] == "cs_test_123"
+        assert captured_calls[0]["url"] == "https://api.stripe.com/v1/checkout/sessions"
+        assert captured_calls[0]["kwargs"]["auth"] == ("sk_test_checkout", "")
+        request_pairs = captured_calls[0]["kwargs"]["data"]
+        assert ("payment_method_types[]", "card") in request_pairs
     finally:
         settings.contribution_checkout_provider = previous_provider
+        settings.stripe_secret_key = previous_secret
 
 
-def test_provider_refund_rejects_unimplemented_refund_provider(client: TestClient) -> None:
+def test_payment_intent_creates_flutterwave_checkout_session(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     settings = get_settings()
-    previous_provider = settings.contribution_refund_provider
-    settings.contribution_refund_provider = "stripe"
+    previous_provider = settings.contribution_checkout_provider
+    previous_secret = settings.flutterwave_secret_key
+    settings.contribution_checkout_provider = "flutterwave"
+    settings.flutterwave_secret_key = "flw_secret_checkout"
+    captured_calls: list[dict] = []
+
+    def mock_post(url: str, **kwargs) -> MockHttpResponse:  # type: ignore[no-untyped-def]
+        captured_calls.append({"kwargs": kwargs, "url": url})
+        return MockHttpResponse(
+            200,
+            {
+                "data": {
+                    "link": "https://flutterwave.test/pay/yalumni_flw_123",
+                }
+            },
+        )
+
+    monkeypatch.setattr(
+        contribution_router.httpx,
+        "Client",
+        lambda *args, **kwargs: FakeProviderClient(mock_post),
+    )
     try:
         admin_headers = create_admin(client, "refund.boundary.finance@example.com")
         member = register_user(client, "refund.boundary.donor@example.com", "Refund Donor")
@@ -232,30 +307,220 @@ def test_provider_refund_rejects_unimplemented_refund_provider(client: TestClien
             json={
                 "amount_cents": 8500,
                 "currency": "USD",
+                "payment_method": "MOBILE_MONEY",
+            },
+        )
+        assert intent_response.status_code == 201
+        intent = intent_response.json()
+        assert intent["provider"] == "FLUTTERWAVE"
+        assert intent["checkout_url"] == "https://flutterwave.test/pay/yalumni_flw_123"
+        assert intent["client_secret"] is None
+        assert intent["provider_intent_id"].startswith("yalumni_flw_")
+        assert captured_calls[0]["url"] == "https://api.flutterwave.com/v3/payments"
+        assert (
+            captured_calls[0]["kwargs"]["headers"]["Authorization"]
+            == "Bearer flw_secret_checkout"
+        )
+        assert captured_calls[0]["kwargs"]["json"]["payment_options"] == "mobilemoney"
+    finally:
+        settings.contribution_checkout_provider = previous_provider
+        settings.flutterwave_secret_key = previous_secret
+
+
+def test_stripe_webhook_confirms_payment_intent_and_provider_refund_uses_resolved_reference(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = get_settings()
+    previous_checkout_provider = settings.contribution_checkout_provider
+    previous_secret = settings.stripe_secret_key
+    previous_webhook_secret = settings.stripe_webhook_secret
+    settings.contribution_checkout_provider = "stripe"
+    settings.stripe_secret_key = "sk_test_checkout"
+    settings.stripe_webhook_secret = "whsec_test_signature"
+    captured_calls: list[dict] = []
+
+    def mock_post(url: str, **kwargs) -> MockHttpResponse:  # type: ignore[no-untyped-def]
+        captured_calls.append({"kwargs": kwargs, "url": url})
+        if url.endswith("/checkout/sessions"):
+            return MockHttpResponse(
+                200,
+                {
+                    "id": "cs_test_refund",
+                    "url": "https://checkout.stripe.test/session/cs_test_refund",
+                },
+            )
+        if url.endswith("/refunds"):
+            return MockHttpResponse(200, {"id": "re_123"})
+        raise AssertionError(f"Unexpected provider URL: {url}")
+
+    monkeypatch.setattr(
+        contribution_router.httpx,
+        "Client",
+        lambda *args, **kwargs: FakeProviderClient(mock_post),
+    )
+    try:
+        admin_headers = create_admin(client, "stripe.refund.finance@example.com")
+        member = register_user(client, "stripe.refund.member@example.com", "Stripe Refund Member")
+        member_headers = auth_headers(member["access_token"])
+        campaign = create_published_campaign(
+            client,
+            admin_headers,
+            "Stripe refund campaign",
+        )
+        intent_response = client.post(
+            f"/api/v1/contributions/{campaign['id']}/payment-intents",
+            headers=member_headers,
+            json={
+                "amount_cents": 9100,
+                "currency": "USD",
                 "payment_method": "CARD_TEST",
             },
         )
         assert intent_response.status_code == 201
         intent = intent_response.json()
-        confirmed_response = client.post(
-            f"/api/v1/contributions/{campaign['id']}/payment-intents/{intent['id']}/confirm",
+
+        webhook_payload = {
+            "id": "evt_stripe_checkout_completed",
+            "type": "checkout.session.completed",
+            "data": {
+                "object": {
+                    "id": "cs_test_refund",
+                    "amount_total": 9100,
+                    "currency": "usd",
+                    "payment_intent": "pi_live_refund_123",
+                }
+            },
+        }
+        raw_body = webhook_body(webhook_payload)
+        timestamp = "1720665600"
+        stripe_signature = hmac.new(
+            settings.stripe_webhook_secret.encode("utf-8"),
+            timestamp.encode("utf-8") + b"." + raw_body,
+            hashlib.sha256,
+        ).hexdigest()
+        webhook_response = client.post(
+            "/api/v1/contributions/webhooks/stripe",
+            content=raw_body,
+            headers={
+                "content-type": "application/json",
+                "stripe-signature": f"t={timestamp},v1={stripe_signature}",
+            },
+        )
+        assert webhook_response.status_code == 200
+        webhook_result = webhook_response.json()
+        assert webhook_result["reconciled"] is True
+        assert webhook_result["payment_intent_status"] == "CONFIRMED"
+
+        refreshed_intent = client.get(
+            f"/api/v1/contributions/{campaign['id']}/payment-intents/{intent['id']}",
             headers=member_headers,
         )
-        assert confirmed_response.status_code == 201
-        confirmed = confirmed_response.json()
+        assert refreshed_intent.status_code == 200
+        refreshed_intent_payload = refreshed_intent.json()
+        assert refreshed_intent_payload["status"] == "CONFIRMED"
+        assert refreshed_intent_payload["receipt_id"] == webhook_result["receipt_id"]
 
         provider_refund_response = client.post(
-            f"/api/v1/contributions/admin/contributions/{confirmed['id']}/provider-refund",
+            f"/api/v1/contributions/admin/contributions/{webhook_result['contribution_id']}/provider-refund",
             headers=admin_headers,
-            json={"note": "Refund should wait for a real provider adapter."},
+            json={"note": "Refund through Stripe provider."},
         )
-        assert provider_refund_response.status_code == 503
-        assert (
-            provider_refund_response.json()["detail"]
-            == "Contribution refund provider STRIPE is not implemented"
-        )
+        assert provider_refund_response.status_code == 200
+        refund_call = captured_calls[-1]
+        assert refund_call["url"] == "https://api.stripe.com/v1/refunds"
+        assert refund_call["kwargs"]["data"]["payment_intent"] == "pi_live_refund_123"
     finally:
-        settings.contribution_refund_provider = previous_provider
+        settings.contribution_checkout_provider = previous_checkout_provider
+        settings.stripe_secret_key = previous_secret
+        settings.stripe_webhook_secret = previous_webhook_secret
+
+
+def test_flutterwave_webhook_confirms_payment_intent_and_sets_receipt(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = get_settings()
+    previous_checkout_provider = settings.contribution_checkout_provider
+    previous_secret = settings.flutterwave_secret_key
+    previous_webhook_hash = settings.flutterwave_webhook_secret_hash
+    settings.contribution_checkout_provider = "flutterwave"
+    settings.flutterwave_secret_key = "flw_secret_checkout"
+    settings.flutterwave_webhook_secret_hash = "flw_hash_signature"
+
+    def mock_post(url: str, **kwargs) -> MockHttpResponse:  # type: ignore[no-untyped-def]
+        return MockHttpResponse(
+            200,
+            {
+                "data": {
+                    "link": "https://flutterwave.test/pay/yalumni_flw_paid",
+                }
+            },
+        )
+
+    monkeypatch.setattr(
+        contribution_router.httpx,
+        "Client",
+        lambda *args, **kwargs: FakeProviderClient(mock_post),
+    )
+    try:
+        admin_headers = create_admin(client, "flutterwave.finance@example.com")
+        member = register_user(client, "flutterwave.member@example.com", "Flutterwave Member")
+        member_headers = auth_headers(member["access_token"])
+        campaign = create_published_campaign(
+            client,
+            admin_headers,
+            "Flutterwave campaign",
+        )
+        intent_response = client.post(
+            f"/api/v1/contributions/{campaign['id']}/payment-intents",
+            headers=member_headers,
+            json={
+                "amount_cents": 6400,
+                "currency": "USD",
+                "payment_method": "MOBILE_MONEY",
+            },
+        )
+        assert intent_response.status_code == 201
+        intent = intent_response.json()
+
+        webhook_payload = {
+            "event": "charge.completed",
+            "data": {
+                "id": 4510021,
+                "tx_ref": intent["provider_intent_id"],
+                "amount": 64.0,
+                "currency": "USD",
+                "status": "successful",
+                "flw_ref": "FLW-REF-9988",
+            },
+        }
+        webhook_response = client.post(
+            "/api/v1/contributions/webhooks/flutterwave",
+            content=webhook_body(webhook_payload),
+            headers={
+                "content-type": "application/json",
+                "verif-hash": settings.flutterwave_webhook_secret_hash,
+            },
+        )
+        assert webhook_response.status_code == 200
+        webhook_result = webhook_response.json()
+        assert webhook_result["reconciled"] is True
+        assert webhook_result["payment_intent_status"] == "CONFIRMED"
+
+        refreshed_intent = client.get(
+            f"/api/v1/contributions/{campaign['id']}/payment-intents/{intent['id']}",
+            headers=member_headers,
+        )
+        assert refreshed_intent.status_code == 200
+        refreshed_intent_payload = refreshed_intent.json()
+        assert refreshed_intent_payload["status"] == "CONFIRMED"
+        assert refreshed_intent_payload["receipt_id"] == webhook_result["receipt_id"]
+        assert refreshed_intent_payload["receipt_number"]
+    finally:
+        settings.contribution_checkout_provider = previous_checkout_provider
+        settings.flutterwave_secret_key = previous_secret
+        settings.flutterwave_webhook_secret_hash = previous_webhook_hash
 
 
 def payment_attempt_snapshots_for_intent(payment_intent_id: str) -> list[dict]:

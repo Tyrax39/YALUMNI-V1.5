@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Annotated
 
+import httpx
 from fastapi import (
     APIRouter,
     Depends,
@@ -564,11 +565,14 @@ def _serialize_contribution(contribution: Contribution) -> ContributionResponse:
 
 
 def _serialize_payment_intent(
+    db: Session,
     payment_intent: ContributionPaymentIntent,
 ) -> ContributionPaymentIntentResponse:
     checkout_attempt = (
         payment_intent.payment_attempts[-1] if payment_intent.payment_attempts else None
     )
+    contribution = _find_contribution_for_payment_intent(db, payment_intent)
+    receipt = contribution.receipt if contribution and contribution.receipt else None
     return ContributionPaymentIntentResponse(
         amount_cents=payment_intent.amount_cents,
         anonymous=payment_intent.anonymous,
@@ -576,6 +580,7 @@ def _serialize_payment_intent(
         checkout_attempt_id=checkout_attempt.id if checkout_attempt else None,
         checkout_url=checkout_attempt.checkout_url if checkout_attempt else None,
         client_secret=checkout_attempt.client_secret if checkout_attempt else None,
+        contribution_id=contribution.id if contribution else None,
         contributor_user_id=payment_intent.contributor_user_id,
         created_at=payment_intent.created_at,
         currency=payment_intent.currency,
@@ -584,6 +589,8 @@ def _serialize_payment_intent(
         payment_method=payment_intent.payment_method,
         provider=payment_intent.provider,
         provider_intent_id=payment_intent.provider_intent_id,
+        receipt_id=receipt.id if receipt else None,
+        receipt_number=receipt.receipt_number if receipt else None,
         status=payment_intent.status,
         updated_at=payment_intent.updated_at,
     )
@@ -1161,13 +1168,89 @@ def _expected_webhook_signature(raw_body: bytes, secret: str) -> str:
     return hmac.new(secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
 
 
-def _verify_contribution_webhook_signature(request: Request, raw_body: bytes) -> None:
-    secret = get_settings().contribution_webhook_secret
+def _provider_timeout() -> httpx.Timeout:
+    configured_seconds = max(get_settings().contribution_provider_request_timeout_seconds, 1.0)
+    connect_timeout = min(configured_seconds, 10.0)
+    return httpx.Timeout(configured_seconds, connect=connect_timeout)
+
+
+def _payment_return_url(
+    *,
+    campaign_id: uuid.UUID,
+    intent_id: uuid.UUID,
+    provider: str,
+    status_value: str,
+) -> str:
+    settings = get_settings()
+    base_url = settings.web_base_url.rstrip("/")
+    return (
+        f"{base_url}/contributions/{campaign_id}/pay"
+        f"?intent={intent_id}&provider={provider.lower()}&status={status_value}"
+    )
+
+
+def _stripe_webhook_signature(raw_body: bytes, secret: str, timestamp: str) -> str:
+    signed_payload = timestamp.encode("utf-8") + b"." + raw_body
+    return hmac.new(secret.encode("utf-8"), signed_payload, hashlib.sha256).hexdigest()
+
+
+def _configured_provider_secret(provider: str) -> str | None:
+    settings = get_settings()
+    if provider == "STRIPE":
+        return settings.stripe_webhook_secret
+    if provider == "FLUTTERWAVE":
+        return settings.flutterwave_webhook_secret_hash
+    return settings.contribution_webhook_secret
+
+
+def _verify_contribution_webhook_signature(
+    provider: str,
+    request: Request,
+    raw_body: bytes,
+) -> None:
+    secret = _configured_provider_secret(provider)
     if not secret:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Contribution webhook secret is not configured",
+            detail=f"{provider} contribution webhook secret is not configured",
         )
+
+    if provider == "STRIPE":
+        supplied_signature = request.headers.get("stripe-signature")
+        if not supplied_signature:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Missing webhook signature",
+            )
+        parts = {}
+        for item in supplied_signature.split(","):
+            key, _, value = item.partition("=")
+            if key and value:
+                parts.setdefault(key.strip(), []).append(value.strip())
+        timestamp = (parts.get("t") or [None])[0]
+        signatures = parts.get("v1") or []
+        if not timestamp or not signatures:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid webhook signature",
+            )
+        expected_signature = _stripe_webhook_signature(raw_body, secret, timestamp)
+        if not any(hmac.compare_digest(candidate, expected_signature) for candidate in signatures):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid webhook signature",
+            )
+        return
+
+    if provider == "FLUTTERWAVE":
+        supplied_signature = request.headers.get("verif-hash")
+        if not supplied_signature or not hmac.compare_digest(supplied_signature.strip(), secret):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid webhook signature",
+            )
+        return
+
     supplied_signature = request.headers.get("x-yalumni-webhook-signature")
     if not supplied_signature:
         raise HTTPException(
@@ -1185,7 +1268,91 @@ def _verify_contribution_webhook_signature(request: Request, raw_body: bytes) ->
         )
 
 
-def _parse_contribution_webhook_payload(raw_body: bytes) -> ContributionWebhookPayload:
+def _parse_stripe_webhook_payload(raw_body: bytes) -> ContributionWebhookPayload:
+    try:
+        payload = json.loads(raw_body)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Invalid webhook payload",
+        ) from exc
+    event_type = _normalize_enum(payload.get("type"))
+    data = payload.get("data", {}).get("object", {})
+    provider_intent_id = data.get("id")
+    if not event_type or not provider_intent_id:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Invalid webhook payload",
+        )
+    amount_total = data.get("amount_total")
+    currency = data.get("currency")
+    provider_payment_reference = data.get("payment_intent")
+    amount_cents = (
+        int(amount_total)
+        if isinstance(amount_total, int) and amount_total > 0
+        else None
+    )
+    return ContributionWebhookPayload(
+        amount_cents=amount_cents,
+        currency=currency,
+        event_type=event_type,
+        failure_reason=None,
+        provider_event_id=payload.get("id"),
+        provider_intent_id=str(provider_intent_id),
+        provider_payment_reference=(
+            str(provider_payment_reference) if provider_payment_reference else None
+        ),
+    )
+
+
+def _parse_flutterwave_webhook_payload(raw_body: bytes) -> ContributionWebhookPayload:
+    try:
+        payload = json.loads(raw_body)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Invalid webhook payload",
+        ) from exc
+    data = payload.get("data", {})
+    tx_ref = data.get("tx_ref")
+    raw_status = str(data.get("status") or "").strip().lower()
+    if not tx_ref:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Invalid webhook payload",
+        )
+    if raw_status == "successful":
+        event_type = "PAYMENT_SUCCEEDED"
+    elif raw_status in {"cancelled", "canceled"}:
+        event_type = "PAYMENT_CANCELED"
+    else:
+        event_type = "PAYMENT_FAILED"
+    amount_value = data.get("amount")
+    amount_cents = None
+    if isinstance(amount_value, (int, float)) and amount_value > 0:
+        amount_cents = int(round(float(amount_value) * 100))
+    return ContributionWebhookPayload(
+        amount_cents=amount_cents,
+        currency=data.get("currency"),
+        event_type=event_type,
+        failure_reason=str(data.get("processor_response") or data.get("narration") or "").strip()
+        or None,
+        provider_event_id=str(data.get("id")) if data.get("id") is not None else None,
+        provider_intent_id=str(tx_ref),
+        provider_payment_reference=str(data.get("flw_ref") or data.get("id"))
+        if data.get("flw_ref") or data.get("id")
+        else None,
+    )
+
+
+def _parse_contribution_webhook_payload(
+    provider: str,
+    raw_body: bytes,
+) -> ContributionWebhookPayload:
+    if provider == "STRIPE":
+        return _parse_stripe_webhook_payload(raw_body)
+    if provider == "FLUTTERWAVE":
+        return _parse_flutterwave_webhook_payload(raw_body)
     try:
         return ContributionWebhookPayload.model_validate_json(raw_body)
     except ValidationError as exc:
@@ -1448,6 +1615,108 @@ def _local_checkout_client_secret(provider_intent_id: str) -> str:
     return f"{provider_intent_id}_secret_{secrets.token_urlsafe(24)}"
 
 
+def _stripe_secret_key() -> str:
+    secret_key = get_settings().stripe_secret_key
+    if not secret_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Stripe secret key is not configured",
+        )
+    return secret_key
+
+
+def _flutterwave_secret_key() -> str:
+    secret_key = get_settings().flutterwave_secret_key
+    if not secret_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Flutterwave secret key is not configured",
+        )
+    return secret_key
+
+
+def _stripe_payment_method_types(payment_method: str) -> list[str]:
+    if payment_method in {"CARD", "CARD_TEST"}:
+        return ["card"]
+    raise HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        detail=f"Payment method {payment_method} is not supported by STRIPE",
+    )
+
+
+def _flutterwave_payment_options(payment_method: str) -> str:
+    if payment_method in {"CARD", "CARD_TEST"}:
+        return "card"
+    if payment_method == "MOBILE_MONEY":
+        return "mobilemoney"
+    if payment_method == "BANK_TRANSFER":
+        return "banktransfer"
+    raise HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        detail=f"Payment method {payment_method} is not supported by FLUTTERWAVE",
+    )
+
+
+def _provider_http_error_detail(provider: str, action: str, response: httpx.Response) -> str:
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = {}
+    if provider == "STRIPE":
+        error_message = payload.get("error", {}).get("message")
+    else:
+        error_message = payload.get("message")
+    detail = f"{provider} {action} request failed"
+    if error_message:
+        detail = f"{detail}: {error_message}"
+    return detail
+
+
+def _resolve_provider_success_url(
+    *,
+    campaign_id: uuid.UUID,
+    intent_id: uuid.UUID,
+    provider: str,
+) -> str:
+    settings = get_settings()
+    if provider == "STRIPE" and settings.stripe_checkout_success_url:
+        return settings.stripe_checkout_success_url.format(
+            campaign_id=campaign_id,
+            payment_intent_id=intent_id,
+        )
+    if provider == "FLUTTERWAVE" and settings.flutterwave_checkout_redirect_url:
+        return settings.flutterwave_checkout_redirect_url.format(
+            campaign_id=campaign_id,
+            payment_intent_id=intent_id,
+        )
+    return _payment_return_url(
+        campaign_id=campaign_id,
+        intent_id=intent_id,
+        provider=provider,
+        status_value="return",
+    )
+
+
+def _resolve_provider_cancel_url(
+    *,
+    campaign_id: uuid.UUID,
+    intent_id: uuid.UUID,
+    provider: str,
+) -> str:
+    settings = get_settings()
+    if provider == "STRIPE" and settings.stripe_checkout_cancel_url:
+        return settings.stripe_checkout_cancel_url.format(
+            campaign_id=campaign_id,
+            payment_intent_id=intent_id,
+        )
+    return _payment_return_url(
+        campaign_id=campaign_id,
+        intent_id=intent_id,
+        provider=provider,
+        status_value="canceled",
+    )
+
+
 def _create_local_test_checkout_session(
     *,
     campaign: ContributionCampaign,
@@ -1475,9 +1744,154 @@ def _create_local_test_checkout_session(
     )
 
 
+def _create_stripe_checkout_session(
+    *,
+    campaign: ContributionCampaign,
+    current_user: User,
+    intent_id: uuid.UUID,
+    payload: ContributionPaymentIntentCreate,
+) -> CheckoutSessionDraft:
+    payment_method_types = _stripe_payment_method_types(payload.payment_method)
+    success_url = _resolve_provider_success_url(
+        campaign_id=campaign.id,
+        intent_id=intent_id,
+        provider="STRIPE",
+    )
+    cancel_url = _resolve_provider_cancel_url(
+        campaign_id=campaign.id,
+        intent_id=intent_id,
+        provider="STRIPE",
+    )
+    request_payload = [
+        ("mode", "payment"),
+        ("success_url", success_url),
+        ("cancel_url", cancel_url),
+        ("client_reference_id", str(intent_id)),
+        ("customer_email", current_user.email),
+        ("line_items[0][price_data][currency]", payload.currency.lower()),
+        ("line_items[0][price_data][product_data][name]", campaign.title),
+        ("line_items[0][price_data][product_data][description]", campaign.summary[:255]),
+        ("line_items[0][price_data][unit_amount]", str(payload.amount_cents)),
+        ("line_items[0][quantity]", "1"),
+        ("metadata[yalumni_campaign_id]", str(campaign.id)),
+        ("metadata[yalumni_payment_intent_id]", str(intent_id)),
+        ("metadata[yalumni_member_id]", str(current_user.id)),
+    ]
+    for method in payment_method_types:
+        request_payload.append(("payment_method_types[]", method))
+    with httpx.Client(timeout=_provider_timeout(), follow_redirects=True) as client:
+        response = client.post(
+            "https://api.stripe.com/v1/checkout/sessions",
+            auth=(_stripe_secret_key(), ""),
+            data=request_payload,
+        )
+    if response.status_code >= 400:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=_provider_http_error_detail("STRIPE", "checkout", response),
+        )
+    payload_json = response.json()
+    checkout_url = payload_json.get("url")
+    provider_intent_id = payload_json.get("id")
+    if not checkout_url or not provider_intent_id:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="STRIPE checkout response is missing required fields",
+        )
+    return CheckoutSessionDraft(
+        checkout_url=str(checkout_url),
+        client_secret=None,
+        provider="STRIPE",
+        provider_intent_id=str(provider_intent_id),
+        request_payload_json={
+            "amount_cents": payload.amount_cents,
+            "campaign_id": str(campaign.id),
+            "currency": payload.currency,
+            "payment_method": payload.payment_method,
+            "provider": "STRIPE",
+            "success_url": success_url,
+            "cancel_url": cancel_url,
+        },
+        response_payload_json={
+            "adapter": "STRIPE",
+            "checkout_url": str(checkout_url),
+            "provider_intent_id": str(provider_intent_id),
+        },
+    )
+
+
+def _create_flutterwave_checkout_session(
+    *,
+    campaign: ContributionCampaign,
+    current_user: User,
+    intent_id: uuid.UUID,
+    payload: ContributionPaymentIntentCreate,
+) -> CheckoutSessionDraft:
+    provider_intent_id = f"yalumni_flw_{intent_id.hex}"
+    redirect_url = _resolve_provider_success_url(
+        campaign_id=campaign.id,
+        intent_id=intent_id,
+        provider="FLUTTERWAVE",
+    )
+    request_payload_json = {
+        "tx_ref": provider_intent_id,
+        "amount": f"{payload.amount_cents / 100:.2f}",
+        "currency": payload.currency,
+        "redirect_url": redirect_url,
+        "payment_options": _flutterwave_payment_options(payload.payment_method),
+        "customer": {
+            "email": current_user.email,
+            "name": current_user.display_name,
+        },
+        "customizations": {
+            "title": campaign.title,
+            "description": campaign.summary[:255],
+        },
+        "meta": {
+            "yalumni_campaign_id": str(campaign.id),
+            "yalumni_payment_intent_id": str(intent_id),
+            "yalumni_member_id": str(current_user.id),
+        },
+    }
+    with httpx.Client(timeout=_provider_timeout(), follow_redirects=True) as client:
+        response = client.post(
+            "https://api.flutterwave.com/v3/payments",
+            headers={
+                "Authorization": f"Bearer {_flutterwave_secret_key()}",
+                "Content-Type": "application/json",
+            },
+            json=request_payload_json,
+        )
+    if response.status_code >= 400:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=_provider_http_error_detail("FLUTTERWAVE", "checkout", response),
+        )
+    payload_json = response.json()
+    checkout_url = payload_json.get("data", {}).get("link")
+    if not checkout_url:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="FLUTTERWAVE checkout response is missing required fields",
+        )
+    return CheckoutSessionDraft(
+        checkout_url=str(checkout_url),
+        client_secret=None,
+        provider="FLUTTERWAVE",
+        provider_intent_id=provider_intent_id,
+        request_payload_json=request_payload_json,
+        response_payload_json={
+            "adapter": "FLUTTERWAVE",
+            "checkout_url": str(checkout_url),
+            "provider_intent_id": provider_intent_id,
+        },
+    )
+
+
 def _create_checkout_session(
     *,
     campaign: ContributionCampaign,
+    current_user: User,
     intent_id: uuid.UUID,
     payload: ContributionPaymentIntentCreate,
     provider: str,
@@ -1488,14 +1902,94 @@ def _create_checkout_session(
             intent_id=intent_id,
             payload=payload,
         )
+    if provider == "STRIPE":
+        return _create_stripe_checkout_session(
+            campaign=campaign,
+            current_user=current_user,
+            intent_id=intent_id,
+            payload=payload,
+        )
+    if provider == "FLUTTERWAVE":
+        return _create_flutterwave_checkout_session(
+            campaign=campaign,
+            current_user=current_user,
+            intent_id=intent_id,
+            payload=payload,
+        )
     raise HTTPException(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         detail=f"Contribution checkout provider {provider} is not implemented",
     )
 
 
-def _create_provider_refund_request(*, contribution: Contribution, provider: str) -> None:
+def _payment_intent_for_contribution(
+    db: Session,
+    contribution: Contribution,
+) -> ContributionPaymentIntent | None:
+    if not contribution.payment_reference:
+        return None
+    return db.scalar(
+        select(ContributionPaymentIntent)
+        .options(joinedload(ContributionPaymentIntent.payment_attempts))
+        .where(ContributionPaymentIntent.provider_intent_id == contribution.payment_reference)
+    )
+
+
+def _resolved_provider_refund_reference(
+    contribution: Contribution,
+    payment_intent: ContributionPaymentIntent | None,
+) -> str:
+    if payment_intent and payment_intent.payment_attempts:
+        latest_attempt = payment_intent.payment_attempts[-1]
+        resolved_reference = (latest_attempt.response_payload_json or {}).get(
+            "resolved_payment_reference"
+        )
+        if isinstance(resolved_reference, str) and resolved_reference.strip():
+            return resolved_reference.strip()
+    if contribution.payment_reference:
+        return contribution.payment_reference
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail="Provider refund requires a payment reference",
+    )
+
+
+def _create_provider_refund_request(
+    *,
+    contribution: Contribution,
+    provider: str,
+    provider_reference: str,
+) -> None:
     if provider == "LOCAL_TEST":
+        return
+    if provider == "STRIPE":
+        with httpx.Client(timeout=_provider_timeout(), follow_redirects=True) as client:
+            response = client.post(
+                "https://api.stripe.com/v1/refunds",
+                auth=(_stripe_secret_key(), ""),
+                data={"payment_intent": provider_reference},
+            )
+        if response.status_code >= 400:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=_provider_http_error_detail("STRIPE", "refund", response),
+            )
+        return
+    if provider == "FLUTTERWAVE":
+        with httpx.Client(timeout=_provider_timeout(), follow_redirects=True) as client:
+            response = client.post(
+                f"https://api.flutterwave.com/v3/transactions/{provider_reference}/refund",
+                headers={
+                    "Authorization": f"Bearer {_flutterwave_secret_key()}",
+                    "Content-Type": "application/json",
+                },
+                json={"amount": f"{contribution.amount_cents / 100:.2f}"},
+            )
+        if response.status_code >= 400:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=_provider_http_error_detail("FLUTTERWAVE", "refund", response),
+            )
         return
     raise HTTPException(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -1549,6 +2043,21 @@ def _update_latest_payment_attempt_status(
         return
     payment_attempt.status = status_value
     payment_attempt.error_message = error_message
+
+
+def _store_provider_payment_reference(
+    db: Session,
+    payment_intent: ContributionPaymentIntent,
+    provider_payment_reference: str | None,
+) -> None:
+    if not provider_payment_reference:
+        return
+    payment_attempt = _get_latest_payment_attempt(db, payment_intent.id)
+    if payment_attempt is None:
+        return
+    response_payload = dict(payment_attempt.response_payload_json or {})
+    response_payload["resolved_payment_reference"] = provider_payment_reference
+    payment_attempt.response_payload_json = response_payload
 
 
 def _record_payment_intent_contribution(
@@ -2386,8 +2895,17 @@ def provider_refund_contribution(
             status_code=status.HTTP_409_CONFLICT,
             detail="Provider refund requires a payment reference",
         )
-    refund_provider = _normalize_enum(get_settings().contribution_refund_provider) or "LOCAL_TEST"
-    _create_provider_refund_request(contribution=contribution, provider=refund_provider)
+    payment_intent = _payment_intent_for_contribution(db, contribution)
+    refund_provider = (
+        payment_intent.provider
+        if payment_intent is not None
+        else _normalize_enum(get_settings().contribution_refund_provider) or "LOCAL_TEST"
+    )
+    _create_provider_refund_request(
+        contribution=contribution,
+        provider=refund_provider,
+        provider_reference=_resolved_provider_refund_reference(contribution, payment_intent),
+    )
     return _apply_contribution_adjustment(
         action="Provider refund",
         contribution=contribution,
@@ -3786,6 +4304,7 @@ def create_payment_intent(
     checkout_provider = _configured_checkout_provider()
     checkout_session = _create_checkout_session(
         campaign=campaign,
+        current_user=current_user,
         intent_id=intent_id,
         payload=payload,
         provider=checkout_provider,
@@ -3827,7 +4346,27 @@ def create_payment_intent(
     )
     db.commit()
     db.refresh(payment_intent)
-    return _serialize_payment_intent(payment_intent)
+    return _serialize_payment_intent(db, payment_intent)
+
+
+@router.get(
+    "/{campaign_id}/payment-intents/{payment_intent_id}",
+    response_model=ContributionPaymentIntentResponse,
+)
+def get_payment_intent(
+    campaign_id: uuid.UUID,
+    payment_intent_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> ContributionPaymentIntentResponse:
+    payment_intent = _get_payment_intent_or_404(
+        db,
+        campaign_id=campaign_id,
+        payment_intent_id=payment_intent_id,
+    )
+    _ensure_payment_intent_access(payment_intent, current_user)
+    _ensure_campaign_visible(payment_intent.campaign, current_user)
+    return _serialize_payment_intent(db, payment_intent)
 
 
 @router.post(
@@ -3857,6 +4396,7 @@ def retry_payment_intent(
     _ensure_campaign_accepts_payment(payment_intent.campaign)
     checkout_session = _create_checkout_session(
         campaign=payment_intent.campaign,
+        current_user=current_user,
         intent_id=payment_intent.id,
         payload=_payment_intent_retry_payload(payment_intent),
         provider=_configured_checkout_provider(),
@@ -3884,7 +4424,7 @@ def retry_payment_intent(
     )
     db.commit()
     db.refresh(payment_intent)
-    return _serialize_payment_intent(payment_intent)
+    return _serialize_payment_intent(db, payment_intent)
 
 
 @router.post(
@@ -4012,14 +4552,14 @@ async def receive_provider_webhook(
     db: Annotated[Session, Depends(get_db_session)],
 ) -> ContributionWebhookResponse:
     raw_body = await request.body()
-    _verify_contribution_webhook_signature(request, raw_body)
-    payload = _parse_contribution_webhook_payload(raw_body)
     normalized_provider = _normalize_enum(provider)
     if not normalized_provider:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Provider is required",
         )
+    _verify_contribution_webhook_signature(normalized_provider, request, raw_body)
+    payload = _parse_contribution_webhook_payload(normalized_provider, raw_body)
     webhook_event = _start_webhook_event(db, payload=payload, provider=normalized_provider)
     supported_events = WEBHOOK_SUCCESS_EVENTS | WEBHOOK_FAILED_EVENTS | WEBHOOK_CANCELED_EVENTS
     if payload.event_type not in supported_events:
@@ -4078,6 +4618,11 @@ async def receive_provider_webhook(
         "provider": normalized_provider,
         "provider_event_id": payload.provider_event_id,
     }
+    _store_provider_payment_reference(
+        db,
+        payment_intent,
+        payload.provider_payment_reference,
+    )
 
     if payload.event_type in WEBHOOK_SUCCESS_EVENTS:
         existing_contribution = _find_contribution_for_payment_intent(db, payment_intent)

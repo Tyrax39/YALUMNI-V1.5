@@ -227,11 +227,14 @@ class ContributionPaymentIntentResponse(BaseModel):
     contributor_user_id: uuid.UUID | None
     created_at: datetime
     currency: str
+    contribution_id: uuid.UUID | None
     id: uuid.UUID
     note: str | None
     payment_method: str
     provider: str
     provider_intent_id: str
+    receipt_id: uuid.UUID | None
+    receipt_number: str | None
     status: str
     updated_at: datetime
 
@@ -270,6 +273,7 @@ class ContributionWebhookPayload(BaseModel):
     amount_cents: int | None = Field(default=None, ge=1, le=100_000_000_000)
     currency: str | None = Field(default=None, min_length=3, max_length=3)
     failure_reason: str | None = Field(default=None, max_length=500)
+    provider_payment_reference: str | None = Field(default=None, max_length=160)
 
     @field_validator("event_type")
     @classmethod
@@ -291,7 +295,7 @@ class ContributionWebhookPayload(BaseModel):
             raise ValueError("provider_intent_id is required")
         return normalized
 
-    @field_validator("provider_event_id", "failure_reason")
+    @field_validator("provider_event_id", "failure_reason", "provider_payment_reference")
     @classmethod
     def normalize_optional_webhook_text(cls, value: str | None) -> str | None:
         if value is None:

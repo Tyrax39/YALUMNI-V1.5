@@ -42,6 +42,14 @@ class Settings(BaseSettings):
     contribution_checkout_provider: str = "LOCAL_TEST"
     contribution_refund_provider: str = "LOCAL_TEST"
     contribution_webhook_secret: str | None = None
+    contribution_provider_request_timeout_seconds: float = 20.0
+    stripe_secret_key: str | None = None
+    stripe_webhook_secret: str | None = None
+    stripe_checkout_success_url: str | None = None
+    stripe_checkout_cancel_url: str | None = None
+    flutterwave_secret_key: str | None = None
+    flutterwave_webhook_secret_hash: str | None = None
+    flutterwave_checkout_redirect_url: str | None = None
     mwf_directory_fellows_url: str = (
         "https://www.mandelawashingtonfellowship.org/wp-json/yali/v1/fellows/"
     )

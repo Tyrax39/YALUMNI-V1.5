@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 
 import {
   CircleDollarSign,
@@ -20,14 +21,18 @@ import {
   MEMBER_ACCESS_ROLES,
   type ContributionCampaign,
   type ContributionFilters,
+  type ContributionPaymentIntent,
   type ContributionReceipt,
   type ContributionRecord,
+  confirmContributionPaymentIntent,
   contributionReceiptDownloadUrl,
   contributionReceiptPdfDownloadUrl,
+  createContributionPaymentIntent,
   fetchContributionCampaign,
   fetchContributionCampaigns,
+  fetchContributionPaymentIntent,
   fetchContributionReceipt,
-  recordContributionPayment
+  retryContributionPaymentIntent
 } from "@yalumni/frontend-shared";
 
 import { AppShell } from "@/components/platform/app-shell";
@@ -52,15 +57,13 @@ type PaymentForm = {
   anonymous: boolean;
   note: string;
   payment_method: string;
-  payment_reference: string;
 };
 
 const INITIAL_PAYMENT_FORM: PaymentForm = {
   amount: "25.00",
   anonymous: false,
   note: "",
-  payment_method: "CARD_TEST",
-  payment_reference: ""
+  payment_method: "CARD_TEST"
 };
 
 const CAMPAIGN_STATUS_OPTIONS: [string, string][] = [
@@ -233,11 +236,15 @@ export function ContributionCampaignDetail({ campaignId }: { campaignId: string 
 }
 
 export function ContributionPaySurface({ campaignId }: { campaignId: string }) {
+  const searchParams = useSearchParams();
   const [state, setState] = useState<CampaignDetailState>({ status: "loading" });
   const [form, setForm] = useState<PaymentForm>(INITIAL_PAYMENT_FORM);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [contribution, setContribution] = useState<ContributionRecord | null>(null);
+  const [paymentIntent, setPaymentIntent] = useState<ContributionPaymentIntent | null>(null);
+  const intentId = searchParams.get("intent");
+  const returnStatus = searchParams.get("status");
 
   useEffect(() => {
     let isMounted = true;
@@ -260,6 +267,38 @@ export function ContributionPaySurface({ campaignId }: { campaignId: string }) {
     };
   }, [campaignId]);
 
+  useEffect(() => {
+    if (!intentId) {
+      return;
+    }
+
+    let isMounted = true;
+    fetchContributionPaymentIntent(campaignId, intentId)
+      .then((intent) => {
+        if (!isMounted) {
+          return;
+        }
+        setPaymentIntent(intent);
+        if (intent.status === "CONFIRMED" && intent.receipt_id) {
+          setMessage("Payment confirmed. Receipt is ready.");
+        } else if (returnStatus === "canceled") {
+          setMessage("Payment session was canceled before confirmation.");
+        } else {
+          setMessage("Payment session returned. Refresh the status if the receipt is still pending.");
+        }
+      })
+      .catch((caught) => {
+        if (!isMounted) {
+          return;
+        }
+        setMessage(caught instanceof Error ? caught.message : "Payment status could not be loaded.");
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [campaignId, intentId, returnStatus]);
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (state.status !== "ready") {
@@ -273,19 +312,76 @@ export function ContributionPaySurface({ campaignId }: { campaignId: string }) {
     setBusy(true);
     setMessage(null);
     try {
-      const created = await recordContributionPayment(state.campaign.id, {
+      const createdIntent = await createContributionPaymentIntent(state.campaign.id, {
         amount_cents: amountCents,
         anonymous: form.anonymous,
         currency: state.campaign.currency,
         note: form.note.trim() || null,
-        payment_method: form.payment_method,
-        payment_reference: form.payment_reference.trim() || null
+        payment_method: form.payment_method
       });
-      setContribution(created);
-      setMessage("Contribution recorded and receipt issued.");
-      setForm(INITIAL_PAYMENT_FORM);
+      setPaymentIntent(createdIntent);
+      if (createdIntent.provider === "LOCAL_TEST") {
+        const confirmed = await confirmContributionPaymentIntent(state.campaign.id, createdIntent.id);
+        setContribution(confirmed);
+        setMessage("Contribution recorded and receipt issued.");
+        setForm(INITIAL_PAYMENT_FORM);
+      } else if (createdIntent.checkout_url) {
+        setMessage(`Redirecting to ${createdIntent.provider.toLowerCase()} checkout...`);
+        window.location.assign(createdIntent.checkout_url);
+        return;
+      } else {
+        setMessage("Payment intent was created, but no checkout session was returned.");
+      }
     } catch (caught) {
       setMessage(caught instanceof Error ? caught.message : "Contribution could not be recorded.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRefreshIntent() {
+    if (!paymentIntent) {
+      return;
+    }
+    setBusy(true);
+    setMessage(null);
+    try {
+      const refreshedIntent = await fetchContributionPaymentIntent(campaignId, paymentIntent.id);
+      setPaymentIntent(refreshedIntent);
+      if (refreshedIntent.status === "CONFIRMED" && refreshedIntent.receipt_id) {
+        setMessage("Payment confirmed. Receipt is ready.");
+      } else {
+        setMessage(`Payment intent is currently ${formatStatus(refreshedIntent.status)}.`);
+      }
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : "Payment status could not be refreshed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRetryIntent() {
+    if (!paymentIntent || state.status !== "ready") {
+      return;
+    }
+    setBusy(true);
+    setMessage(null);
+    try {
+      const retriedIntent = await retryContributionPaymentIntent(state.campaign.id, paymentIntent.id);
+      setPaymentIntent(retriedIntent);
+      if (retriedIntent.provider === "LOCAL_TEST") {
+        const confirmed = await confirmContributionPaymentIntent(state.campaign.id, retriedIntent.id);
+        setContribution(confirmed);
+        setMessage("Contribution recorded and receipt issued.");
+      } else if (retriedIntent.checkout_url) {
+        setMessage(`Redirecting to ${retriedIntent.provider.toLowerCase()} checkout...`);
+        window.location.assign(retriedIntent.checkout_url);
+        return;
+      } else {
+        setMessage("Payment intent was retried, but no checkout session was returned.");
+      }
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : "Payment intent could not be retried.");
     } finally {
       setBusy(false);
     }
@@ -325,12 +421,6 @@ export function ContributionPaySurface({ campaignId }: { campaignId: string }) {
                     options={PAYMENT_METHOD_OPTIONS}
                     value={form.payment_method}
                   />
-                  <TextInput
-                    label="Reference"
-                    onChange={(value) => updateField("payment_reference", value)}
-                    placeholder="Transaction or bank reference"
-                    value={form.payment_reference}
-                  />
                   <label className="flex min-h-11 items-center gap-3 rounded-lg border border-border bg-surface px-3 text-sm font-bold text-ink md:mt-7">
                     <input
                       checked={form.anonymous}
@@ -354,22 +444,53 @@ export function ContributionPaySurface({ campaignId }: { campaignId: string }) {
               <aside className="rounded-lg border border-border bg-white p-5 shadow-soft">
                 <h2 className="font-display text-xl font-semibold text-ink">Receipt status</h2>
                 <p className="mt-2 text-sm leading-6 text-muted">
-                  This slice records a local confirmed payment and issues a receipt immediately.
+                  Payment intents are created in YALUMNI first, then completed either locally or in the active provider checkout.
                 </p>
                 <div className="mt-5 grid gap-3">
                   <StatusLine label="Campaign" value={formatStatus(state.campaign.status)} />
                   <StatusLine label="Raised" value={formatMoney(state.campaign.received_amount_cents, state.campaign.currency)} />
                   <StatusLine label="Goal" value={formatMoney(state.campaign.goal_amount_cents, state.campaign.currency)} />
+                  <StatusLine
+                    label="Checkout provider"
+                    value={paymentIntent ? paymentIntent.provider : "Pending"}
+                  />
+                  <StatusLine
+                    label="Intent status"
+                    value={paymentIntent ? formatStatus(paymentIntent.status) : "Not started"}
+                  />
                 </div>
                 {message ? <NoticePanel message={message} /> : null}
-                {contribution?.receipt_id ? (
+                {contribution?.receipt_id || paymentIntent?.receipt_id ? (
                   <Link
                     className="focus-ring mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-border bg-white px-4 text-sm font-bold text-ink transition hover:border-primary hover:text-primary"
-                    href={`/contributions/receipts/${contribution.receipt_id}`}
+                    href={`/contributions/receipts/${contribution?.receipt_id ?? paymentIntent?.receipt_id ?? ""}`}
                   >
                     <ReceiptText aria-hidden="true" className="h-4 w-4" />
                     View receipt
                   </Link>
+                ) : null}
+                {paymentIntent && paymentIntent.status !== "CONFIRMED" ? (
+                  <button
+                    className="focus-ring mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-border bg-white px-4 text-sm font-bold text-ink transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={busy}
+                    onClick={handleRefreshIntent}
+                    type="button"
+                  >
+                    <RefreshCcw aria-hidden="true" className="h-4 w-4" />
+                    Refresh payment status
+                  </button>
+                ) : null}
+                {paymentIntent &&
+                (paymentIntent.status === "FAILED" || paymentIntent.status === "CANCELED") ? (
+                  <button
+                    className="focus-ring mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-border bg-white px-4 text-sm font-bold text-ink transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={busy}
+                    onClick={handleRetryIntent}
+                    type="button"
+                  >
+                    <RefreshCcw aria-hidden="true" className="h-4 w-4" />
+                    Retry payment
+                  </button>
                 ) : null}
                 <button
                   className="focus-ring mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
@@ -377,7 +498,7 @@ export function ContributionPaySurface({ campaignId }: { campaignId: string }) {
                   type="submit"
                 >
                   {busy ? <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" /> : <Send aria-hidden="true" className="h-4 w-4" />}
-                  {busy ? "Recording" : "Record contribution"}
+                  {busy ? "Processing" : "Continue to payment"}
                 </button>
               </aside>
             </form>

@@ -740,6 +740,7 @@ export type ContributionPaymentIntent = {
   checkout_attempt_id?: string | null;
   checkout_url?: string | null;
   client_secret?: string | null;
+  contribution_id?: string | null;
   contributor_user_id?: string | null;
   created_at: string;
   currency: string;
@@ -748,6 +749,8 @@ export type ContributionPaymentIntent = {
   payment_method: string;
   provider: string;
   provider_intent_id: string;
+  receipt_id?: string | null;
+  receipt_number?: string | null;
   status: string;
   updated_at: string;
 };
@@ -1527,6 +1530,17 @@ export function createContributionPaymentIntent(
   );
 }
 
+export function fetchContributionPaymentIntent(
+  campaignId: string,
+  paymentIntentId: string
+): Promise<ContributionPaymentIntent> {
+  return fetchJson<ContributionPaymentIntent>(
+    `/api/backend/api/v1/contributions/${encodeURIComponent(
+      campaignId
+    )}/payment-intents/${encodeURIComponent(paymentIntentId)}`
+  );
+}
+
 export function confirmContributionPaymentIntent(
   campaignId: string,
   paymentIntentId: string
@@ -1535,6 +1549,18 @@ export function confirmContributionPaymentIntent(
     `/api/backend/api/v1/contributions/${encodeURIComponent(
       campaignId
     )}/payment-intents/${encodeURIComponent(paymentIntentId)}/confirm`,
+      "POST"
+    );
+}
+
+export function retryContributionPaymentIntent(
+  campaignId: string,
+  paymentIntentId: string
+): Promise<ContributionPaymentIntent> {
+  return mutateJson<ContributionPaymentIntent>(
+    `/api/backend/api/v1/contributions/${encodeURIComponent(
+      campaignId
+    )}/payment-intents/${encodeURIComponent(paymentIntentId)}/retry`,
     "POST"
   );
 }
