@@ -10,13 +10,26 @@ export const refreshTokenCookieName = "yalumni_refresh_token";
 
 const fallbackApiBaseUrl = "http://127.0.0.1:8002";
 const refreshCookieDays = Number(process.env.YALUMNI_REFRESH_COOKIE_DAYS ?? "30");
+const trustedOriginSet = new Set(
+  (process.env.YALUMNI_TRUSTED_ORIGINS ?? "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean)
+);
 
 export const serverApiBaseUrl =
   process.env.API_BASE_URL?.replace(/\/$/, "") ??
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ??
   fallbackApiBaseUrl;
 
+type CookieSameSite = "lax" | "none" | "strict";
+
 type AuthUserPayload = Record<string, unknown>;
+export type BackendSessionUser = AuthUserPayload & {
+  email?: string;
+  id?: string;
+  roles?: string[];
+};
 
 export type BackendAuthResponse = {
   access_token: string;
@@ -39,19 +52,76 @@ type AuthenticatedBackendResponse = {
   refreshedAuth: BackendAuthResponse | null;
 };
 
+export type ResolvedSessionUser = {
+  clearSession: boolean;
+  refreshedAuth: BackendAuthResponse | null;
+  user: BackendSessionUser | null;
+};
+
+function resolveCookieSameSite(): CookieSameSite {
+  const configuredValue = process.env.YALUMNI_COOKIE_SAME_SITE?.trim().toLowerCase();
+  if (configuredValue === "strict" || configuredValue === "none") {
+    return configuredValue;
+  }
+
+  return "lax";
+}
+
+function resolveCookieSecure(sameSite: CookieSameSite): boolean {
+  const configuredValue = process.env.YALUMNI_COOKIE_SECURE?.trim().toLowerCase();
+  if (configuredValue === "true") {
+    return true;
+  }
+  if (configuredValue === "false") {
+    return sameSite === "none";
+  }
+
+  return process.env.NODE_ENV === "production" || sameSite === "none";
+}
+
+const cookieSameSite = resolveCookieSameSite();
+const cookieSecure = resolveCookieSecure(cookieSameSite);
+
 const cookieOptions = {
   httpOnly: true,
   path: "/",
-  sameSite: "lax" as const,
-  secure: process.env.NODE_ENV === "production"
+  sameSite: cookieSameSite,
+  secure: cookieSecure
 };
 
 const csrfCookieOptions = {
   httpOnly: false,
   path: "/",
-  sameSite: "lax" as const,
-  secure: process.env.NODE_ENV === "production"
+  sameSite: cookieSameSite,
+  secure: cookieSecure
 };
+
+function getRequestOrigin(request: NextRequest): string | null {
+  const origin = request.headers.get("origin");
+  if (origin) {
+    return origin;
+  }
+
+  const referer = request.headers.get("referer");
+  if (!referer) {
+    return null;
+  }
+
+  try {
+    return new URL(referer).origin;
+  } catch {
+    return null;
+  }
+}
+
+function isTrustedOrigin(request: NextRequest): boolean {
+  const requestOrigin = getRequestOrigin(request);
+  if (!requestOrigin) {
+    return true;
+  }
+
+  return requestOrigin === request.nextUrl.origin || trustedOriginSet.has(requestOrigin);
+}
 
 export function getAccessToken(request: NextRequest): string | null {
   return request.cookies.get(accessTokenCookieName)?.value ?? null;
@@ -80,6 +150,10 @@ export function validateCsrfToken(request: NextRequest): NextResponse | null {
   const method = request.method.toUpperCase();
   if (method === "GET" || method === "HEAD" || method === "OPTIONS") {
     return null;
+  }
+
+  if (!isTrustedOrigin(request)) {
+    return NextResponse.json({ detail: "Request origin is not allowed" }, { status: 403 });
   }
 
   const csrfCookie = getCsrfToken(request);
@@ -209,6 +283,79 @@ export async function refreshSession(request: NextRequest): Promise<BackendAuthR
   }
 
   return (await backendResponse.json()) as BackendAuthResponse;
+}
+
+async function fetchSessionUserWithToken(
+  request: NextRequest,
+  accessToken: string,
+  refreshToken: string | null
+): Promise<BackendSessionUser | null> {
+  const backendResponse = await fetch(backendUrl("/api/v1/auth/me"), {
+    cache: "no-store",
+    headers: buildBackendHeaders(request, {
+      accessToken,
+      refreshToken
+    }),
+    method: "GET"
+  });
+
+  if (!backendResponse.ok) {
+    return null;
+  }
+
+  return (await backendResponse.json()) as BackendSessionUser;
+}
+
+export async function resolveSessionUser(request: NextRequest): Promise<ResolvedSessionUser> {
+  const accessToken = getAccessToken(request);
+  const refreshToken = getRefreshToken(request);
+
+  let refreshedAuth: BackendAuthResponse | null = null;
+  let sessionAccessToken = accessToken;
+  let sessionRefreshToken = refreshToken;
+
+  if (!sessionAccessToken && sessionRefreshToken) {
+    refreshedAuth = await refreshSession(request);
+    if (!refreshedAuth) {
+      return { clearSession: true, refreshedAuth: null, user: null };
+    }
+
+    sessionAccessToken = refreshedAuth.access_token;
+    sessionRefreshToken = refreshedAuth.refresh_token;
+  }
+
+  if (!sessionAccessToken) {
+    return { clearSession: false, refreshedAuth, user: null };
+  }
+
+  const initialUser = await fetchSessionUserWithToken(
+    request,
+    sessionAccessToken,
+    sessionRefreshToken ?? null
+  );
+  if (initialUser) {
+    return { clearSession: false, refreshedAuth, user: initialUser };
+  }
+
+  if (!sessionRefreshToken || refreshedAuth) {
+    return { clearSession: true, refreshedAuth, user: null };
+  }
+
+  refreshedAuth = await refreshSession(request);
+  if (!refreshedAuth) {
+    return { clearSession: true, refreshedAuth: null, user: null };
+  }
+
+  const refreshedUser = await fetchSessionUserWithToken(
+    request,
+    refreshedAuth.access_token,
+    refreshedAuth.refresh_token
+  );
+  if (!refreshedUser) {
+    return { clearSession: true, refreshedAuth, user: null };
+  }
+
+  return { clearSession: false, refreshedAuth, user: refreshedUser };
 }
 
 export function proxyBackendResponse(

@@ -1,6 +1,6 @@
 # YALUMNI V1.5 Implementation Status
 
-Last updated: 2026-07-11
+Last updated: 2026-07-14
 Canonical scope target: pilot alumni core launch
 Canonical runtime: `apps/web` (`3010`), `apps/admin-console` (`3011`), `apps/super-admin-console` (`3012`), `apps/api` (`8002`)
 
@@ -13,13 +13,14 @@ the documents disagree.
 
 ## Snapshot
 
-- Overall pilot-core completion estimate: `94-97%`
+- Overall pilot-core completion estimate: `95-97%`
 - Confidence: `medium-high`
 - Current branch at audit: `Tyrax0/yalumni-v1.5-foundation`
 - Current state: late-stage staging build with strong module coverage, pilot
   route parity completed for the remaining partial member/admin surfaces,
   provider-backed contribution checkout/webhook/refund foundations now in place,
-  and production hardening/deployment parity still required
+  cookie/CSRF/session-edge hardening advanced across member/admin/super-admin
+  runtimes, and production hardening/deployment parity still required
 
 ## Frozen Baseline
 
@@ -42,7 +43,7 @@ future task slice explicitly touches them:
 | Domain | Spec scope | Current coverage | UI state | Backend state | Test/deploy state | Launch status | Frozen |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Foundation and runtime split | Separate member/admin/super-admin apps, FastAPI backend, shared packages | Implemented | implemented | implemented | local/staging paths present | complete | yes |
-| Auth, session, RBAC | login, logout, sessions, route protection, role-aware consoles | Implemented with hardening follow-up | implemented | implemented | smoke and contract coverage present | hardening follow-up | yes |
+| Auth, session, RBAC | login, logout, sessions, route protection, role-aware consoles | Implemented with hardening follow-up | implemented | implemented with backend-validated proxy session checks and stricter route gating | smoke and contract coverage present | hardening follow-up | yes |
 | Profile and verification | profile, affiliation, verification request, evidence, admin review | Implemented | implemented | implemented | covered and deployed locally/staging | complete | yes |
 | Directory and MWF alumni | member directory plus MWF alumni cache | Implemented | implemented | implemented | tests and super-admin sync controls present | complete | yes |
 | Communities | discovery, detail, memberships, invitations, leadership views | Implemented for pilot scope | implemented | implemented | local/staging ready | complete for pilot | yes |
@@ -62,7 +63,7 @@ future task slice explicitly touches them:
 | Public landing and trust IA | home, sign-in/join framing, public trust/value surface | Implemented minimum | implemented | not backend-heavy | staging parity review still needed | complete for pilot minimum | yes |
 | Public informational/discovery breadth | broader public marketing/institutional breadth from long-form spec | intentionally reduced for pilot | partial | partial | not required for pilot launch | post-launch | no |
 | Payments productionization | real providers, callbacks, reconciliation | partially implemented | implemented via intent-based member pay UX | implemented foundation for Stripe + Flutterwave checkout, refunds, and webhook normalization | local verified; staging/provider credential validation still needed | launch blocker | no |
-| Security hardening | 2FA recovery, cookie review, CSRF/session review, SSR role checks | partially implemented | unchanged | partially implemented | needs staging validation | launch blocker | no |
+| Security hardening | 2FA recovery, cookie review, CSRF/session review, SSR role checks | partially implemented | unchanged | partially implemented with cookie-policy controls, same-origin CSRF checks, and SSR-aware proxy enforcement | needs staging validation | launch blocker | no |
 | Storage/search/ops hardening | storage policy, background workers, search threshold, runbooks | partially implemented | unchanged | partially implemented | needs runbook/release gate completion | launch blocker | no |
 | Azure release parity | same code/env behavior in staging | partially implemented | partial | partial | needs formal release checklist | launch blocker | no |
 
@@ -87,9 +88,8 @@ broader post-launch work:
    - local provider-backed adapter flow is implemented
    - staging credential wiring, webhook delivery, and live callback validation still required
 2. Security and identity hardening
-   - SSR-aware role enforcement review
    - cookie domain/SameSite/secure review in staging
-   - CSRF/session hardening follow-up
+   - proxy-backed SSR route enforcement validation across deployed apps
    - 2FA backup/recovery code workflow
 3. Storage and operations hardening
    - production storage policy validation
@@ -142,7 +142,7 @@ Common local runtime commands:
 Execute in this order unless a user explicitly reprioritizes:
 
 1. Validate Stripe + Flutterwave flows in staging, including webhook delivery and deployed auth parity.
-2. Close auth/session/security hardening gaps.
+2. Close the remaining auth/session/security hardening gaps, starting with 2FA recovery and staging cookie validation.
 3. Harden Azure staging to release parity with a formal deployment checklist.
 4. Finalize storage/worker/runbook production readiness.
 5. Add only the minimum remaining public informational surfaces needed for pilot
