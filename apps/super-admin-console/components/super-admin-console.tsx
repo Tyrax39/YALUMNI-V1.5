@@ -13,11 +13,13 @@ import {
   type AuthUser,
   type MwfAlumniSyncRun,
   type MwfAlumniSyncStatus,
+  type SystemDiagnostics,
   fetchAdminAuditEvents,
   fetchAdminOverview,
   fetchMwfSyncRuns,
   fetchMwfSyncStatus,
   fetchSessionUser,
+  fetchSystemDiagnostics,
   refreshMwfSync,
   isSuperAdmin
 } from "@yalumni/frontend-shared";
@@ -45,6 +47,7 @@ type ConsoleState =
       auditEvents: AdminAuditEvent[];
       overview: AdminOverview | null;
       status: "ready";
+      systemDiagnostics: SystemDiagnostics | null;
       user: AuthUser;
     }
   | { message: string; status: "error" };
@@ -87,9 +90,10 @@ export function SuperAdminConsole({ pageId }: SuperAdminConsoleProps) {
     async function load() {
       try {
         const user = await fetchSessionUser();
-        const [overviewResult, auditResult] = await Promise.allSettled([
+        const [overviewResult, auditResult, systemResult] = await Promise.allSettled([
           fetchAdminOverview(),
-          fetchAdminAuditEvents(8)
+          fetchAdminAuditEvents(8),
+          fetchSystemDiagnostics()
         ]);
 
         if (!isMounted) {
@@ -100,6 +104,7 @@ export function SuperAdminConsole({ pageId }: SuperAdminConsoleProps) {
           auditEvents: auditResult.status === "fulfilled" ? auditResult.value.events : [],
           overview: overviewResult.status === "fulfilled" ? overviewResult.value : null,
           status: "ready",
+          systemDiagnostics: systemResult.status === "fulfilled" ? systemResult.value : null,
           user
         });
       } catch (caught) {
@@ -172,11 +177,14 @@ export function SuperAdminConsole({ pageId }: SuperAdminConsoleProps) {
         </section>
 
         {pageId === "roles" ? <RoleMatrix /> : null}
-        {pageId === "diagnostics" ? <Diagnostics overview={state.overview} user={state.user} /> : null}
+        {pageId === "diagnostics" ? (
+          <Diagnostics diagnostics={state.systemDiagnostics} overview={state.overview} user={state.user} />
+        ) : null}
         {pageId === "audit" ? <AuditPanel events={state.auditEvents} overview={state.overview} /> : null}
         {pageId === "system" ? (
           <div className="grid gap-5">
-            <SystemChecks overview={state.overview} />
+            <SystemChecks diagnostics={state.systemDiagnostics} overview={state.overview} />
+            <ReleaseReadinessPanel diagnostics={state.systemDiagnostics} />
             <MwfCachePanel />
           </div>
         ) : null}
@@ -205,7 +213,12 @@ export function SuperAdminConsole({ pageId }: SuperAdminConsoleProps) {
               />
             </section>
             <section className="grid gap-5 xl:grid-cols-[1fr_1fr]">
-              <Diagnostics overview={state.overview} user={state.user} compact />
+              <Diagnostics
+                compact
+                diagnostics={state.systemDiagnostics}
+                overview={state.overview}
+                user={state.user}
+              />
               <AuditPanel events={state.auditEvents} overview={state.overview} compact />
             </section>
           </>
@@ -307,10 +320,12 @@ function Shell({
 
 function Diagnostics({
   compact = false,
+  diagnostics,
   overview,
   user
 }: {
   compact?: boolean;
+  diagnostics: SystemDiagnostics | null;
   overview: AdminOverview | null;
   user: AuthUser;
 }) {
@@ -332,6 +347,26 @@ function Diagnostics({
         <CheckRow label="Owner demotion/removal" status="blocked by policy" />
         <CheckRow label="Backend admin overview" status={overview ? "reachable" : "not reachable"} />
         <CheckRow label="Runtime isolation" status="3010 / 3011 / 3012 split" />
+        <CheckRow
+          label="Release commit"
+          status={diagnostics?.release.commit_sha ? diagnostics.release.commit_sha.slice(0, 12) : "not reported"}
+        />
+        <CheckRow
+          label="Checkout provider readiness"
+          status={
+            diagnostics
+              ? diagnostics.payments.checkout_provider === "STRIPE"
+                ? diagnostics.payments.stripe.checkout_ready
+                  ? "stripe ready"
+                  : "stripe incomplete"
+                : diagnostics.payments.checkout_provider === "FLUTTERWAVE"
+                  ? diagnostics.payments.flutterwave.checkout_ready
+                    ? "flutterwave ready"
+                    : "flutterwave incomplete"
+                  : diagnostics.payments.checkout_provider.toLowerCase()
+              : "loading"
+          }
+        />
       </div>
     </section>
   );
@@ -413,13 +448,108 @@ function RoleMatrix() {
   );
 }
 
-function SystemChecks({ overview }: { overview: AdminOverview | null }) {
+function SystemChecks({
+  diagnostics,
+  overview
+}: {
+  diagnostics: SystemDiagnostics | null;
+  overview: AdminOverview | null;
+}) {
   return (
     <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-      <SystemCard icon={<Activity className="h-5 w-5" />} label="Member app" value="3010" />
-      <SystemCard icon={<ClipboardList className="h-5 w-5" />} label="Admin console" value="3011" />
-      <SystemCard icon={<ShieldCheck className="h-5 w-5" />} label="Super admin" value="3012" />
+      <SystemCard
+        icon={<Activity className="h-5 w-5" />}
+        label="Member app"
+        value={diagnostics ? shortRuntimeUrl(diagnostics.runtime.web_base_url) : "3010"}
+      />
+      <SystemCard
+        icon={<ClipboardList className="h-5 w-5" />}
+        label="Admin console"
+        value={diagnostics ? shortRuntimeUrl(diagnostics.runtime.admin_console_base_url) : "3011"}
+      />
+      <SystemCard
+        icon={<ShieldCheck className="h-5 w-5" />}
+        label="Super admin"
+        value={diagnostics ? shortRuntimeUrl(diagnostics.runtime.super_admin_console_base_url) : "3012"}
+      />
       <SystemCard icon={<BadgeCheck className="h-5 w-5" />} label="Backend API" value={overview ? "reachable" : "check 8002"} />
+    </section>
+  );
+}
+
+function ReleaseReadinessPanel({ diagnostics }: { diagnostics: SystemDiagnostics | null }) {
+  if (!diagnostics) {
+    return (
+      <section className="rounded-lg border border-border bg-white p-5 shadow-soft">
+        <p className="text-sm font-semibold text-muted">
+          Release diagnostics will appear here when the backend system diagnostics endpoint is reachable.
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="rounded-lg border border-border bg-white p-5 shadow-soft sm:p-6">
+      <div className="grid gap-5 xl:grid-cols-[1.1fr_1fr]">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.12em] text-muted">Release parity</p>
+          <h2 className="mt-2 font-display text-2xl font-semibold text-ink">Deployment and provider readiness</h2>
+          <p className="mt-3 text-sm leading-6 text-muted">
+            This surface summarizes the active API runtime, reported release metadata, and whether
+            the configured Stripe or Flutterwave checkout path has the minimum settings required for staging.
+          </p>
+          <div className="mt-5 grid gap-3 md:grid-cols-2">
+            <SystemMetric
+              label="Environment"
+              value={diagnostics.environment}
+            />
+            <SystemMetric
+              label="Release SHA"
+              value={diagnostics.release.commit_sha?.slice(0, 12) ?? "not set"}
+            />
+            <SystemMetric
+              label="Release version"
+              value={diagnostics.release.release_version ?? "not set"}
+            />
+            <SystemMetric
+              label="Deployment target"
+              value={diagnostics.release.deployment_target ?? "local/dev"}
+            />
+          </div>
+        </div>
+        <div className="grid gap-3">
+          <CheckRow
+            label={`Checkout provider: ${diagnostics.payments.checkout_provider}`}
+            status={
+              diagnostics.payments.checkout_provider === "STRIPE"
+                ? diagnostics.payments.stripe.checkout_ready
+                  ? "ready"
+                  : "incomplete"
+                : diagnostics.payments.checkout_provider === "FLUTTERWAVE"
+                  ? diagnostics.payments.flutterwave.checkout_ready
+                    ? "ready"
+                    : "incomplete"
+                  : diagnostics.payments.checkout_provider.toLowerCase()
+            }
+          />
+          <CheckRow
+            label="Stripe staging config"
+            status={diagnostics.payments.stripe.checkout_ready ? "ready" : "missing settings"}
+          />
+          <CheckRow
+            label="Flutterwave staging config"
+            status={diagnostics.payments.flutterwave.checkout_ready ? "ready" : "missing settings"}
+          />
+          <CheckRow
+            label="Email delivery"
+            status={diagnostics.runtime.email_ready ? diagnostics.runtime.email_provider : "not ready"}
+          />
+          <CheckRow
+            label="Redis configured"
+            status={diagnostics.runtime.redis_configured ? "yes" : "no"}
+          />
+        </div>
+      </div>
     </section>
   );
 }
@@ -677,6 +807,15 @@ function formatDuration(seconds: number) {
     return `${seconds / 60}m`;
   }
   return `${seconds}s`;
+}
+
+function shortRuntimeUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return `${url.hostname}:${url.port}`;
+  } catch {
+    return value;
+  }
 }
 
 function isActivePath(pathname: string, href: string) {

@@ -22,6 +22,70 @@ export type AdminOverview = {
   verified_users?: number;
 };
 
+export type ReleaseDiagnostics = {
+  commit_sha: string | null;
+  release_version: string | null;
+  deployed_at: string | null;
+  deployment_target: string | null;
+  source_control_ref: string | null;
+  instance_id_present: boolean;
+};
+
+export type RuntimeDiagnostics = {
+  admin_console_base_url: string;
+  api_base_url: string;
+  cors_origin_count: number;
+  email_provider: string;
+  email_ready: boolean;
+  redis_configured: boolean;
+  sentry_configured: boolean;
+  super_admin_console_base_url: string;
+  upload_storage_provider: string;
+  web_base_url: string;
+};
+
+export type AuthDiagnostics = {
+  admin_two_factor_required: boolean;
+  platform_owner_email: string;
+  seed_test_accounts_enabled: boolean;
+};
+
+export type StripeDiagnostics = {
+  cancel_url_configured: boolean;
+  checkout_ready: boolean;
+  secret_key_configured: boolean;
+  success_url_configured: boolean;
+  webhook_secret_configured: boolean;
+  webhook_url: string;
+};
+
+export type FlutterwaveDiagnostics = {
+  checkout_ready: boolean;
+  redirect_url_configured: boolean;
+  secret_key_configured: boolean;
+  webhook_secret_configured: boolean;
+  webhook_url: string;
+};
+
+export type PaymentDiagnostics = {
+  checkout_provider: string;
+  flutterwave: FlutterwaveDiagnostics;
+  provider_request_timeout_seconds: number;
+  refund_provider: string;
+  stripe: StripeDiagnostics;
+  webhook_base_url: string;
+};
+
+export type SystemDiagnostics = {
+  auth: AuthDiagnostics;
+  environment: string;
+  payments: PaymentDiagnostics;
+  release: ReleaseDiagnostics;
+  runtime: RuntimeDiagnostics;
+  service: string;
+  status: string;
+};
+
 export type MwfAlumniSyncRun = {
   deactivated_count: number;
   error_message: string | null;
@@ -1029,6 +1093,10 @@ export function fetchSessionUser(): Promise<AuthUser> {
 
 export function fetchAdminOverview(): Promise<AdminOverview> {
   return fetchJson<AdminOverview>("/api/backend/api/v1/auth/admin/overview");
+}
+
+export function fetchSystemDiagnostics(): Promise<SystemDiagnostics> {
+  return fetchJson<SystemDiagnostics>("/api/backend/api/v1/system/diagnostics");
 }
 
 export function fetchMwfSyncStatus(): Promise<MwfAlumniSyncStatus> {

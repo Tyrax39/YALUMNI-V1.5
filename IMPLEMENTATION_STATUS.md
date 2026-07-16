@@ -20,7 +20,8 @@ the documents disagree.
   route parity completed for the remaining partial member/admin surfaces,
   provider-backed contribution checkout/webhook/refund foundations now in place,
   cookie/CSRF/session-edge hardening advanced across member/admin/super-admin
-  runtimes, and production hardening/deployment parity still required
+  runtimes, release/provider diagnostics now surfaced in the super-admin
+  console, and production hardening/deployment parity still required
 
 ## Frozen Baseline
 
@@ -65,7 +66,7 @@ future task slice explicitly touches them:
 | Payments productionization | real providers, callbacks, reconciliation | partially implemented | implemented via intent-based member pay UX | implemented foundation for Stripe + Flutterwave checkout, refunds, and webhook normalization | local verified; staging/provider credential validation still needed | launch blocker | no |
 | Security hardening | 2FA recovery, cookie review, CSRF/session review, SSR role checks | partially implemented | unchanged | partially implemented with cookie-policy controls, same-origin CSRF checks, SSR-aware proxy enforcement, and persisted 2FA recovery-code lifecycle | needs staging validation | launch blocker | no |
 | Storage/search/ops hardening | storage policy, background workers, search threshold, runbooks | partially implemented | unchanged | partially implemented | needs runbook/release gate completion | launch blocker | no |
-| Azure release parity | same code/env behavior in staging | partially implemented | partial | partial | needs formal release checklist | launch blocker | no |
+| Azure release parity | same code/env behavior in staging | partially implemented | implemented read-only release/provider diagnostics in owner console | partial with API diagnostics for release metadata and payment provider readiness | needs formal release checklist and deployed validation | launch blocker | no |
 
 ## Active Partial Routes And Workflows
 
@@ -99,6 +100,7 @@ broader post-launch work:
    - same SHA/version across all apps
    - migrations and env parity
    - verified auth/layout/API behavior on deployed staging
+   - release diagnostics now available locally through the super-admin system surface
 5. Canonical release verification
    - critical-path smoke + staging validation across member/admin/super-admin/API
 
@@ -143,7 +145,7 @@ Execute in this order unless a user explicitly reprioritizes:
 
 1. Validate Stripe + Flutterwave flows in staging, including webhook delivery and deployed auth parity.
 2. Close the remaining auth/session/security hardening gaps, starting with staging cookie validation and deployed recovery-path verification.
-3. Harden Azure staging to release parity with a formal deployment checklist.
+3. Harden Azure staging to release parity with a formal deployment checklist and live diagnostics validation.
 4. Finalize storage/worker/runbook production readiness.
 5. Add only the minimum remaining public informational surfaces needed for pilot
    credibility; defer broader public-marketing breadth post-launch.
