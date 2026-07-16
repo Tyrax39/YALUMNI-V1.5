@@ -528,6 +528,7 @@ def test_two_factor_setup_confirm_and_disable(client: TestClient) -> None:
     status_response = client.get("/api/v1/auth/me/security", headers=headers)
     assert status_response.status_code == 200
     assert status_response.json()["enabled"] is False
+    assert status_response.json()["recovery_codes_remaining"] == 0
 
     invalid_setup = client.post(
         "/api/v1/auth/me/2fa/setup",
@@ -560,11 +561,15 @@ def test_two_factor_setup_confirm_and_disable(client: TestClient) -> None:
         json={"code": generate_totp_code(setup["secret"])},
     )
     assert confirm_response.status_code == 200
-    assert confirm_response.json()["two_factor_enabled"] is True
+    enabled_payload = confirm_response.json()
+    assert enabled_payload["user"]["two_factor_enabled"] is True
+    assert len(enabled_payload["recovery_codes"]) == 8
+    assert enabled_payload["recovery_codes_remaining"] == 8
 
     enabled_status = client.get("/api/v1/auth/me/security", headers=headers)
     assert enabled_status.status_code == 200
     assert enabled_status.json()["enabled"] is True
+    assert enabled_status.json()["recovery_codes_remaining"] == 8
 
     disable_response = client.post(
         "/api/v1/auth/me/2fa/disable",
@@ -594,6 +599,7 @@ def test_admin_two_factor_policy_blocks_admin_until_enabled(client: TestClient) 
         assert security_response.status_code == 200
         assert security_response.json()["admin_two_factor_required"] is True
         assert security_response.json()["admin_two_factor_satisfied"] is False
+        assert security_response.json()["recovery_codes_remaining"] == 0
 
         setup_response = client.post(
             "/api/v1/auth/me/2fa/setup",
@@ -609,11 +615,99 @@ def test_admin_two_factor_policy_blocks_admin_until_enabled(client: TestClient) 
             json={"code": generate_totp_code(secret)},
         )
         assert confirm_response.status_code == 200
+        assert confirm_response.json()["recovery_codes_remaining"] == 8
 
         overview_response = client.get("/api/v1/auth/admin/overview", headers=headers)
         assert overview_response.status_code == 200
     finally:
         settings.admin_two_factor_required = previous_requirement
+
+
+def test_two_factor_recovery_code_regeneration_and_disable(client: TestClient) -> None:
+    registered = register_user(client, email="two-factor-recovery@example.com")
+    headers = auth_headers(registered["access_token"])
+
+    setup_response = client.post(
+        "/api/v1/auth/me/2fa/setup",
+        headers=headers,
+        json={"password": "SecurePass123!"},
+    )
+    assert setup_response.status_code == 200
+    secret = setup_response.json()["secret"]
+
+    confirm_response = client.post(
+        "/api/v1/auth/me/2fa/confirm",
+        headers=headers,
+        json={"code": generate_totp_code(secret)},
+    )
+    assert confirm_response.status_code == 200
+    initial_recovery_codes = confirm_response.json()["recovery_codes"]
+    assert len(initial_recovery_codes) == 8
+
+    bad_regenerate = client.post(
+        "/api/v1/auth/me/2fa/recovery-codes/regenerate",
+        headers=headers,
+        json={"password": "SecurePass123!", "code": "000000"},
+    )
+    assert bad_regenerate.status_code == 400
+
+    regenerate_response = client.post(
+        "/api/v1/auth/me/2fa/recovery-codes/regenerate",
+        headers=headers,
+        json={"password": "SecurePass123!", "recovery_code": initial_recovery_codes[0]},
+    )
+    assert regenerate_response.status_code == 200
+    regenerated_payload = regenerate_response.json()
+    assert len(regenerated_payload["recovery_codes"]) == 8
+    assert regenerated_payload["recovery_codes_remaining"] == 8
+    assert regenerated_payload["recovery_codes"] != initial_recovery_codes
+
+    security_response = client.get("/api/v1/auth/me/security", headers=headers)
+    assert security_response.status_code == 200
+    assert security_response.json()["recovery_codes_remaining"] == 8
+
+    disable_response = client.post(
+        "/api/v1/auth/me/2fa/disable",
+        headers=headers,
+        json={
+            "password": "SecurePass123!",
+            "recovery_code": regenerated_payload["recovery_codes"][0],
+        },
+    )
+    assert disable_response.status_code == 200
+    assert disable_response.json()["two_factor_enabled"] is False
+
+    disabled_status = client.get("/api/v1/auth/me/security", headers=headers)
+    assert disabled_status.status_code == 200
+    assert disabled_status.json()["enabled"] is False
+    assert disabled_status.json()["recovery_codes_remaining"] == 0
+
+
+def test_two_factor_recovery_code_regeneration_requires_password(client: TestClient) -> None:
+    registered = register_user(client, email="two-factor-recovery-password@example.com")
+    headers = auth_headers(registered["access_token"])
+
+    setup_response = client.post(
+        "/api/v1/auth/me/2fa/setup",
+        headers=headers,
+        json={"password": "SecurePass123!"},
+    )
+    assert setup_response.status_code == 200
+    secret = setup_response.json()["secret"]
+
+    confirm_response = client.post(
+        "/api/v1/auth/me/2fa/confirm",
+        headers=headers,
+        json={"code": generate_totp_code(secret)},
+    )
+    assert confirm_response.status_code == 200
+
+    regenerate_response = client.post(
+        "/api/v1/auth/me/2fa/recovery-codes/regenerate",
+        headers=headers,
+        json={"password": "wrong-password", "code": generate_totp_code(secret)},
+    )
+    assert regenerate_response.status_code == 401
 
 
 def test_admin_audit_events_requires_role_and_supports_filters(client: TestClient) -> None:

@@ -35,6 +35,10 @@ class User(Base, TimestampMixin):
     email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     two_factor_secret_encrypted: Mapped[str | None] = mapped_column(String(512))
     two_factor_enabled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    two_factor_recovery_codes_json: Mapped[list[str] | None] = mapped_column(
+        "two_factor_recovery_codes",
+        JSON,
+    )
 
     sessions: Mapped[list["AuthSession"]] = relationship(
         back_populates="user",

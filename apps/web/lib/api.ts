@@ -33,12 +33,24 @@ export type TwoFactorStatus = {
   enabled: boolean;
   admin_two_factor_required: boolean;
   admin_two_factor_satisfied: boolean;
+  recovery_codes_remaining: number;
 };
 
 export type TwoFactorSetup = {
   secret: string;
   otpauth_url: string;
   enabled: boolean;
+};
+
+export type TwoFactorEnableResponse = {
+  user: AuthUser;
+  recovery_codes: string[];
+  recovery_codes_remaining: number;
+};
+
+export type TwoFactorRecoveryCodesResponse = {
+  recovery_codes: string[];
+  recovery_codes_remaining: number;
 };
 
 type CsrfResponse = {
@@ -1041,8 +1053,11 @@ export function setupTwoFactor(
   });
 }
 
-export function confirmTwoFactor(accessToken: string, code: string): Promise<AuthUser> {
-  return protectedApiFetch<AuthUser>("/api/v1/auth/me/2fa/confirm", {
+export function confirmTwoFactor(
+  accessToken: string,
+  code: string
+): Promise<TwoFactorEnableResponse> {
+  return protectedApiFetch<TwoFactorEnableResponse>("/api/v1/auth/me/2fa/confirm", {
     body: JSON.stringify({ code }),
     headers: authHeaders(accessToken),
     method: "POST"
@@ -1051,13 +1066,27 @@ export function confirmTwoFactor(accessToken: string, code: string): Promise<Aut
 
 export function disableTwoFactor(
   accessToken: string,
-  payload: { code: string; password: string }
+  payload: { code?: string; password: string; recovery_code?: string }
 ): Promise<AuthUser> {
   return protectedApiFetch<AuthUser>("/api/v1/auth/me/2fa/disable", {
     body: JSON.stringify(payload),
     headers: authHeaders(accessToken),
     method: "POST"
   });
+}
+
+export function regenerateTwoFactorRecoveryCodes(
+  accessToken: string,
+  payload: { code?: string; password: string; recovery_code?: string }
+): Promise<TwoFactorRecoveryCodesResponse> {
+  return protectedApiFetch<TwoFactorRecoveryCodesResponse>(
+    "/api/v1/auth/me/2fa/recovery-codes/regenerate",
+    {
+      body: JSON.stringify(payload),
+      headers: authHeaders(accessToken),
+      method: "POST"
+    }
+  );
 }
 
 function authHeaders(accessToken: string, refreshToken?: string | null) {

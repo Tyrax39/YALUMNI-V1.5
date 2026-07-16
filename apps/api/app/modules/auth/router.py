@@ -20,9 +20,12 @@ from app.core.security import (
 )
 from app.core.totp import (
     build_otpauth_url,
+    consume_recovery_code,
     decrypt_totp_secret,
     encrypt_totp_secret,
+    generate_recovery_codes,
     generate_totp_secret,
+    hash_recovery_codes,
     verify_totp_code,
 )
 from app.modules.auth.dependencies import get_current_user, require_roles
@@ -58,6 +61,9 @@ from app.modules.auth.schemas import (
     SessionRevocationResponse,
     TwoFactorConfirmRequest,
     TwoFactorDisableRequest,
+    TwoFactorEnableResponse,
+    TwoFactorRecoveryCodesRegenerateRequest,
+    TwoFactorRecoveryCodesResponse,
     TwoFactorSetupRequest,
     TwoFactorSetupResponse,
     TwoFactorStatusResponse,
@@ -201,6 +207,39 @@ def _is_expired(expires_at: datetime) -> bool:
     if expires_at.tzinfo is None:
         expires_at = expires_at.replace(tzinfo=UTC)
     return expires_at <= utcnow()
+
+
+def _remaining_recovery_codes(user: User) -> int:
+    return len(user.two_factor_recovery_codes_json or [])
+
+
+def _issue_recovery_codes(user: User) -> list[str]:
+    recovery_codes = generate_recovery_codes()
+    user.two_factor_recovery_codes_json = hash_recovery_codes(recovery_codes)
+    return recovery_codes
+
+
+def _verify_two_factor_challenge(
+    user: User,
+    *,
+    code: str | None = None,
+    recovery_code: str | None = None,
+) -> tuple[bool, bool]:
+    secret_encrypted = user.two_factor_secret_encrypted
+    if not secret_encrypted:
+        return False, False
+
+    secret = decrypt_totp_secret(secret_encrypted)
+    if code and verify_totp_code(secret, code):
+        return True, False
+
+    if recovery_code:
+        remaining_hashes = consume_recovery_code(user.two_factor_recovery_codes_json, recovery_code)
+        if remaining_hashes is not None:
+            user.two_factor_recovery_codes_json = remaining_hashes
+            return True, True
+
+    return False, False
 
 
 def _create_account_token(
@@ -408,6 +447,7 @@ def two_factor_status(
         enabled=enabled,
         admin_two_factor_required=admin_two_factor_required,
         admin_two_factor_satisfied=not admin_two_factor_required or enabled,
+        recovery_codes_remaining=_remaining_recovery_codes(current_user),
     )
 
 
@@ -444,13 +484,13 @@ def setup_two_factor(
     )
 
 
-@router.post("/me/2fa/confirm", response_model=AuthUser)
+@router.post("/me/2fa/confirm", response_model=TwoFactorEnableResponse)
 def confirm_two_factor(
     payload: TwoFactorConfirmRequest,
     request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db_session)],
-) -> AuthUser:
+) -> TwoFactorEnableResponse:
     if not current_user.two_factor_secret_encrypted:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -466,11 +506,17 @@ def confirm_two_factor(
             detail="Invalid two-factor code",
         )
 
+    recovery_codes = _issue_recovery_codes(current_user)
     current_user.two_factor_enabled_at = utcnow()
     _create_security_event(db, request, current_user, "auth.two_factor_enabled")
+    _create_security_event(db, request, current_user, "auth.two_factor_recovery_codes_issued")
     db.commit()
     db.refresh(current_user)
-    return _serialize_user(current_user)
+    return TwoFactorEnableResponse(
+        user=_serialize_user(current_user),
+        recovery_codes=recovery_codes,
+        recovery_codes_remaining=_remaining_recovery_codes(current_user),
+    )
 
 
 @router.post("/me/2fa/disable", response_model=AuthUser)
@@ -494,21 +540,88 @@ def disable_two_factor(
             detail="Current password is invalid",
         )
 
-    secret = decrypt_totp_secret(current_user.two_factor_secret_encrypted)
-    if not verify_totp_code(secret, payload.code):
+    challenge_valid, used_recovery_code = _verify_two_factor_challenge(
+        current_user,
+        code=payload.code,
+        recovery_code=payload.recovery_code,
+    )
+    if not challenge_valid:
         _create_security_event(db, request, current_user, "auth.two_factor_disable_failed")
         db.commit()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid two-factor code",
+            detail="Invalid two-factor code or recovery code",
         )
 
     current_user.two_factor_secret_encrypted = None
     current_user.two_factor_enabled_at = None
+    current_user.two_factor_recovery_codes_json = None
     _create_security_event(db, request, current_user, "auth.two_factor_disabled")
+    if used_recovery_code:
+        _create_security_event(
+            db,
+            request,
+            current_user,
+            "auth.two_factor_disabled_with_recovery_code",
+        )
     db.commit()
     db.refresh(current_user)
     return _serialize_user(current_user)
+
+
+@router.post("/me/2fa/recovery-codes/regenerate", response_model=TwoFactorRecoveryCodesResponse)
+def regenerate_two_factor_recovery_codes(
+    payload: TwoFactorRecoveryCodesRegenerateRequest,
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> TwoFactorRecoveryCodesResponse:
+    if current_user.two_factor_enabled_at is None or not current_user.two_factor_secret_encrypted:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Two-factor authentication is not enabled",
+        )
+
+    if not verify_password(payload.password, current_user.password_hash):
+        _create_security_event(
+            db, request, current_user, "auth.two_factor_recovery_codes_regenerate_failed"
+        )
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Current password is invalid",
+        )
+
+    challenge_valid, used_recovery_code = _verify_two_factor_challenge(
+        current_user,
+        code=payload.code,
+        recovery_code=payload.recovery_code,
+    )
+    if not challenge_valid:
+        _create_security_event(
+            db, request, current_user, "auth.two_factor_recovery_codes_regenerate_failed"
+        )
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid two-factor code or recovery code",
+        )
+
+    recovery_codes = _issue_recovery_codes(current_user)
+    _create_security_event(db, request, current_user, "auth.two_factor_recovery_codes_regenerated")
+    if used_recovery_code:
+        _create_security_event(
+            db,
+            request,
+            current_user,
+            "auth.two_factor_recovery_code_consumed",
+        )
+    db.commit()
+    db.refresh(current_user)
+    return TwoFactorRecoveryCodesResponse(
+        recovery_codes=recovery_codes,
+        recovery_codes_remaining=_remaining_recovery_codes(current_user),
+    )
 
 
 @router.get("/sessions", response_model=AuthSessionsResponse)

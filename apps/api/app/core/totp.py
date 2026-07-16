@@ -14,6 +14,7 @@ TOTP_DIGITS = 6
 TOTP_PERIOD_SECONDS = 30
 TOTP_SECRET_BYTES = 20
 TOTP_WINDOW = 1
+RECOVERY_CODE_COUNT = 8
 
 
 def generate_totp_secret() -> str:
@@ -76,3 +77,39 @@ def build_otpauth_url(secret: str, account_name: str) -> str:
         f"?secret={secret}&issuer={quote(issuer)}&algorithm=SHA1&digits={TOTP_DIGITS}"
         f"&period={TOTP_PERIOD_SECONDS}"
     )
+
+
+def normalize_recovery_code(code: str) -> str:
+    return "".join(character for character in code.strip().upper() if character.isalnum())
+
+
+def generate_recovery_codes(count: int = RECOVERY_CODE_COUNT) -> list[str]:
+    recovery_codes: list[str] = []
+    for _ in range(count):
+        raw_code = secrets.token_hex(4).upper()
+        recovery_codes.append(f"{raw_code[:4]}-{raw_code[4:]}")
+
+    return recovery_codes
+
+
+def hash_recovery_code(code: str) -> str:
+    normalized = normalize_recovery_code(code)
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def hash_recovery_codes(codes: list[str]) -> list[str]:
+    return [hash_recovery_code(code) for code in codes]
+
+
+def consume_recovery_code(stored_hashes: list[str] | None, code: str) -> list[str] | None:
+    normalized = normalize_recovery_code(code)
+    if not normalized:
+        return None
+
+    candidate_hash = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+    hashes = list(stored_hashes or [])
+    for index, stored_hash in enumerate(hashes):
+        if hmac.compare_digest(stored_hash, candidate_hash):
+            return hashes[:index] + hashes[index + 1 :]
+
+    return None

@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class RegisterRequest(BaseModel):
@@ -71,7 +71,28 @@ class TwoFactorConfirmRequest(BaseModel):
 
 class TwoFactorDisableRequest(BaseModel):
     password: str = Field(min_length=1, max_length=128)
-    code: str = Field(min_length=6, max_length=16)
+    code: str | None = Field(default=None, min_length=6, max_length=16)
+    recovery_code: str | None = Field(default=None, min_length=4, max_length=32)
+
+    @model_validator(mode="after")
+    def require_code_or_recovery_code(self) -> "TwoFactorDisableRequest":
+        if self.code or self.recovery_code:
+            return self
+
+        raise ValueError("Enter a two-factor code or recovery code")
+
+
+class TwoFactorRecoveryCodesRegenerateRequest(BaseModel):
+    password: str = Field(min_length=1, max_length=128)
+    code: str | None = Field(default=None, min_length=6, max_length=16)
+    recovery_code: str | None = Field(default=None, min_length=4, max_length=32)
+
+    @model_validator(mode="after")
+    def require_code_or_recovery_code(self) -> "TwoFactorRecoveryCodesRegenerateRequest":
+        if self.code or self.recovery_code:
+            return self
+
+        raise ValueError("Enter a two-factor code or recovery code")
 
 
 class DevTokenResponse(BaseModel):
@@ -142,12 +163,24 @@ class TwoFactorStatusResponse(BaseModel):
     enabled: bool
     admin_two_factor_required: bool
     admin_two_factor_satisfied: bool
+    recovery_codes_remaining: int
 
 
 class TwoFactorSetupResponse(BaseModel):
     secret: str
     otpauth_url: str
     enabled: bool
+
+
+class TwoFactorRecoveryCodesResponse(BaseModel):
+    recovery_codes: list[str]
+    recovery_codes_remaining: int
+
+
+class TwoFactorEnableResponse(BaseModel):
+    user: "AuthUser"
+    recovery_codes: list[str]
+    recovery_codes_remaining: int
 
 
 class AuthUser(BaseModel):
@@ -171,3 +204,6 @@ class AuthResponse(BaseModel):
     expires_in: int
     user: AuthUser
     dev_email_verification_token: str | None = None
+
+
+TwoFactorEnableResponse.model_rebuild()

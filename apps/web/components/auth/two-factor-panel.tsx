@@ -8,6 +8,7 @@ import {
   confirmTwoFactor,
   disableTwoFactor,
   getTwoFactorStatus,
+  regenerateTwoFactorRecoveryCodes,
   setupTwoFactor,
   TwoFactorSetup,
   TwoFactorStatus
@@ -30,6 +31,7 @@ const inputClass =
 export function TwoFactorPanel({ accessToken, onUserChange, user }: TwoFactorPanelProps) {
   const [state, setState] = useState<PanelState>({ status: "loading" });
   const [setup, setSetup] = useState<TwoFactorSetup | null>(null);
+  const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -92,10 +94,11 @@ export function TwoFactorPanel({ accessToken, onUserChange, user }: TwoFactorPan
 
     const formData = new FormData(event.currentTarget);
     try {
-      const updatedUser = await confirmTwoFactor(accessToken, String(formData.get("code") ?? ""));
-      onUserChange(updatedUser);
+      const response = await confirmTwoFactor(accessToken, String(formData.get("code") ?? ""));
+      onUserChange(response.user);
       setSetup(null);
-      setMessage("Two-factor authentication enabled.");
+      setRecoveryCodes(response.recovery_codes);
+      setMessage("Two-factor authentication enabled. Save your recovery codes now.");
       await reloadStatus();
       event.currentTarget.reset();
     } catch (caught) {
@@ -114,16 +117,44 @@ export function TwoFactorPanel({ accessToken, onUserChange, user }: TwoFactorPan
     const formData = new FormData(event.currentTarget);
     try {
       const updatedUser = await disableTwoFactor(accessToken, {
-        code: String(formData.get("code") ?? ""),
-        password: String(formData.get("password") ?? "")
+        code: String(formData.get("code") ?? "").trim() || undefined,
+        password: String(formData.get("password") ?? ""),
+        recovery_code: String(formData.get("recovery_code") ?? "").trim() || undefined
       });
       onUserChange(updatedUser);
       setSetup(null);
+      setRecoveryCodes([]);
       setMessage("Two-factor authentication disabled.");
       await reloadStatus();
       event.currentTarget.reset();
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : "Two-factor disable failed.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleRegenerateRecoveryCodes(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+    setMessage(null);
+    setIsSubmitting(true);
+
+    const formData = new FormData(event.currentTarget);
+    try {
+      const response = await regenerateTwoFactorRecoveryCodes(accessToken, {
+        code: String(formData.get("code") ?? "").trim() || undefined,
+        password: String(formData.get("password") ?? ""),
+        recovery_code: String(formData.get("recovery_code") ?? "").trim() || undefined
+      });
+      setRecoveryCodes(response.recovery_codes);
+      setMessage("Recovery codes regenerated. Replace any previously saved codes.");
+      await reloadStatus();
+      event.currentTarget.reset();
+    } catch (caught) {
+      setError(
+        caught instanceof ApiError ? caught.message : "Recovery codes could not be regenerated."
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -143,6 +174,11 @@ export function TwoFactorPanel({ accessToken, onUserChange, user }: TwoFactorPan
           <p className="mt-2 text-sm font-semibold text-muted">
             Two-factor: {enabled ? "enabled" : "not enabled"}
           </p>
+          {state.status === "ready" ? (
+            <p className="mt-1 text-sm font-semibold text-muted">
+              Recovery codes remaining: {state.security.recovery_codes_remaining}
+            </p>
+          ) : null}
         </div>
         {adminRequired ? (
           <span
@@ -235,45 +271,140 @@ export function TwoFactorPanel({ accessToken, onUserChange, user }: TwoFactorPan
       ) : null}
 
       {enabled ? (
-        <form className="mt-5 grid gap-4 md:grid-cols-[1fr_1fr_auto] md:items-end" onSubmit={handleDisable}>
-          <div>
-            <label className="block text-sm font-semibold text-ink" htmlFor="disable_two_factor_password">
+        <>
+          {recoveryCodes.length ? (
+            <RecoveryCodePanel recoveryCodes={recoveryCodes} />
+          ) : null}
+
+          <form className="mt-5 grid gap-4 md:grid-cols-3" onSubmit={handleRegenerateRecoveryCodes}>
+            <div>
+              <label
+                className="block text-sm font-semibold text-ink"
+                htmlFor="regenerate_two_factor_password"
+              >
+                Current password
+              </label>
+              <input
+                autoComplete="current-password"
+                className={inputClass}
+                id="regenerate_two_factor_password"
+                name="password"
+                required
+                type="password"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-ink" htmlFor="regenerate_two_factor_code">
+                6-digit code
+              </label>
+              <input
+                autoComplete="one-time-code"
+                className={inputClass}
+                id="regenerate_two_factor_code"
+                inputMode="numeric"
+                maxLength={12}
+                name="code"
+                type="text"
+              />
+            </div>
+            <div>
+              <label
+                className="block text-sm font-semibold text-ink"
+                htmlFor="regenerate_two_factor_recovery_code"
+              >
+                Recovery code
+              </label>
+              <input
+                className={inputClass}
+                id="regenerate_two_factor_recovery_code"
+                name="recovery_code"
+                type="text"
+              />
+            </div>
+            <div className="md:col-span-3 flex items-start justify-end">
+              <button
+                className="focus-ring min-h-11 rounded-lg border border-border px-4 py-2 text-sm font-semibold text-ink transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-65"
+                disabled={isSubmitting}
+                type="submit"
+              >
+                Regenerate recovery codes
+              </button>
+            </div>
+          </form>
+
+          <form className="mt-5 grid gap-4 md:grid-cols-4 md:items-end" onSubmit={handleDisable}>
+            <div>
+              <label className="block text-sm font-semibold text-ink" htmlFor="disable_two_factor_password">
               Current password
-            </label>
-            <input
-              autoComplete="current-password"
-              className={inputClass}
-              id="disable_two_factor_password"
-              name="password"
-              required
-              type="password"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-semibold text-ink" htmlFor="disable_two_factor_code">
+              </label>
+              <input
+                autoComplete="current-password"
+                className={inputClass}
+                id="disable_two_factor_password"
+                name="password"
+                required
+                type="password"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-ink" htmlFor="disable_two_factor_code">
               6-digit code
-            </label>
-            <input
-              autoComplete="one-time-code"
-              className={inputClass}
-              id="disable_two_factor_code"
-              inputMode="numeric"
-              maxLength={12}
-              name="code"
-              required
-              type="text"
-            />
-          </div>
-          <button
-            className="focus-ring min-h-11 rounded-lg border border-border px-4 py-2 text-sm font-semibold text-ink transition hover:border-danger hover:text-danger disabled:cursor-not-allowed disabled:opacity-65"
-            disabled={isSubmitting}
-            type="submit"
-          >
-            Disable
-          </button>
-        </form>
+              </label>
+              <input
+                autoComplete="one-time-code"
+                className={inputClass}
+                id="disable_two_factor_code"
+                inputMode="numeric"
+                maxLength={12}
+                name="code"
+                type="text"
+              />
+            </div>
+            <div>
+              <label
+                className="block text-sm font-semibold text-ink"
+                htmlFor="disable_two_factor_recovery_code"
+              >
+                Recovery code
+              </label>
+              <input
+                className={inputClass}
+                id="disable_two_factor_recovery_code"
+                name="recovery_code"
+                type="text"
+              />
+            </div>
+            <button
+              className="focus-ring min-h-11 rounded-lg border border-border px-4 py-2 text-sm font-semibold text-ink transition hover:border-danger hover:text-danger disabled:cursor-not-allowed disabled:opacity-65"
+              disabled={isSubmitting}
+              type="submit"
+            >
+              Disable
+            </button>
+          </form>
+        </>
       ) : null}
     </section>
+  );
+}
+
+function RecoveryCodePanel({ recoveryCodes }: { recoveryCodes: string[] }) {
+  return (
+    <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-4">
+      <p className="text-sm font-semibold text-amber-900">
+        Save these recovery codes. Each code can be used once if you lose access to your authenticator.
+      </p>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        {recoveryCodes.map((code) => (
+          <div
+            className="rounded-md border border-amber-200 bg-white px-3 py-2 font-mono text-sm font-semibold text-amber-950"
+            key={code}
+          >
+            {code}
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
