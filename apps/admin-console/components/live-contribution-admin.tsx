@@ -11,17 +11,26 @@ import {
   ShieldCheck
 } from "lucide-react";
 import {
+  type ContributionExpenseEvidencePolicy,
+  type ContributionExpenseEvidenceRetentionPreview,
   type ContributionCampaign,
+  type ContributionPaymentAttempt,
   type ContributionRecord,
+  type ContributionWebhookEvent,
   type TreasurySummary,
   adminContributionsExportUrl,
   closeContributionCampaign,
   createContributionCampaign,
+  fetchAdminContributionPaymentAttempts,
   fetchAdminContributionCampaigns,
   fetchAdminContributions,
+  fetchAdminContributionWebhookEvents,
+  fetchAdminExpenseEvidencePolicy,
+  fetchAdminExpenseEvidenceRetentionPreview,
   fetchTreasurySummary,
   publishContributionCampaign,
   refundContribution,
+  runAdminExpenseEvidenceRetention,
   treasuryAuditPackageUrl,
   treasuryAuditReportUrl,
   treasuryLedgerExportUrl,
@@ -39,8 +48,16 @@ type ContributionAdminState =
       contributions: ContributionRecord[];
       status: "ready";
       treasury: TreasurySummary;
+      treasuryOps: TreasuryOpsState | null;
     }
   | { message: string; status: "error" };
+
+type TreasuryOpsState = {
+  expensePolicy: ContributionExpenseEvidencePolicy;
+  paymentAttempts: ContributionPaymentAttempt[];
+  retentionPreview: ContributionExpenseEvidenceRetentionPreview;
+  webhookEvents: ContributionWebhookEvent[];
+};
 
 type CampaignForm = {
   chapter_name: string;
@@ -79,9 +96,22 @@ export function LiveContributionAdmin({ mode }: LiveContributionAdminProps) {
     Promise.all([
       fetchAdminContributionCampaigns({ status: "ALL", limit: 20 }),
       fetchAdminContributions({ limit: 10 }),
-      fetchTreasurySummary()
+      fetchTreasurySummary(),
+      mode === "treasury"
+        ? Promise.all([
+            fetchAdminContributionPaymentAttempts({ limit: 6 }),
+            fetchAdminContributionWebhookEvents({ limit: 6 }),
+            fetchAdminExpenseEvidencePolicy(),
+            fetchAdminExpenseEvidenceRetentionPreview(12)
+          ]).then(([paymentAttempts, webhookEvents, expensePolicy, retentionPreview]) => ({
+            expensePolicy,
+            paymentAttempts: paymentAttempts.attempts,
+            retentionPreview,
+            webhookEvents: webhookEvents.events
+          }))
+        : Promise.resolve(null)
     ])
-      .then(([campaigns, contributions, treasury]) => {
+      .then(([campaigns, contributions, treasury, treasuryOps]) => {
         if (!isMounted) {
           return;
         }
@@ -89,7 +119,8 @@ export function LiveContributionAdmin({ mode }: LiveContributionAdminProps) {
           campaigns: campaigns.campaigns,
           contributions: contributions.contributions,
           status: "ready",
-          treasury
+          treasury,
+          treasuryOps
         });
         if (!selectedCampaignId && campaigns.campaigns[0]) {
           setSelectedCampaignId(campaigns.campaigns[0].id);
@@ -106,7 +137,7 @@ export function LiveContributionAdmin({ mode }: LiveContributionAdminProps) {
     return () => {
       isMounted = false;
     };
-  }, [reloadKey, selectedCampaignId]);
+  }, [mode, reloadKey, selectedCampaignId]);
 
   const selectedCampaign = useMemo(() => {
     return state.status === "ready"
@@ -175,6 +206,53 @@ export function LiveContributionAdmin({ mode }: LiveContributionAdminProps) {
       setReloadKey((current) => current + 1);
     } catch (caught) {
       setMessage(caught instanceof Error ? caught.message : "Contribution adjustment could not be recorded.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function refreshRetentionPreview(action: "preview" | "cleanup") {
+    if (mode !== "treasury") {
+      return;
+    }
+
+    if (action === "cleanup") {
+      const confirmed = window.confirm(
+        "Run live expense evidence retention cleanup? This permanently deletes expired evidence candidates."
+      );
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    setBusy(`retention:${action}`);
+    setMessage(null);
+    try {
+      const retentionPreview =
+        action === "cleanup"
+          ? await runAdminExpenseEvidenceRetention({ dryRun: false, limit: 12 })
+          : await fetchAdminExpenseEvidenceRetentionPreview(12);
+
+      setState((current) =>
+        current.status === "ready"
+          ? {
+              ...current,
+              treasuryOps: current.treasuryOps
+                ? {
+                    ...current.treasuryOps,
+                    retentionPreview
+                  }
+                : current.treasuryOps
+            }
+          : current
+      );
+      setMessage(
+        action === "cleanup"
+          ? `Retention cleanup completed for ${retentionPreview.deleted_count} file${retentionPreview.deleted_count === 1 ? "" : "s"}.`
+          : "Retention preview refreshed."
+      );
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : "Retention action could not be completed.");
     } finally {
       setBusy(null);
     }
@@ -331,14 +409,34 @@ export function LiveContributionAdmin({ mode }: LiveContributionAdminProps) {
         </section>
       ) : (
         state.status === "ready" ? (
-          <section className="grid gap-5 2xl:grid-cols-[1fr_1fr]">
-            <RecentContributions
-              busy={busy}
-              contributions={state.contributions}
-              onAdjust={adjustContribution}
-            />
-            <LedgerEntries entries={state.treasury.ledger_entries} />
-          </section>
+          <div className="grid gap-5">
+            <section className="grid gap-5 2xl:grid-cols-[1fr_1fr]">
+              <RecentContributions
+                busy={busy}
+                contributions={state.contributions}
+                onAdjust={adjustContribution}
+              />
+              <LedgerEntries entries={state.treasury.ledger_entries} />
+            </section>
+
+            {state.treasuryOps ? (
+              <section className="grid gap-5 2xl:grid-cols-[1fr_1fr]">
+                <PaymentAttemptPanel attempts={state.treasuryOps.paymentAttempts} />
+                <WebhookEventsPanel events={state.treasuryOps.webhookEvents} />
+              </section>
+            ) : null}
+
+            {state.treasuryOps ? (
+              <section className="grid gap-5 2xl:grid-cols-[0.9fr_1.1fr]">
+                <ExpenseEvidencePolicyPanel policy={state.treasuryOps.expensePolicy} />
+                <RetentionPreviewPanel
+                  busy={busy}
+                  preview={state.treasuryOps.retentionPreview}
+                  onRun={refreshRetentionPreview}
+                />
+              </section>
+            ) : null}
+          </div>
         ) : null
       )}
     </div>
@@ -549,12 +647,229 @@ function LedgerEntries({ entries }: { entries: TreasurySummary["ledger_entries"]
   );
 }
 
+function PaymentAttemptPanel({ attempts }: { attempts: ContributionPaymentAttempt[] }) {
+  return (
+    <section className="rounded-lg border border-border bg-white p-5 shadow-soft">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="font-display text-xl font-semibold text-ink">Payment attempts</h3>
+          <p className="mt-1 text-sm leading-6 text-muted">
+            Live provider checkout attempts across Stripe and Flutterwave reconciliation.
+          </p>
+        </div>
+        <MetricPill label={`${attempts.length} recent`} />
+      </div>
+      <div className="mt-4 grid gap-3">
+        {attempts.length ? (
+          attempts.map((attempt) => (
+            <div className="rounded-lg border border-border bg-surface p-4" key={attempt.id}>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-bold text-ink">
+                    {formatStatus(attempt.provider)} · {formatStatus(attempt.status)}
+                  </p>
+                  <p className="mt-1 text-xs font-semibold uppercase tracking-[0.1em] text-muted">
+                    {formatStatus(attempt.payment_method)} · {formatDateTime(attempt.created_at)}
+                  </p>
+                </div>
+                <p className="font-display text-xl font-bold text-primary">
+                  {formatMoney(attempt.amount_cents, attempt.currency)}
+                </p>
+              </div>
+              <div className="mt-3 grid gap-2 text-xs font-semibold text-muted sm:grid-cols-2">
+                <p>Intent status: {attempt.payment_intent_status ? formatStatus(attempt.payment_intent_status) : "n/a"}</p>
+                <p>Provider reference: <span className="break-all text-ink">{attempt.provider_intent_id}</span></p>
+                <p>Checkout URL: {attempt.has_checkout_url ? "present" : "not issued"}</p>
+                <p>Client secret: {attempt.has_client_secret ? "present" : "not issued"}</p>
+              </div>
+              {attempt.error_message ? (
+                <p className="mt-3 rounded-lg border border-[#ffb7a8] bg-[#fff2ed] px-3 py-2 text-xs font-semibold text-[#b82716]">
+                  {attempt.error_message}
+                </p>
+              ) : null}
+            </div>
+          ))
+        ) : (
+          <EmptyPanel label="No payment attempt records yet." />
+        )}
+      </div>
+    </section>
+  );
+}
+
+function WebhookEventsPanel({ events }: { events: ContributionWebhookEvent[] }) {
+  return (
+    <section className="rounded-lg border border-border bg-white p-5 shadow-soft">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="font-display text-xl font-semibold text-ink">Webhook events</h3>
+          <p className="mt-1 text-sm leading-6 text-muted">
+            Provider callbacks, delivery attempts, and reconciliation outcomes.
+          </p>
+        </div>
+        <MetricPill label={`${events.length} recent`} />
+      </div>
+      <div className="mt-4 grid gap-3">
+        {events.length ? (
+          events.map((event) => (
+            <div className="rounded-lg border border-border bg-surface p-4" key={event.id}>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-bold text-ink">
+                    {formatStatus(event.provider)} · {formatStatus(event.event_type)}
+                  </p>
+                  <p className="mt-1 text-xs font-semibold uppercase tracking-[0.1em] text-muted">
+                    {formatStatus(event.status)} · {formatDateTime(event.created_at)}
+                  </p>
+                </div>
+                <MetricPill label={`${event.delivery_count} deliveries`} />
+              </div>
+              <div className="mt-3 grid gap-2 text-xs font-semibold text-muted sm:grid-cols-2">
+                <p>Intent reference: <span className="break-all text-ink">{event.provider_intent_id}</span></p>
+                <p>Processed: {event.processed_at ? formatDateTime(event.processed_at) : "pending"}</p>
+                <p>Amount: {event.amount_cents && event.currency ? formatMoney(event.amount_cents, event.currency) : "n/a"}</p>
+                <p>Provider event: <span className="break-all text-ink">{event.provider_event_id ?? "n/a"}</span></p>
+              </div>
+              {event.failure_reason || event.error_message ? (
+                <p className="mt-3 rounded-lg border border-[#ffb7a8] bg-[#fff2ed] px-3 py-2 text-xs font-semibold text-[#b82716]">
+                  {event.failure_reason ?? event.error_message}
+                </p>
+              ) : null}
+            </div>
+          ))
+        ) : (
+          <EmptyPanel label="No webhook events recorded yet." />
+        )}
+      </div>
+    </section>
+  );
+}
+
+function ExpenseEvidencePolicyPanel({ policy }: { policy: ContributionExpenseEvidencePolicy }) {
+  return (
+    <section className="rounded-lg border border-border bg-white p-5 shadow-soft">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="font-display text-xl font-semibold text-ink">Evidence policy</h3>
+          <p className="mt-1 text-sm leading-6 text-muted">
+            Current upload guardrails for finance evidence and reimbursement support files.
+          </p>
+        </div>
+        <MetricPill label={formatStatus(policy.storage_provider)} />
+      </div>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <MetricCard label="Retention" value={`${policy.retention_days} days`} />
+        <MetricCard label="Max size" value={formatBytes(policy.max_file_size_bytes)} />
+        <MetricCard label="Blocked signatures" value={String(policy.blocked_signature_count)} />
+        <MetricCard
+          label="Malware scanner"
+          value={policy.malware_scanner_url_configured ? formatStatus(policy.malware_scanner_provider) : "not configured"}
+        />
+      </div>
+      <div className="mt-4 rounded-lg border border-border bg-surface p-4">
+        <p className="text-xs font-bold uppercase tracking-[0.12em] text-muted">Allowed content types</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {policy.allowed_content_types.length ? (
+            policy.allowed_content_types.map((contentType) => (
+              <MetricPill key={contentType} label={contentType} />
+            ))
+          ) : (
+            <p className="text-sm font-semibold text-muted">No allowed content types configured.</p>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function RetentionPreviewPanel({
+  busy,
+  onRun,
+  preview
+}: {
+  busy: string | null;
+  onRun: (action: "preview" | "cleanup") => void;
+  preview: ContributionExpenseEvidenceRetentionPreview;
+}) {
+  return (
+    <section className="rounded-lg border border-border bg-white p-5 shadow-soft">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="font-display text-xl font-semibold text-ink">Retention preview</h3>
+          <p className="mt-1 text-sm leading-6 text-muted">
+            Expired evidence candidates based on the active retention policy.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-border bg-white px-3 text-sm font-bold text-ink disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={busy === "retention:preview" || busy === "retention:cleanup"}
+            onClick={() => onRun("preview")}
+            type="button"
+          >
+            {busy === "retention:preview" ? <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" /> : <RefreshCcw aria-hidden="true" className="h-4 w-4" />}
+            Refresh preview
+          </button>
+          <button
+            className="focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-primary px-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={busy === "retention:preview" || busy === "retention:cleanup"}
+            onClick={() => onRun("cleanup")}
+            type="button"
+          >
+            {busy === "retention:cleanup" ? <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" /> : <ShieldCheck aria-hidden="true" className="h-4 w-4" />}
+            Apply cleanup
+          </button>
+        </div>
+      </div>
+      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        <MetricCard label="Candidates" value={String(preview.candidates.length)} />
+        <MetricCard label="Scanned" value={String(preview.scanned_count)} />
+        <MetricCard label="Deleted" value={String(preview.deleted_count)} />
+      </div>
+      <div className="mt-4 rounded-lg border border-border bg-surface p-4">
+        <p className="text-xs font-bold uppercase tracking-[0.12em] text-muted">
+          Cutoff {formatDateTime(preview.cutoff_at)} · {preview.dry_run ? "dry run" : "live run"}
+        </p>
+        <div className="mt-3 grid gap-3">
+          {preview.candidates.length ? (
+            preview.candidates.map((candidate) => (
+              <div className="rounded-lg border border-border bg-white p-3" key={candidate.id}>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-bold text-ink">{candidate.file_name ?? "Unnamed evidence file"}</p>
+                    <p className="mt-1 text-xs font-semibold uppercase tracking-[0.1em] text-muted">
+                      {candidate.storage_provider ? formatStatus(candidate.storage_provider) : "storage n/a"} · {formatDateTime(candidate.created_at)}
+                    </p>
+                  </div>
+                  <MetricPill
+                    label={candidate.file_size_bytes ? formatBytes(candidate.file_size_bytes) : "size n/a"}
+                  />
+                </div>
+              </div>
+            ))
+          ) : (
+            <EmptyPanel label="No expired evidence candidates were found in the current preview." />
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function MetricCard({ label, value }: { label: string; value: string }) {
   return (
     <article className="rounded-lg border border-border bg-white p-4">
       <p className="text-sm font-bold text-muted">{label}</p>
       <p className="mt-2 font-display text-2xl font-bold text-primary">{value}</p>
     </article>
+  );
+}
+
+function MetricPill({ label }: { label: string }) {
+  return (
+    <span className="inline-flex items-center rounded-md border border-border bg-white px-3 py-1 text-xs font-bold uppercase tracking-[0.1em] text-muted">
+      {label}
+    </span>
   );
 }
 
@@ -667,6 +982,21 @@ function formatMoney(amountCents: number, currency: string) {
     maximumFractionDigits: 2,
     style: "currency"
   }).format(amountCents / 100);
+}
+
+function formatBytes(value: number) {
+  if (value < 1024) {
+    return `${value} B`;
+  }
+  if (value < 1024 * 1024) {
+    return `${(value / 1024).toFixed(1)} KB`;
+  }
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatDateTime(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }
 
 function formatStatus(value: string) {

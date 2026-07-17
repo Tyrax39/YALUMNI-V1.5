@@ -884,6 +884,89 @@ export type TreasurySummary = {
   recent_contributions: ContributionRecord[];
 };
 
+export type ContributionPaymentAttempt = {
+  amount_cents: number;
+  campaign_id?: string | null;
+  contributor_user_id?: string | null;
+  created_at: string;
+  currency: string;
+  error_message?: string | null;
+  has_checkout_url: boolean;
+  has_client_secret: boolean;
+  id: string;
+  payment_intent_id: string;
+  payment_intent_status?: string | null;
+  payment_method: string;
+  provider: string;
+  provider_intent_id: string;
+  status: string;
+  updated_at: string;
+};
+
+export type ContributionPaymentAttemptListResponse = {
+  attempts: ContributionPaymentAttempt[];
+  has_more: boolean;
+  limit: number;
+  offset: number;
+  total: number;
+};
+
+export type ContributionWebhookEvent = {
+  amount_cents?: number | null;
+  contribution_id?: string | null;
+  created_at: string;
+  currency?: string | null;
+  delivery_count: number;
+  error_message?: string | null;
+  event_type: string;
+  failure_reason?: string | null;
+  id: string;
+  payment_intent_id?: string | null;
+  processed_at?: string | null;
+  provider: string;
+  provider_event_id?: string | null;
+  provider_intent_id: string;
+  status: string;
+  updated_at: string;
+};
+
+export type ContributionWebhookEventListResponse = {
+  events: ContributionWebhookEvent[];
+  has_more: boolean;
+  limit: number;
+  offset: number;
+  total: number;
+};
+
+export type ContributionExpenseEvidencePolicy = {
+  allowed_content_types: string[];
+  blocked_signature_count: number;
+  malware_scanner_provider: string;
+  malware_scanner_timeout_seconds: number;
+  malware_scanner_url_configured: boolean;
+  max_file_size_bytes: number;
+  retention_days: number;
+  storage_provider: string;
+};
+
+export type ContributionExpenseEvidenceRetentionCandidate = {
+  created_at: string;
+  expense_report_id: string;
+  file_name?: string | null;
+  file_size_bytes?: number | null;
+  id: string;
+  storage_provider?: string | null;
+};
+
+export type ContributionExpenseEvidenceRetentionPreview = {
+  candidates: ContributionExpenseEvidenceRetentionCandidate[];
+  cutoff_at: string;
+  deleted_count: number;
+  dry_run: boolean;
+  retention_days: number;
+  scanned_count: number;
+};
+
 export type ContributionFilters = {
   country?: string;
   limit?: number;
@@ -1681,6 +1764,66 @@ export function adminContributionsExportUrl(
 
 export function fetchTreasurySummary(): Promise<TreasurySummary> {
   return fetchJson<TreasurySummary>("/api/backend/api/v1/contributions/admin/treasury");
+}
+
+export function fetchAdminContributionPaymentAttempts(
+  filters: {
+    limit?: number;
+    offset?: number;
+    payment_intent_id?: string;
+    provider?: string;
+    provider_intent_id?: string;
+    status?: string;
+  } = {}
+): Promise<ContributionPaymentAttemptListResponse> {
+  const query = contributionQueryString({ limit: 25, offset: 0, ...filters });
+  return fetchJson<ContributionPaymentAttemptListResponse>(
+    `/api/backend/api/v1/contributions/admin/payment-attempts?${query}`
+  );
+}
+
+export function fetchAdminContributionWebhookEvents(
+  filters: {
+    event_type?: string;
+    limit?: number;
+    offset?: number;
+    provider?: string;
+    provider_intent_id?: string;
+    status?: string;
+  } = {}
+): Promise<ContributionWebhookEventListResponse> {
+  const query = contributionQueryString({ limit: 25, offset: 0, ...filters });
+  return fetchJson<ContributionWebhookEventListResponse>(
+    `/api/backend/api/v1/contributions/admin/webhook-events?${query}`
+  );
+}
+
+export function fetchAdminExpenseEvidencePolicy(): Promise<ContributionExpenseEvidencePolicy> {
+  return fetchJson<ContributionExpenseEvidencePolicy>(
+    "/api/backend/api/v1/contributions/admin/expense-evidence-policy"
+  );
+}
+
+export function fetchAdminExpenseEvidenceRetentionPreview(
+  limit = 100
+): Promise<ContributionExpenseEvidenceRetentionPreview> {
+  return fetchJson<ContributionExpenseEvidenceRetentionPreview>(
+    `/api/backend/api/v1/contributions/admin/expense-evidence-retention?limit=${encodeURIComponent(
+      String(limit)
+    )}`
+  );
+}
+
+export function runAdminExpenseEvidenceRetention(
+  options: { dryRun?: boolean; limit?: number } = {}
+): Promise<ContributionExpenseEvidenceRetentionPreview> {
+  const params = new URLSearchParams();
+  params.set("dry_run", String(options.dryRun ?? true));
+  params.set("limit", String(options.limit ?? 100));
+  return mutateJson<ContributionExpenseEvidenceRetentionPreview>(
+    `/api/backend/api/v1/contributions/admin/expense-evidence-retention/run?${params.toString()}`,
+    "POST"
+  );
 }
 
 export function treasuryLedgerExportUrl(limit = 1000): string {
