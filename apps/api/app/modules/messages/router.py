@@ -674,6 +674,64 @@ def create_introduction_request(
 
 
 @router.post(
+    "/introduction-requests/{introduction_request_id}/cancel",
+    response_model=IntroductionRequestResponse,
+)
+def cancel_introduction_request(
+    introduction_request_id: uuid.UUID,
+    payload: IntroductionRequestReview,
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> IntroductionRequestResponse:
+    introduction_request = _get_introduction_request_for_user(
+        db,
+        introduction_request_id,
+        current_user,
+    )
+    if introduction_request.requester_user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the requester can cancel this introduction",
+        )
+    if introduction_request.status != "PENDING":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only pending introduction requests can be canceled",
+        )
+
+    introduction_request.status = "CANCELED"
+    introduction_request.responded_by_user_id = current_user.id
+    introduction_request.responded_at = utcnow()
+    if payload.note:
+        introduction_request.note = payload.note
+    _create_security_event(
+        db,
+        request,
+        current_user,
+        "messages.introduction_canceled",
+        {"introduction_request_id": str(introduction_request.id)},
+    )
+    notify_users(
+        db,
+        [introduction_request.recipient_user_id],
+        actor_user_id=current_user.id,
+        body=f"{current_user.display_name} withdrew an introduction request.",
+        event_type="messages.introduction_canceled",
+        metadata={"introduction_request_id": str(introduction_request.id)},
+        target_url="/messages/introductions",
+        title="Introduction request withdrawn",
+    )
+    db.commit()
+    introduction_request = _get_introduction_request_for_user(
+        db,
+        introduction_request.id,
+        current_user,
+    )
+    return _serialize_introduction_request(introduction_request)
+
+
+@router.post(
     "/introduction-requests/{introduction_request_id}/accept",
     response_model=IntroductionRequestResponse,
 )

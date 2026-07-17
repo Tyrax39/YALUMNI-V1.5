@@ -461,3 +461,45 @@ def test_introduction_request_accept_decline_and_thread_creation(client: TestCli
     assert decline_response.status_code == 200
     assert decline_response.json()["status"] == "DECLINED"
     assert decline_response.json()["note"] == "Not available right now."
+
+
+def test_introduction_request_can_be_canceled_by_requester(client: TestClient) -> None:
+    requester = register_user(client, "intro.cancel.requester@example.com", "Cancel Requester")
+    recipient = register_user(client, "intro.cancel.recipient@example.com", "Cancel Recipient")
+
+    create_response = client.post(
+        "/api/v1/messages/introduction-requests",
+        headers=message_headers(requester),
+        json={
+            "recipient_user_id": recipient["user"]["id"],
+            "note": "Would love to connect for a chapter handoff.",
+        },
+    )
+    assert create_response.status_code == 201
+    introduction_request = create_response.json()
+    assert introduction_request["status"] == "PENDING"
+
+    recipient_cannot_cancel = client.post(
+        f"/api/v1/messages/introduction-requests/{introduction_request['id']}/cancel",
+        headers=message_headers(recipient),
+        json={},
+    )
+    assert recipient_cannot_cancel.status_code == 403
+
+    cancel_response = client.post(
+        f"/api/v1/messages/introduction-requests/{introduction_request['id']}/cancel",
+        headers=message_headers(requester),
+        json={"note": "Timing changed, I will follow up later."},
+    )
+    assert cancel_response.status_code == 200
+    canceled_request = cancel_response.json()
+    assert canceled_request["status"] == "CANCELED"
+    assert canceled_request["responded_by_user_id"] == requester["user"]["id"]
+    assert canceled_request["note"] == "Timing changed, I will follow up later."
+
+    duplicate_pending_response = client.post(
+        "/api/v1/messages/introduction-requests",
+        headers=message_headers(requester),
+        json={"recipient_user_id": recipient["user"]["id"]},
+    )
+    assert duplicate_pending_response.status_code == 201

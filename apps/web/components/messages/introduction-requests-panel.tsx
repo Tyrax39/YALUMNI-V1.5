@@ -21,6 +21,7 @@ import {
   Conversation,
   IntroductionRequest,
   acceptIntroductionRequest,
+  cancelIntroductionRequest,
   createIntroductionRequest,
   declineIntroductionRequest,
   listConversations,
@@ -277,6 +278,20 @@ export function IntroductionRequestsPanel({
     }
   }
 
+  async function handleCancelRequest(request: IntroductionRequest) {
+    setBusyKey(`cancel:${request.id}`);
+    setNotice(null);
+    try {
+      await cancelIntroductionRequest(accessToken, request.id);
+      setNotice(`Introduction request withdrawn for ${request.recipient_display_name}.`);
+      await loadOverview();
+    } catch (caught) {
+      setNotice(caught instanceof ApiError ? caught.message : "Introduction could not be withdrawn.");
+    } finally {
+      setBusyKey(null);
+    }
+  }
+
   return (
     <div className="grid gap-6">
       <section className="grid gap-4 md:grid-cols-3">
@@ -511,15 +526,20 @@ export function IntroductionRequestsPanel({
               Live backend
             </span>
           </div>
-          <div className="mt-5 grid gap-3">
-            {requests.outgoing.length === 0 ? (
-              <EmptyState message="No outgoing requests have been sent from this workspace yet." />
-            ) : (
-              requests.outgoing.slice(0, 4).map((request) => (
-                <IntroductionRequestSummaryRow key={request.id} request={request} />
-              ))
-            )}
-          </div>
+              <div className="mt-5 grid gap-3">
+                {requests.outgoing.length === 0 ? (
+                  <EmptyState message="No outgoing requests have been sent from this workspace yet." />
+                ) : (
+                  requests.outgoing.slice(0, 4).map((request) => (
+                    <IntroductionRequestSummaryRow
+                      busyKey={busyKey}
+                      key={request.id}
+                      onCancel={handleCancelRequest}
+                      request={request}
+                    />
+                  ))
+                )}
+              </div>
         </div>
       </section>
     </div>
@@ -740,7 +760,17 @@ function IntroductionRequestRow({
   );
 }
 
-function IntroductionRequestSummaryRow({ request }: { request: IntroductionRequest }) {
+function IntroductionRequestSummaryRow({
+  busyKey,
+  onCancel,
+  request
+}: {
+  busyKey: string | null;
+  onCancel: (request: IntroductionRequest) => void;
+  request: IntroductionRequest;
+}) {
+  const busyCancel = busyKey === `cancel:${request.id}`;
+
   return (
     <article className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface px-4 py-3">
       <div className="min-w-0">
@@ -749,9 +779,21 @@ function IntroductionRequestSummaryRow({ request }: { request: IntroductionReque
           {request.note || "No note attached."}
         </p>
       </div>
-      <span className="rounded-md border border-border bg-white px-3 py-1 text-[11px] font-bold uppercase tracking-[0.1em] text-muted">
-        {formatRequestStatus(request.status)}
-      </span>
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <span className="rounded-md border border-border bg-white px-3 py-1 text-[11px] font-bold uppercase tracking-[0.1em] text-muted">
+          {formatRequestStatus(request.status)}
+        </span>
+        {request.status === "PENDING" ? (
+          <button
+            className="focus-ring inline-flex min-h-9 items-center justify-center rounded-lg border border-border bg-white px-3 text-xs font-bold uppercase tracking-[0.1em] text-ink transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={busyCancel}
+            onClick={() => onCancel(request)}
+            type="button"
+          >
+            {busyCancel ? "Withdrawing..." : "Withdraw"}
+          </button>
+        ) : null}
+      </div>
     </article>
   );
 }

@@ -1341,6 +1341,21 @@ export function declineIntroductionRequest(
   );
 }
 
+export function cancelIntroductionRequest(
+  accessToken: string,
+  introductionRequestId: string,
+  payload: IntroductionRequestReviewPayload = {}
+): Promise<IntroductionRequest> {
+  return protectedApiFetch<IntroductionRequest>(
+    `/api/v1/messages/introduction-requests/${encodeURIComponent(introductionRequestId)}/cancel`,
+    {
+      body: JSON.stringify(payload),
+      headers: authHeaders(accessToken),
+      method: "POST"
+    }
+  );
+}
+
 export function listConversationMessages(
   accessToken: string,
   conversationId: string,
