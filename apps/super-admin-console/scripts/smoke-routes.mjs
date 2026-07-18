@@ -1,6 +1,6 @@
 const baseUrl = process.env.SMOKE_BASE_URL ?? "http://127.0.0.1:3012";
 
-const routes = ["/login", "/", "/diagnostics", "/roles", "/audit", "/system"];
+const routes = ["/api/release", "/login", "/", "/diagnostics", "/roles", "/audit", "/system"];
 const results = [];
 
 for (const route of routes) {

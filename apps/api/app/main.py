@@ -1,3 +1,4 @@
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -67,6 +68,16 @@ def health_check() -> dict[str, str]:
         "status": "ok",
         "service": "api",
         "environment": settings.app_env,
+    }
+
+
+@app.get("/release", tags=["system"])
+def release_identity() -> dict[str, str | None]:
+    return {
+        "service": "api",
+        "environment": settings.app_env,
+        "commit_sha": os.getenv("YALUMNI_RELEASE_SHA") or os.getenv("SOURCE_VERSION"),
+        "release_version": os.getenv("YALUMNI_RELEASE_VERSION"),
     }
 
 

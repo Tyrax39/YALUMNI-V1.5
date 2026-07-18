@@ -1,6 +1,6 @@
 # YALUMNI V1.5 Implementation Status
 
-Last updated: 2026-07-16
+Last updated: 2026-07-18
 Canonical scope target: pilot alumni core launch
 Canonical runtime: `apps/web` (`3010`), `apps/admin-console` (`3011`), `apps/super-admin-console` (`3012`), `apps/api` (`8002`)
 
@@ -66,7 +66,7 @@ future task slice explicitly touches them:
 | Payments productionization | real providers, callbacks, reconciliation | partially implemented | implemented via intent-based member pay UX | implemented foundation for Stripe + Flutterwave checkout, refunds, and webhook normalization | local verified; staging/provider credential validation still needed | launch blocker | no |
 | Security hardening | 2FA recovery, cookie review, CSRF/session review, SSR role checks | partially implemented | unchanged | partially implemented with cookie-policy controls, same-origin CSRF checks, SSR-aware proxy enforcement, and persisted 2FA recovery-code lifecycle | needs staging validation | launch blocker | no |
 | Storage/search/ops hardening | storage policy, background workers, search threshold, runbooks | partially implemented | unchanged | partially implemented | needs runbook/release gate completion | launch blocker | no |
-| Azure release parity | same code/env behavior in staging | partially implemented | implemented read-only release/provider diagnostics in owner console | partial with API diagnostics for release metadata and payment provider readiness | needs formal release checklist and deployed validation | launch blocker | no |
+| Azure release parity | same code/env behavior in staging | partially implemented | implemented read-only release/provider diagnostics in owner console | additive release-identity endpoints and a strict four-service SHA/version parity gate are implemented | needs deployed parity validation | launch blocker | no |
 
 ## Active Partial Routes And Workflows
 
@@ -98,6 +98,7 @@ broader post-launch work:
    - worker/runbook coverage for scheduled and recovery paths
 4. Azure release parity
    - same SHA/version across all apps
+   - four-service release identity is now machine-checkable with `npm run verify:release-parity`
    - migrations and env parity
    - verified auth/layout/API behavior on deployed staging
    - release diagnostics now available locally through the super-admin system surface

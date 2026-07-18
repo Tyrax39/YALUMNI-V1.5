@@ -51,10 +51,17 @@ The API app requires:
 
 Each frontend app requires:
 
+- `APP_ENV=staging`
 - `API_BASE_URL=https://yalumni-v15-api-954095.azurewebsites.net`
 - `NEXT_PUBLIC_API_BASE_URL=https://yalumni-v15-api-954095.azurewebsites.net`
+- `YALUMNI_RELEASE_SHA=<git-sha>`
+- `YALUMNI_RELEASE_VERSION=<release-version>`
 - `PORT=3000`
 - `WEBSITES_PORT=3000`
+
+The API app also requires the same `YALUMNI_RELEASE_SHA` and
+`YALUMNI_RELEASE_VERSION` values. Set both values on all four Web Apps before
+restarting them.
 
 Generated secret values must stay out of git. Store local deployment handoff
 metadata only under `.local/`.
@@ -78,6 +85,22 @@ After deployment, verify:
 - Admin app: `https://yalumni-v15-admin-954095.azurewebsites.net/login`
 - Super-admin app: `https://yalumni-v15-superadmin-954095.azurewebsites.net/login`
 - Route smokes against Azure base URLs.
+
+Verify that all four services report the same deployed artifact identity:
+
+```powershell
+$env:RELEASE_API_URL="https://yalumni-v15-api-954095.azurewebsites.net"
+$env:RELEASE_MEMBER_URL="https://yalumni-v15-member-954095.azurewebsites.net"
+$env:RELEASE_ADMIN_URL="https://yalumni-v15-admin-954095.azurewebsites.net"
+$env:RELEASE_SUPERADMIN_URL="https://yalumni-v15-superadmin-954095.azurewebsites.net"
+$env:RELEASE_EXPECTED_SHA="<sha>"
+$env:RELEASE_EXPECTED_VERSION="<release-version>"
+npm run verify:release-parity
+```
+
+The release is rejected if any endpoint is unavailable, reports the wrong
+service identity, omits release metadata, or differs from the expected SHA or
+version.
 
 ## Staging Limitations
 

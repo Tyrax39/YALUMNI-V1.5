@@ -1,6 +1,7 @@
 const baseUrl = process.env.SMOKE_BASE_URL ?? "http://127.0.0.1:3011";
 
 const routes = [
+  "/api/release",
   "/login",
   "/",
   "/verification",
