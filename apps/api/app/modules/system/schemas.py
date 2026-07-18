@@ -14,6 +14,9 @@ class ReleaseDiagnostics(BaseModel):
     deployment_target: str | None
     source_control_ref: str | None
     instance_id_present: bool
+    metadata_complete: bool
+    source_control_reported: bool
+    azure_app_service_target: bool
 
 
 class RuntimeDiagnostics(BaseModel):
@@ -98,6 +101,8 @@ class StripeDiagnostics(BaseModel):
     success_url_configured: bool
     cancel_url_configured: bool
     checkout_ready: bool
+    refund_ready: bool
+    return_urls_ready: bool
     webhook_url: str
 
 
@@ -106,14 +111,21 @@ class FlutterwaveDiagnostics(BaseModel):
     webhook_secret_configured: bool
     redirect_url_configured: bool
     checkout_ready: bool
+    refund_ready: bool
+    return_url_ready: bool
     webhook_url: str
 
 
 class PaymentDiagnostics(BaseModel):
     checkout_provider: str
     refund_provider: str
+    provider_mode: str
     provider_request_timeout_seconds: float
     webhook_base_url: str
+    webhook_signing_ready: bool
+    checkout_return_url_ready: bool
+    refund_provider_ready: bool
+    staging_candidate_ready: bool
     stripe: StripeDiagnostics
     flutterwave: FlutterwaveDiagnostics
 

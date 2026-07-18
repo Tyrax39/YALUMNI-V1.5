@@ -100,6 +100,7 @@ def test_system_diagnostics_reports_release_and_provider_readiness(
     monkeypatch.setenv("YALUMNI_RELEASE_SHA", "527fa4f")
     monkeypatch.setenv("YALUMNI_RELEASE_VERSION", "v1.5.0-staging")
     monkeypatch.setenv("YALUMNI_DEPLOYED_AT", "2026-07-16T10:00:00Z")
+    monkeypatch.setenv("YALUMNI_SOURCE_CONTROL_REF", "refs/heads/Tyrax0/yalumni-v1.5-foundation")
     monkeypatch.setenv("WEBSITE_SITE_NAME", "yalumni-v15-api-954095")
     monkeypatch.setenv("WEBSITE_INSTANCE_ID", "instance-001")
     monkeypatch.setenv("CONTRIBUTION_CHECKOUT_PROVIDER", "stripe")
@@ -178,10 +179,23 @@ def test_system_diagnostics_reports_release_and_provider_readiness(
     assert payload["release"]["release_version"] == "v1.5.0-staging"
     assert payload["release"]["deployment_target"] == "yalumni-v15-api-954095"
     assert payload["release"]["instance_id_present"] is True
+    assert payload["release"]["source_control_ref"] == "refs/heads/Tyrax0/yalumni-v1.5-foundation"
+    assert payload["release"]["metadata_complete"] is True
+    assert payload["release"]["source_control_reported"] is True
+    assert payload["release"]["azure_app_service_target"] is True
     assert payload["payments"]["checkout_provider"] == "STRIPE"
     assert payload["payments"]["refund_provider"] == "FLUTTERWAVE"
+    assert payload["payments"]["provider_mode"] == "PROVIDER_BACKED"
+    assert payload["payments"]["webhook_signing_ready"] is True
+    assert payload["payments"]["checkout_return_url_ready"] is True
+    assert payload["payments"]["refund_provider_ready"] is True
+    assert payload["payments"]["staging_candidate_ready"] is True
     assert payload["payments"]["stripe"]["checkout_ready"] is True
+    assert payload["payments"]["stripe"]["refund_ready"] is True
+    assert payload["payments"]["stripe"]["return_urls_ready"] is True
     assert payload["payments"]["flutterwave"]["checkout_ready"] is True
+    assert payload["payments"]["flutterwave"]["refund_ready"] is True
+    assert payload["payments"]["flutterwave"]["return_url_ready"] is True
     assert payload["payments"]["stripe"]["webhook_url"].endswith(
         "/api/v1/contributions/webhooks/stripe"
     )

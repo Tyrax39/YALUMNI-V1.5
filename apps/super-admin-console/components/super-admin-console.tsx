@@ -518,6 +518,14 @@ function ReleaseReadinessPanel({ diagnostics }: { diagnostics: SystemDiagnostics
               label="Deployment target"
               value={diagnostics.release.deployment_target ?? "local/dev"}
             />
+            <SystemMetric
+              label="Source control ref"
+              value={diagnostics.release.source_control_ref ?? "not set"}
+            />
+            <SystemMetric
+              label="Deployed at"
+              value={diagnostics.release.deployed_at ?? "not set"}
+            />
           </div>
         </div>
         <div className="grid gap-3">
@@ -542,6 +550,14 @@ function ReleaseReadinessPanel({ diagnostics }: { diagnostics: SystemDiagnostics
           <CheckRow
             label="Flutterwave staging config"
             status={diagnostics.payments.flutterwave.checkout_ready ? "ready" : "missing settings"}
+          />
+          <CheckRow
+            label="Release metadata completeness"
+            status={diagnostics.release.metadata_complete ? "complete" : "incomplete"}
+          />
+          <CheckRow
+            label="Azure App Service target"
+            status={diagnostics.release.azure_app_service_target ? "detected" : "not detected"}
           />
           <CheckRow
             label="Email delivery"
@@ -599,11 +615,11 @@ function ReleaseChecklistPanel({ diagnostics }: { diagnostics: SystemDiagnostics
           label="Refund provider ready"
           status={
             diagnostics.payments.refund_provider === "STRIPE"
-              ? diagnostics.payments.stripe.secret_key_configured
+              ? diagnostics.payments.stripe.refund_ready
                 ? "ready"
                 : "incomplete"
               : diagnostics.payments.refund_provider === "FLUTTERWAVE"
-                ? diagnostics.payments.flutterwave.secret_key_configured
+                ? diagnostics.payments.flutterwave.refund_ready
                   ? "ready"
                   : "incomplete"
                 : diagnostics.payments.refund_provider.toLowerCase()
@@ -612,6 +628,14 @@ function ReleaseChecklistPanel({ diagnostics }: { diagnostics: SystemDiagnostics
         <CheckRow
           label="Email transport"
           status={diagnostics.runtime.email_ready ? "ready" : "incomplete"}
+        />
+        <CheckRow
+          label="Webhook signing"
+          status={diagnostics.payments.webhook_signing_ready ? "ready" : "incomplete"}
+        />
+        <CheckRow
+          label="Checkout return URLs"
+          status={diagnostics.payments.checkout_return_url_ready ? "ready" : "incomplete"}
         />
         <CheckRow
           label="Secure auth cookies"
@@ -642,6 +666,10 @@ function ReleaseChecklistPanel({ diagnostics }: { diagnostics: SystemDiagnostics
         <CheckRow
           label="Retention worker lock"
           status={diagnostics.workers.expense_retention_lock_ready ? "ready" : "incomplete"}
+        />
+        <CheckRow
+          label="Staging candidate"
+          status={diagnostics.payments.staging_candidate_ready ? "ready" : "incomplete"}
         />
       </div>
     </section>

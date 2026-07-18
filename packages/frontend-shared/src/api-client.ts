@@ -23,11 +23,14 @@ export type AdminOverview = {
 };
 
 export type ReleaseDiagnostics = {
+  azure_app_service_target: boolean;
   commit_sha: string | null;
   release_version: string | null;
   deployed_at: string | null;
   deployment_target: string | null;
+  metadata_complete: boolean;
   source_control_ref: string | null;
+  source_control_reported: boolean;
   instance_id_present: boolean;
 };
 
@@ -110,6 +113,8 @@ export type WorkerDiagnostics = {
 export type StripeDiagnostics = {
   cancel_url_configured: boolean;
   checkout_ready: boolean;
+  refund_ready: boolean;
+  return_urls_ready: boolean;
   secret_key_configured: boolean;
   success_url_configured: boolean;
   webhook_secret_configured: boolean;
@@ -118,18 +123,25 @@ export type StripeDiagnostics = {
 
 export type FlutterwaveDiagnostics = {
   checkout_ready: boolean;
+  refund_ready: boolean;
   redirect_url_configured: boolean;
+  return_url_ready: boolean;
   secret_key_configured: boolean;
   webhook_secret_configured: boolean;
   webhook_url: string;
 };
 
 export type PaymentDiagnostics = {
+  checkout_return_url_ready: boolean;
   checkout_provider: string;
   flutterwave: FlutterwaveDiagnostics;
+  provider_mode: string;
   provider_request_timeout_seconds: number;
   refund_provider: string;
+  refund_provider_ready: boolean;
+  staging_candidate_ready: boolean;
   stripe: StripeDiagnostics;
+  webhook_signing_ready: boolean;
   webhook_base_url: string;
 };
 

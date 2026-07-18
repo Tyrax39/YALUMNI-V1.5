@@ -76,6 +76,22 @@ def _origin_configured(origin_value: str, trusted_origins: set[str]) -> bool:
     return origin_value.rstrip("/") in trusted_origins
 
 
+def _release_metadata_complete(
+    commit_sha: str | None,
+    release_version: str | None,
+    deployed_at: str | None,
+    deployment_target: str | None,
+    source_control_ref: str | None,
+) -> bool:
+    return bool(
+        commit_sha
+        and release_version
+        and deployed_at
+        and deployment_target
+        and source_control_ref
+    )
+
+
 @router.get("/status", response_model=SystemStatusResponse)
 def system_status() -> SystemStatusResponse:
     settings = get_settings()
@@ -96,6 +112,22 @@ def system_diagnostics(
     cookie_same_site = _resolve_cookie_same_site(settings)
     cookie_secure = _resolve_cookie_secure(settings, cookie_same_site)
     trusted_origins = {origin.rstrip("/") for origin in settings.trusted_origin_list}
+    commit_sha = _configured_env_value("YALUMNI_RELEASE_SHA", "SOURCE_VERSION")
+    release_version = _configured_env_value("YALUMNI_RELEASE_VERSION")
+    deployed_at = _configured_env_value("YALUMNI_DEPLOYED_AT")
+    deployment_target = _configured_env_value("WEBSITE_SITE_NAME")
+    source_control_ref = _configured_env_value(
+        "YALUMNI_SOURCE_CONTROL_REF",
+        "WEBSITE_BRANCH",
+    )
+    metadata_complete = _release_metadata_complete(
+        commit_sha,
+        release_version,
+        deployed_at,
+        deployment_target,
+        source_control_ref,
+    )
+    azure_app_service_target = bool(deployment_target and deployment_target.strip())
 
     stripe = StripeDiagnostics(
         secret_key_configured=bool(settings.stripe_secret_key),
@@ -108,6 +140,10 @@ def system_diagnostics(
             and settings.stripe_checkout_success_url
             and settings.stripe_checkout_cancel_url
         ),
+        refund_ready=bool(settings.stripe_secret_key),
+        return_urls_ready=bool(
+            settings.stripe_checkout_success_url and settings.stripe_checkout_cancel_url
+        ),
         webhook_url=f"{webhook_base_url}/stripe",
     )
     flutterwave = FlutterwaveDiagnostics(
@@ -119,7 +155,35 @@ def system_diagnostics(
             and settings.flutterwave_webhook_secret_hash
             and settings.flutterwave_checkout_redirect_url
         ),
+        refund_ready=bool(settings.flutterwave_secret_key),
+        return_url_ready=bool(settings.flutterwave_checkout_redirect_url),
         webhook_url=f"{webhook_base_url}/flutterwave",
+    )
+    webhook_signing_ready = (
+        stripe.webhook_secret_configured
+        if settings.contribution_checkout_provider.strip().upper() == "STRIPE"
+        else flutterwave.webhook_secret_configured
+        if settings.contribution_checkout_provider.strip().upper() == "FLUTTERWAVE"
+        else bool(settings.contribution_webhook_secret)
+    )
+    checkout_return_url_ready = (
+        stripe.return_urls_ready
+        if settings.contribution_checkout_provider.strip().upper() == "STRIPE"
+        else flutterwave.return_url_ready
+        if settings.contribution_checkout_provider.strip().upper() == "FLUTTERWAVE"
+        else True
+    )
+    refund_provider_ready = (
+        stripe.refund_ready
+        if settings.contribution_refund_provider.strip().upper() == "STRIPE"
+        else flutterwave.refund_ready
+        if settings.contribution_refund_provider.strip().upper() == "FLUTTERWAVE"
+        else True
+    )
+    provider_mode = (
+        "LOCAL_TEST"
+        if settings.contribution_checkout_provider.strip().upper() == "LOCAL_TEST"
+        else "PROVIDER_BACKED"
     )
 
     return SystemDiagnosticsResponse(
@@ -127,15 +191,15 @@ def system_diagnostics(
         service=settings.app_name,
         environment=settings.app_env,
         release=ReleaseDiagnostics(
-            commit_sha=_configured_env_value("YALUMNI_RELEASE_SHA", "SOURCE_VERSION"),
-            release_version=_configured_env_value("YALUMNI_RELEASE_VERSION"),
-            deployed_at=_configured_env_value("YALUMNI_DEPLOYED_AT"),
-            deployment_target=_configured_env_value("WEBSITE_SITE_NAME"),
-            source_control_ref=_configured_env_value(
-                "YALUMNI_SOURCE_CONTROL_REF",
-                "WEBSITE_BRANCH",
-            ),
+            commit_sha=commit_sha,
+            release_version=release_version,
+            deployed_at=deployed_at,
+            deployment_target=deployment_target,
+            source_control_ref=source_control_ref,
             instance_id_present=bool(_configured_env_value("WEBSITE_INSTANCE_ID")),
+            metadata_complete=metadata_complete,
+            source_control_reported=bool(source_control_ref),
+            azure_app_service_target=azure_app_service_target,
         ),
         runtime=RuntimeDiagnostics(
             api_base_url=settings.api_base_url,
@@ -229,8 +293,20 @@ def system_diagnostics(
         payments=PaymentDiagnostics(
             checkout_provider=settings.contribution_checkout_provider.strip().upper(),
             refund_provider=settings.contribution_refund_provider.strip().upper(),
+            provider_mode=provider_mode,
             provider_request_timeout_seconds=settings.contribution_provider_request_timeout_seconds,
             webhook_base_url=webhook_base_url,
+            webhook_signing_ready=webhook_signing_ready,
+            checkout_return_url_ready=checkout_return_url_ready,
+            refund_provider_ready=refund_provider_ready,
+            staging_candidate_ready=bool(
+                provider_mode == "PROVIDER_BACKED"
+                and webhook_signing_ready
+                and checkout_return_url_ready
+                and refund_provider_ready
+                and settings.contribution_provider_request_timeout_seconds > 0
+                and metadata_complete
+            ),
             stripe=stripe,
             flutterwave=flutterwave,
         ),
