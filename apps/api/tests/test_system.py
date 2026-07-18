@@ -121,7 +121,26 @@ def test_system_diagnostics_reports_release_and_provider_readiness(
         "https://member.example.com/contributions/flutterwave/{payment_intent_id}",
     )
     monkeypatch.setenv("UPLOAD_STORAGE_PROVIDER", "S3")
+    monkeypatch.setenv("PLATFORM_OWNER_ALIASES", "tshiva@yalumni.org,patient0@yalumni.org")
+    monkeypatch.setenv("PLATFORM_OWNER_PASSWORD", "Admin@123-Yalumni/*9")
+    monkeypatch.setenv("SEED_TEST_ACCOUNTS", "true")
+    monkeypatch.setenv("TEST_ACCOUNTS_PASSWORD", "YalumniTest@12345!")
+    monkeypatch.setenv("CONTRIBUTION_EXPENSE_EVIDENCE_MALWARE_SCANNER_PROVIDER", "HTTP")
+    monkeypatch.setenv("CONTRIBUTION_EXPENSE_EVIDENCE_MALWARE_SCANNER_URL", "https://scanner.example.com/scan")
+    monkeypatch.setenv("CONTRIBUTION_EXPENSE_EVIDENCE_RETENTION_DAYS", "180")
+    monkeypatch.setenv("CONTRIBUTION_EXPENSE_EVIDENCE_RETENTION_WORKER_INTERVAL_SECONDS", "43200")
+    monkeypatch.setenv("CONTRIBUTION_EXPENSE_EVIDENCE_RETENTION_WORKER_LIMIT", "250")
+    monkeypatch.setenv("CONTRIBUTION_EXPENSE_EVIDENCE_RETENTION_WORKER_LOCK_PROVIDER", "redis")
+    monkeypatch.setenv("MWF_DIRECTORY_SYNC_WORKER_INTERVAL_SECONDS", "7200")
+    monkeypatch.setenv("NOTIFICATION_DIGEST_WORKER_INTERVAL_SECONDS", "5400")
+    monkeypatch.setenv("LOGIN_RATE_LIMIT_ATTEMPTS", "7")
+    monkeypatch.setenv("LOGIN_RATE_LIMIT_WINDOW_SECONDS", "600")
+    monkeypatch.setenv("PASSWORD_RESET_RATE_LIMIT_ATTEMPTS", "4")
+    monkeypatch.setenv("PASSWORD_RESET_RATE_LIMIT_WINDOW_SECONDS", "1200")
+    monkeypatch.setenv("ADMIN_ACTION_RATE_LIMIT_ATTEMPTS", "12")
+    monkeypatch.setenv("ADMIN_ACTION_RATE_LIMIT_WINDOW_SECONDS", "480")
     monkeypatch.setenv("SENTRY_DSN", "https://examplePublicKey@example.ingest.sentry.io/123")
+    monkeypatch.setenv("S3_BUCKET_NAME", "yalumni-private")
     get_settings.cache_clear()
 
     try:
@@ -149,3 +168,21 @@ def test_system_diagnostics_reports_release_and_provider_readiness(
     )
     assert payload["runtime"]["upload_storage_provider"] == "S3"
     assert payload["runtime"]["sentry_configured"] is True
+    assert payload["auth"]["platform_owner_alias_count"] == 2
+    assert payload["auth"]["platform_owner_password_configured"] is True
+    assert payload["auth"]["seed_test_accounts_enabled"] is True
+    assert payload["auth"]["test_accounts_password_configured"] is True
+    assert payload["rate_limits"]["login_attempts"] == 7
+    assert payload["rate_limits"]["login_window_seconds"] == 600
+    assert payload["rate_limits"]["password_reset_attempts"] == 4
+    assert payload["rate_limits"]["admin_action_attempts"] == 12
+    assert payload["storage"]["provider"] == "S3"
+    assert payload["storage"]["s3_bucket_configured"] is True
+    assert payload["storage"]["malware_scanner_provider"] == "HTTP"
+    assert payload["storage"]["malware_scanner_ready"] is True
+    assert payload["storage"]["retention_days"] == 180
+    assert payload["workers"]["mwf_sync_interval_seconds"] == 7200
+    assert payload["workers"]["notification_digest_interval_seconds"] == 5400
+    assert payload["workers"]["expense_retention_interval_seconds"] == 43200
+    assert payload["workers"]["expense_retention_limit"] == 250
+    assert payload["workers"]["expense_retention_lock_provider"] == "REDIS"

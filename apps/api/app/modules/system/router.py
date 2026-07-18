@@ -10,11 +10,14 @@ from app.modules.system.schemas import (
     AuthDiagnostics,
     FlutterwaveDiagnostics,
     PaymentDiagnostics,
+    RateLimitDiagnostics,
     ReleaseDiagnostics,
     RuntimeDiagnostics,
+    StorageDiagnostics,
     StripeDiagnostics,
     SystemDiagnosticsResponse,
     SystemStatusResponse,
+    WorkerDiagnostics,
 )
 
 router = APIRouter()
@@ -33,6 +36,13 @@ def _email_ready(settings) -> bool:
     if settings.email_provider.strip().lower() == "console":
         return True
     return bool(settings.smtp_host and settings.smtp_user and settings.smtp_password)
+
+
+def _malware_scanner_ready(settings) -> bool:
+    provider = settings.contribution_expense_evidence_malware_scanner_provider.strip().upper()
+    if provider == "SIGNATURE_ONLY":
+        return True
+    return bool(settings.contribution_expense_evidence_malware_scanner_url)
 
 
 @router.get("/status", response_model=SystemStatusResponse)
@@ -107,8 +117,46 @@ def system_diagnostics(
         ),
         auth=AuthDiagnostics(
             platform_owner_email=settings.platform_owner_email,
+            platform_owner_alias_count=len(
+                [alias for alias in settings.platform_owner_aliases.split(",") if alias.strip()]
+            ),
+            platform_owner_password_configured=bool(settings.platform_owner_password),
             admin_two_factor_required=settings.admin_two_factor_required,
             seed_test_accounts_enabled=settings.seed_test_accounts,
+            test_accounts_password_configured=bool(settings.test_accounts_password),
+        ),
+        rate_limits=RateLimitDiagnostics(
+            login_attempts=settings.login_rate_limit_attempts,
+            login_window_seconds=settings.login_rate_limit_window_seconds,
+            password_reset_attempts=settings.password_reset_rate_limit_attempts,
+            password_reset_window_seconds=settings.password_reset_rate_limit_window_seconds,
+            admin_action_attempts=settings.admin_action_rate_limit_attempts,
+            admin_action_window_seconds=settings.admin_action_rate_limit_window_seconds,
+        ),
+        storage=StorageDiagnostics(
+            provider=settings.upload_storage_provider,
+            s3_bucket_configured=bool(settings.s3_bucket_name),
+            malware_scanner_provider=(
+                settings.contribution_expense_evidence_malware_scanner_provider.strip().upper()
+            ),
+            malware_scanner_ready=_malware_scanner_ready(settings),
+            retention_days=settings.contribution_expense_evidence_retention_days,
+            verification_upload_max_bytes=settings.verification_upload_max_bytes,
+            profile_photo_upload_max_bytes=settings.profile_photo_upload_max_bytes,
+            contribution_expense_evidence_upload_max_bytes=(
+                settings.contribution_expense_evidence_upload_max_bytes
+            ),
+        ),
+        workers=WorkerDiagnostics(
+            mwf_sync_interval_seconds=settings.mwf_directory_sync_worker_interval_seconds,
+            notification_digest_interval_seconds=settings.notification_digest_worker_interval_seconds,
+            expense_retention_interval_seconds=(
+                settings.contribution_expense_evidence_retention_worker_interval_seconds
+            ),
+            expense_retention_limit=settings.contribution_expense_evidence_retention_worker_limit,
+            expense_retention_lock_provider=(
+                settings.contribution_expense_evidence_retention_worker_lock_provider.strip().upper()
+            ),
         ),
         payments=PaymentDiagnostics(
             checkout_provider=settings.contribution_checkout_provider.strip().upper(),

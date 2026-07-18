@@ -31,8 +31,39 @@ class RuntimeDiagnostics(BaseModel):
 
 class AuthDiagnostics(BaseModel):
     platform_owner_email: str
+    platform_owner_alias_count: int
+    platform_owner_password_configured: bool
     admin_two_factor_required: bool
     seed_test_accounts_enabled: bool
+    test_accounts_password_configured: bool
+
+
+class RateLimitDiagnostics(BaseModel):
+    login_attempts: int
+    login_window_seconds: int
+    password_reset_attempts: int
+    password_reset_window_seconds: int
+    admin_action_attempts: int
+    admin_action_window_seconds: int
+
+
+class StorageDiagnostics(BaseModel):
+    provider: str
+    s3_bucket_configured: bool
+    malware_scanner_provider: str
+    malware_scanner_ready: bool
+    retention_days: int
+    verification_upload_max_bytes: int
+    profile_photo_upload_max_bytes: int
+    contribution_expense_evidence_upload_max_bytes: int
+
+
+class WorkerDiagnostics(BaseModel):
+    mwf_sync_interval_seconds: int
+    notification_digest_interval_seconds: int
+    expense_retention_interval_seconds: int
+    expense_retention_limit: int
+    expense_retention_lock_provider: str
 
 
 class StripeDiagnostics(BaseModel):
@@ -68,4 +99,7 @@ class SystemDiagnosticsResponse(BaseModel):
     release: ReleaseDiagnostics
     runtime: RuntimeDiagnostics
     auth: AuthDiagnostics
+    rate_limits: RateLimitDiagnostics
+    storage: StorageDiagnostics
+    workers: WorkerDiagnostics
     payments: PaymentDiagnostics

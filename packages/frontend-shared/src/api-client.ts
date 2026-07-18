@@ -47,7 +47,38 @@ export type RuntimeDiagnostics = {
 export type AuthDiagnostics = {
   admin_two_factor_required: boolean;
   platform_owner_email: string;
+  platform_owner_alias_count: number;
+  platform_owner_password_configured: boolean;
   seed_test_accounts_enabled: boolean;
+  test_accounts_password_configured: boolean;
+};
+
+export type RateLimitDiagnostics = {
+  admin_action_attempts: number;
+  admin_action_window_seconds: number;
+  login_attempts: number;
+  login_window_seconds: number;
+  password_reset_attempts: number;
+  password_reset_window_seconds: number;
+};
+
+export type StorageDiagnostics = {
+  contribution_expense_evidence_upload_max_bytes: number;
+  malware_scanner_provider: string;
+  malware_scanner_ready: boolean;
+  profile_photo_upload_max_bytes: number;
+  provider: string;
+  retention_days: number;
+  s3_bucket_configured: boolean;
+  verification_upload_max_bytes: number;
+};
+
+export type WorkerDiagnostics = {
+  expense_retention_interval_seconds: number;
+  expense_retention_limit: number;
+  expense_retention_lock_provider: string;
+  mwf_sync_interval_seconds: number;
+  notification_digest_interval_seconds: number;
 };
 
 export type StripeDiagnostics = {
@@ -80,10 +111,13 @@ export type SystemDiagnostics = {
   auth: AuthDiagnostics;
   environment: string;
   payments: PaymentDiagnostics;
+  rate_limits: RateLimitDiagnostics;
   release: ReleaseDiagnostics;
   runtime: RuntimeDiagnostics;
   service: string;
   status: string;
+  storage: StorageDiagnostics;
+  workers: WorkerDiagnostics;
 };
 
 export type MwfAlumniSyncRun = {

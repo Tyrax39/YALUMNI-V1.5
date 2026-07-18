@@ -185,6 +185,8 @@ export function SuperAdminConsole({ pageId }: SuperAdminConsoleProps) {
           <div className="grid gap-5">
             <SystemChecks diagnostics={state.systemDiagnostics} overview={state.overview} />
             <ReleaseReadinessPanel diagnostics={state.systemDiagnostics} />
+            <SecurityHardeningPanel diagnostics={state.systemDiagnostics} />
+            <OperationsHardeningPanel diagnostics={state.systemDiagnostics} />
             <MwfCachePanel />
           </div>
         ) : null}
@@ -554,6 +556,183 @@ function ReleaseReadinessPanel({ diagnostics }: { diagnostics: SystemDiagnostics
   );
 }
 
+function SecurityHardeningPanel({ diagnostics }: { diagnostics: SystemDiagnostics | null }) {
+  if (!diagnostics) {
+    return (
+      <section className="rounded-lg border border-border bg-white p-5 shadow-soft">
+        <p className="text-sm font-semibold text-muted">
+          Security hardening diagnostics will appear here when the system endpoint is reachable.
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="rounded-lg border border-border bg-white p-5 shadow-soft sm:p-6">
+      <div className="grid gap-5 xl:grid-cols-[1fr_1fr]">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.12em] text-muted">Security hardening</p>
+          <h2 className="mt-2 font-display text-2xl font-semibold text-ink">Auth, policy, and guardrails</h2>
+          <p className="mt-3 text-sm leading-6 text-muted">
+            Read-only visibility into owner bootstrap protection, admin 2FA policy, and auth rate-limit
+            settings that still need staging validation before pilot release.
+          </p>
+          <div className="mt-5 grid gap-3 md:grid-cols-2">
+            <SystemMetric label="Owner email" value={diagnostics.auth.platform_owner_email} />
+            <SystemMetric label="Owner aliases" value={String(diagnostics.auth.platform_owner_alias_count)} />
+            <SystemMetric
+              label="Owner password seed"
+              value={diagnostics.auth.platform_owner_password_configured ? "configured" : "missing"}
+            />
+            <SystemMetric
+              label="Admin 2FA policy"
+              value={diagnostics.auth.admin_two_factor_required ? "required" : "not required"}
+            />
+          </div>
+        </div>
+        <div className="grid gap-3">
+          <CheckRow
+            label="Protected owner bootstrap secret"
+            status={diagnostics.auth.platform_owner_password_configured ? "configured" : "missing"}
+          />
+          <CheckRow
+            label="Admin two-factor enforcement"
+            status={diagnostics.auth.admin_two_factor_required ? "required" : "optional"}
+          />
+          <CheckRow
+            label="Seeded test accounts"
+            status={
+              diagnostics.auth.seed_test_accounts_enabled
+                ? diagnostics.auth.test_accounts_password_configured
+                  ? "enabled"
+                  : "enabled without password"
+                : "disabled"
+            }
+          />
+          <CheckRow
+            label="Cross-app CORS origin count"
+            status={`${diagnostics.runtime.cors_origin_count} configured`}
+          />
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-3 md:grid-cols-3">
+        <SystemMetric
+          label="Login rate limit"
+          value={`${diagnostics.rate_limits.login_attempts} / ${formatDuration(diagnostics.rate_limits.login_window_seconds)}`}
+        />
+        <SystemMetric
+          label="Password reset limit"
+          value={`${diagnostics.rate_limits.password_reset_attempts} / ${formatDuration(diagnostics.rate_limits.password_reset_window_seconds)}`}
+        />
+        <SystemMetric
+          label="Admin action limit"
+          value={`${diagnostics.rate_limits.admin_action_attempts} / ${formatDuration(diagnostics.rate_limits.admin_action_window_seconds)}`}
+        />
+      </div>
+    </section>
+  );
+}
+
+function OperationsHardeningPanel({ diagnostics }: { diagnostics: SystemDiagnostics | null }) {
+  if (!diagnostics) {
+    return (
+      <section className="rounded-lg border border-border bg-white p-5 shadow-soft">
+        <p className="text-sm font-semibold text-muted">
+          Storage and worker diagnostics will appear here when the system endpoint is reachable.
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="rounded-lg border border-border bg-white p-5 shadow-soft sm:p-6">
+      <div className="grid gap-5 xl:grid-cols-[1fr_1fr]">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.12em] text-muted">Operations hardening</p>
+          <h2 className="mt-2 font-display text-2xl font-semibold text-ink">Storage, scanning, and workers</h2>
+          <p className="mt-3 text-sm leading-6 text-muted">
+            Read-only readiness checks for upload storage, evidence scanning, and scheduled worker cadence.
+          </p>
+          <div className="mt-5 grid gap-3 md:grid-cols-2">
+            <SystemMetric label="Storage provider" value={diagnostics.storage.provider} />
+            <SystemMetric
+              label="S3 bucket"
+              value={diagnostics.storage.provider === "S3" ? (diagnostics.storage.s3_bucket_configured ? "configured" : "missing") : "not required"}
+            />
+            <SystemMetric
+              label="Malware scanner"
+              value={`${diagnostics.storage.malware_scanner_provider} · ${diagnostics.storage.malware_scanner_ready ? "ready" : "incomplete"}`}
+            />
+            <SystemMetric
+              label="Evidence retention"
+              value={`${diagnostics.storage.retention_days} days`}
+            />
+          </div>
+        </div>
+        <div className="grid gap-3">
+          <CheckRow
+            label="Upload storage target"
+            status={
+              diagnostics.storage.provider === "S3"
+                ? diagnostics.storage.s3_bucket_configured
+                  ? "s3 configured"
+                  : "s3 incomplete"
+                : diagnostics.storage.provider.toLowerCase()
+            }
+          />
+          <CheckRow
+            label="Evidence malware scanning"
+            status={diagnostics.storage.malware_scanner_ready ? "ready" : "incomplete"}
+          />
+          <CheckRow
+            label="Expense retention worker lock"
+            status={diagnostics.workers.expense_retention_lock_provider.toLowerCase()}
+          />
+          <CheckRow
+            label="Redis dependency"
+            status={diagnostics.runtime.redis_configured ? "configured" : "not configured"}
+          />
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-3 md:grid-cols-3 xl:grid-cols-5">
+        <SystemMetric
+          label="Verification uploads"
+          value={formatBytes(diagnostics.storage.verification_upload_max_bytes)}
+        />
+        <SystemMetric
+          label="Profile photo uploads"
+          value={formatBytes(diagnostics.storage.profile_photo_upload_max_bytes)}
+        />
+        <SystemMetric
+          label="Expense evidence uploads"
+          value={formatBytes(diagnostics.storage.contribution_expense_evidence_upload_max_bytes)}
+        />
+        <SystemMetric
+          label="MWF sync cadence"
+          value={formatDuration(diagnostics.workers.mwf_sync_interval_seconds)}
+        />
+        <SystemMetric
+          label="Digest cadence"
+          value={formatDuration(diagnostics.workers.notification_digest_interval_seconds)}
+        />
+      </div>
+
+      <div className="mt-3 grid gap-3 md:grid-cols-2">
+        <SystemMetric
+          label="Expense retention cadence"
+          value={formatDuration(diagnostics.workers.expense_retention_interval_seconds)}
+        />
+        <SystemMetric
+          label="Retention batch limit"
+          value={String(diagnostics.workers.expense_retention_limit)}
+        />
+      </div>
+    </section>
+  );
+}
+
 function MwfCachePanel() {
   const [runs, setRuns] = useState<MwfAlumniSyncRun[]>([]);
   const [status, setStatus] = useState<MwfAlumniSyncStatus | null>(null);
@@ -807,6 +986,16 @@ function formatDuration(seconds: number) {
     return `${seconds / 60}m`;
   }
   return `${seconds}s`;
+}
+
+function formatBytes(value: number) {
+  if (value < 1024) {
+    return `${value} B`;
+  }
+  if (value < 1024 * 1024) {
+    return `${(value / 1024).toFixed(1)} KB`;
+  }
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function shortRuntimeUrl(value: string) {
