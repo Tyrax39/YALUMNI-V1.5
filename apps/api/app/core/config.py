@@ -105,6 +105,10 @@ class Settings(BaseSettings):
     notification_digest_worker_limit: int = 100
     notification_digest_worker_max_items_per_email: int = 10
     notification_digest_worker_include_read: bool = False
+    yalumni_cookie_same_site: str = "lax"
+    yalumni_cookie_secure: str | None = None
+    yalumni_refresh_cookie_days: int = 30
+    yalumni_trusted_origins: str = ""
     s3_endpoint_url: str | None = None
     s3_access_key_id: str | None = None
     s3_secret_access_key: str | None = None
@@ -127,6 +131,14 @@ class Settings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    @property
+    def trusted_origin_list(self) -> list[str]:
+        return [
+            origin.strip()
+            for origin in self.yalumni_trusted_origins.split(",")
+            if origin.strip()
+        ]
 
 
 @lru_cache

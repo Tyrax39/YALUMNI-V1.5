@@ -35,6 +35,7 @@ export type RuntimeDiagnostics = {
   admin_console_base_url: string;
   api_base_url: string;
   cors_origin_count: number;
+  csrf_same_origin_enforced: boolean;
   email_provider: string;
   email_ready: boolean;
   email_from_address_configured: boolean;
@@ -45,6 +46,7 @@ export type RuntimeDiagnostics = {
   smtp_use_tls: boolean;
   smtp_user_configured: boolean;
   super_admin_console_base_url: string;
+  trusted_origin_count: number;
   upload_storage_provider: string;
   web_base_url: string;
 };
@@ -56,6 +58,22 @@ export type AuthDiagnostics = {
   platform_owner_password_configured: boolean;
   seed_test_accounts_enabled: boolean;
   test_accounts_password_configured: boolean;
+  two_factor_recovery_code_count: number;
+  two_factor_recovery_supported: boolean;
+  two_factor_totp_digits: number;
+  two_factor_totp_period_seconds: number;
+};
+
+export type SessionDiagnostics = {
+  access_token_minutes: number;
+  cookie_same_site: string;
+  cookie_secure: boolean;
+  refresh_cookie_days: number;
+  refresh_rotation_enabled: boolean;
+  refresh_token_days: number;
+  trusted_admin_origin_configured: boolean;
+  trusted_member_origin_configured: boolean;
+  trusted_super_admin_origin_configured: boolean;
 };
 
 export type RateLimitDiagnostics = {
@@ -122,6 +140,7 @@ export type SystemDiagnostics = {
   rate_limits: RateLimitDiagnostics;
   release: ReleaseDiagnostics;
   runtime: RuntimeDiagnostics;
+  session: SessionDiagnostics;
   service: string;
   status: string;
   storage: StorageDiagnostics;

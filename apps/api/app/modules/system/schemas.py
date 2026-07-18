@@ -22,6 +22,7 @@ class RuntimeDiagnostics(BaseModel):
     admin_console_base_url: str
     super_admin_console_base_url: str
     cors_origin_count: int
+    trusted_origin_count: int
     redis_configured: bool
     sentry_configured: bool
     upload_storage_provider: str
@@ -32,6 +33,7 @@ class RuntimeDiagnostics(BaseModel):
     smtp_user_configured: bool
     smtp_password_configured: bool
     smtp_use_tls: bool
+    csrf_same_origin_enforced: bool
 
 
 class AuthDiagnostics(BaseModel):
@@ -41,6 +43,22 @@ class AuthDiagnostics(BaseModel):
     admin_two_factor_required: bool
     seed_test_accounts_enabled: bool
     test_accounts_password_configured: bool
+    two_factor_recovery_supported: bool
+    two_factor_recovery_code_count: int
+    two_factor_totp_digits: int
+    two_factor_totp_period_seconds: int
+
+
+class SessionDiagnostics(BaseModel):
+    access_token_minutes: int
+    refresh_token_days: int
+    refresh_cookie_days: int
+    cookie_same_site: str
+    cookie_secure: bool
+    trusted_member_origin_configured: bool
+    trusted_admin_origin_configured: bool
+    trusted_super_admin_origin_configured: bool
+    refresh_rotation_enabled: bool
 
 
 class RateLimitDiagnostics(BaseModel):
@@ -107,6 +125,7 @@ class SystemDiagnosticsResponse(BaseModel):
     release: ReleaseDiagnostics
     runtime: RuntimeDiagnostics
     auth: AuthDiagnostics
+    session: SessionDiagnostics
     rate_limits: RateLimitDiagnostics
     storage: StorageDiagnostics
     workers: WorkerDiagnostics

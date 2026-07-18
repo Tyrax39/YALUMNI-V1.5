@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends
 
 from app.core.config import get_settings
 from app.core.permissions import GlobalRole
+from app.core.totp import RECOVERY_CODE_COUNT, TOTP_DIGITS, TOTP_PERIOD_SECONDS
 from app.modules.auth.dependencies import require_roles
 from app.modules.system.schemas import (
     AuthDiagnostics,
@@ -13,6 +14,7 @@ from app.modules.system.schemas import (
     RateLimitDiagnostics,
     ReleaseDiagnostics,
     RuntimeDiagnostics,
+    SessionDiagnostics,
     StorageDiagnostics,
     StripeDiagnostics,
     SystemDiagnosticsResponse,
@@ -54,6 +56,26 @@ def _expense_retention_lock_ready(settings) -> bool:
     return False
 
 
+def _resolve_cookie_same_site(settings) -> str:
+    configured_value = settings.yalumni_cookie_same_site.strip().lower()
+    if configured_value in {"strict", "none"}:
+        return configured_value
+    return "lax"
+
+
+def _resolve_cookie_secure(settings, same_site: str) -> bool:
+    configured_value = (settings.yalumni_cookie_secure or "").strip().lower()
+    if configured_value == "true":
+        return True
+    if configured_value == "false":
+        return same_site == "none"
+    return settings.app_env.lower() in {"production", "staging"} or same_site == "none"
+
+
+def _origin_configured(origin_value: str, trusted_origins: set[str]) -> bool:
+    return origin_value.rstrip("/") in trusted_origins
+
+
 @router.get("/status", response_model=SystemStatusResponse)
 def system_status() -> SystemStatusResponse:
     settings = get_settings()
@@ -71,6 +93,9 @@ def system_diagnostics(
     _ = current_user
     settings = get_settings()
     webhook_base_url = f"{settings.api_base_url.rstrip('/')}/api/v1/contributions/webhooks"
+    cookie_same_site = _resolve_cookie_same_site(settings)
+    cookie_secure = _resolve_cookie_secure(settings, cookie_same_site)
+    trusted_origins = {origin.rstrip("/") for origin in settings.trusted_origin_list}
 
     stripe = StripeDiagnostics(
         secret_key_configured=bool(settings.stripe_secret_key),
@@ -118,6 +143,7 @@ def system_diagnostics(
             admin_console_base_url=settings.admin_console_base_url,
             super_admin_console_base_url=settings.super_admin_console_base_url,
             cors_origin_count=len(settings.cors_origin_list),
+            trusted_origin_count=len(trusted_origins),
             redis_configured=bool(settings.redis_url),
             sentry_configured=bool(settings.sentry_dsn),
             upload_storage_provider=settings.upload_storage_provider,
@@ -128,6 +154,7 @@ def system_diagnostics(
             smtp_user_configured=bool(settings.smtp_user),
             smtp_password_configured=bool(settings.smtp_password),
             smtp_use_tls=settings.smtp_use_tls,
+            csrf_same_origin_enforced=True,
         ),
         auth=AuthDiagnostics(
             platform_owner_email=settings.platform_owner_email,
@@ -138,6 +165,30 @@ def system_diagnostics(
             admin_two_factor_required=settings.admin_two_factor_required,
             seed_test_accounts_enabled=settings.seed_test_accounts,
             test_accounts_password_configured=bool(settings.test_accounts_password),
+            two_factor_recovery_supported=True,
+            two_factor_recovery_code_count=RECOVERY_CODE_COUNT,
+            two_factor_totp_digits=TOTP_DIGITS,
+            two_factor_totp_period_seconds=TOTP_PERIOD_SECONDS,
+        ),
+        session=SessionDiagnostics(
+            access_token_minutes=settings.jwt_access_token_minutes,
+            refresh_token_days=settings.jwt_refresh_token_days,
+            refresh_cookie_days=settings.yalumni_refresh_cookie_days,
+            cookie_same_site=cookie_same_site,
+            cookie_secure=cookie_secure,
+            trusted_member_origin_configured=_origin_configured(
+                settings.web_base_url,
+                trusted_origins,
+            ),
+            trusted_admin_origin_configured=_origin_configured(
+                settings.admin_console_base_url,
+                trusted_origins,
+            ),
+            trusted_super_admin_origin_configured=_origin_configured(
+                settings.super_admin_console_base_url,
+                trusted_origins,
+            ),
+            refresh_rotation_enabled=True,
         ),
         rate_limits=RateLimitDiagnostics(
             login_attempts=settings.login_rate_limit_attempts,

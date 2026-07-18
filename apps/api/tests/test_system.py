@@ -120,6 +120,9 @@ def test_system_diagnostics_reports_release_and_provider_readiness(
         "FLUTTERWAVE_CHECKOUT_REDIRECT_URL",
         "https://member.example.com/contributions/flutterwave/{payment_intent_id}",
     )
+    monkeypatch.setenv("WEB_BASE_URL", "https://member.example.com")
+    monkeypatch.setenv("ADMIN_CONSOLE_BASE_URL", "https://admin.example.com")
+    monkeypatch.setenv("SUPER_ADMIN_CONSOLE_BASE_URL", "https://superadmin.example.com")
     monkeypatch.setenv("UPLOAD_STORAGE_PROVIDER", "S3")
     monkeypatch.setenv("S3_ENDPOINT_URL", "https://s3.example.com")
     monkeypatch.setenv("S3_REGION", "us-east-1")
@@ -133,6 +136,13 @@ def test_system_diagnostics_reports_release_and_provider_readiness(
     monkeypatch.setenv("SMTP_USER", "smtp-user")
     monkeypatch.setenv("SMTP_PASSWORD", "smtp-password")
     monkeypatch.setenv("SMTP_USE_TLS", "true")
+    monkeypatch.setenv("YALUMNI_COOKIE_SAME_SITE", "none")
+    monkeypatch.setenv("YALUMNI_COOKIE_SECURE", "true")
+    monkeypatch.setenv("YALUMNI_REFRESH_COOKIE_DAYS", "45")
+    monkeypatch.setenv(
+        "YALUMNI_TRUSTED_ORIGINS",
+        "https://member.example.com,https://admin.example.com,https://superadmin.example.com",
+    )
     monkeypatch.setenv("CONTRIBUTION_EXPENSE_EVIDENCE_MALWARE_SCANNER_PROVIDER", "HTTP")
     monkeypatch.setenv("CONTRIBUTION_EXPENSE_EVIDENCE_MALWARE_SCANNER_URL", "https://scanner.example.com/scan")
     monkeypatch.setenv("CONTRIBUTION_EXPENSE_EVIDENCE_RETENTION_DAYS", "180")
@@ -183,10 +193,25 @@ def test_system_diagnostics_reports_release_and_provider_readiness(
     assert payload["runtime"]["smtp_user_configured"] is True
     assert payload["runtime"]["smtp_password_configured"] is True
     assert payload["runtime"]["smtp_use_tls"] is True
+    assert payload["runtime"]["trusted_origin_count"] == 3
+    assert payload["runtime"]["csrf_same_origin_enforced"] is True
     assert payload["auth"]["platform_owner_alias_count"] == 2
     assert payload["auth"]["platform_owner_password_configured"] is True
     assert payload["auth"]["seed_test_accounts_enabled"] is True
     assert payload["auth"]["test_accounts_password_configured"] is True
+    assert payload["auth"]["two_factor_recovery_supported"] is True
+    assert payload["auth"]["two_factor_recovery_code_count"] == 8
+    assert payload["auth"]["two_factor_totp_digits"] == 6
+    assert payload["auth"]["two_factor_totp_period_seconds"] == 30
+    assert payload["session"]["access_token_minutes"] == 15
+    assert payload["session"]["refresh_token_days"] == 30
+    assert payload["session"]["refresh_cookie_days"] == 45
+    assert payload["session"]["cookie_same_site"] == "none"
+    assert payload["session"]["cookie_secure"] is True
+    assert payload["session"]["refresh_rotation_enabled"] is True
+    assert payload["session"]["trusted_member_origin_configured"] is True
+    assert payload["session"]["trusted_admin_origin_configured"] is True
+    assert payload["session"]["trusted_super_admin_origin_configured"] is True
     assert payload["rate_limits"]["login_attempts"] == 7
     assert payload["rate_limits"]["login_window_seconds"] == 600
     assert payload["rate_limits"]["password_reset_attempts"] == 4

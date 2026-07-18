@@ -574,7 +574,7 @@ function ReleaseChecklistPanel({ diagnostics }: { diagnostics: SystemDiagnostics
       <h2 className="mt-2 font-display text-2xl font-semibold text-ink">Staging parity gate</h2>
       <p className="mt-3 text-sm leading-6 text-muted">
         A compact release gate view for the staging deployment: runtime identity, payment readiness,
-        email transport completeness, storage target completeness, and worker lock viability.
+        email transport completeness, session policy completeness, storage target completeness, and worker lock viability.
       </p>
       <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         <CheckRow
@@ -612,6 +612,20 @@ function ReleaseChecklistPanel({ diagnostics }: { diagnostics: SystemDiagnostics
         <CheckRow
           label="Email transport"
           status={diagnostics.runtime.email_ready ? "ready" : "incomplete"}
+        />
+        <CheckRow
+          label="Secure auth cookies"
+          status={diagnostics.session.cookie_secure ? "enabled" : "disabled"}
+        />
+        <CheckRow
+          label="Trusted origin allowlist"
+          status={
+            diagnostics.session.trusted_member_origin_configured &&
+            diagnostics.session.trusted_admin_origin_configured &&
+            diagnostics.session.trusted_super_admin_origin_configured
+              ? "ready"
+              : "incomplete"
+          }
         />
         <CheckRow
           label="Storage target details"
@@ -666,6 +680,18 @@ function SecurityHardeningPanel({ diagnostics }: { diagnostics: SystemDiagnostic
               label="Admin 2FA policy"
               value={diagnostics.auth.admin_two_factor_required ? "required" : "not required"}
             />
+            <SystemMetric
+              label="Recovery codes"
+              value={
+                diagnostics.auth.two_factor_recovery_supported
+                  ? `${diagnostics.auth.two_factor_recovery_code_count} issued per reset`
+                  : "not supported"
+              }
+            />
+            <SystemMetric
+              label="TOTP policy"
+              value={`${diagnostics.auth.two_factor_totp_digits} digits / ${diagnostics.auth.two_factor_totp_period_seconds}s`}
+            />
           </div>
         </div>
         <div className="grid gap-3">
@@ -690,6 +716,14 @@ function SecurityHardeningPanel({ diagnostics }: { diagnostics: SystemDiagnostic
           <CheckRow
             label="Cross-app CORS origin count"
             status={`${diagnostics.runtime.cors_origin_count} configured`}
+          />
+          <CheckRow
+            label="CSRF same-origin enforcement"
+            status={diagnostics.runtime.csrf_same_origin_enforced ? "enabled" : "disabled"}
+          />
+          <CheckRow
+            label="Refresh-token rotation"
+            status={diagnostics.session.refresh_rotation_enabled ? "enabled" : "disabled"}
           />
         </div>
       </div>
@@ -735,6 +769,29 @@ function SecurityHardeningPanel({ diagnostics }: { diagnostics: SystemDiagnostic
                 : "password only"
               : "missing password"
           }
+        />
+      </div>
+
+      <div className="mt-3 grid gap-3 md:grid-cols-3 xl:grid-cols-5">
+        <SystemMetric
+          label="Access token TTL"
+          value={`${diagnostics.session.access_token_minutes}m`}
+        />
+        <SystemMetric
+          label="Refresh token TTL"
+          value={`${diagnostics.session.refresh_token_days}d`}
+        />
+        <SystemMetric
+          label="Refresh cookie TTL"
+          value={`${diagnostics.session.refresh_cookie_days}d`}
+        />
+        <SystemMetric
+          label="Cookie policy"
+          value={`${diagnostics.session.cookie_same_site} / ${diagnostics.session.cookie_secure ? "secure" : "not secure"}`}
+        />
+        <SystemMetric
+          label="Trusted origins"
+          value={`${diagnostics.runtime.trusted_origin_count} configured`}
         />
       </div>
     </section>
