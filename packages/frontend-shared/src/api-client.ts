@@ -37,8 +37,13 @@ export type RuntimeDiagnostics = {
   cors_origin_count: number;
   email_provider: string;
   email_ready: boolean;
+  email_from_address_configured: boolean;
   redis_configured: boolean;
   sentry_configured: boolean;
+  smtp_host_configured: boolean;
+  smtp_password_configured: boolean;
+  smtp_use_tls: boolean;
+  smtp_user_configured: boolean;
   super_admin_console_base_url: string;
   upload_storage_provider: string;
   web_base_url: string;
@@ -70,6 +75,8 @@ export type StorageDiagnostics = {
   provider: string;
   retention_days: number;
   s3_bucket_configured: boolean;
+  s3_endpoint_configured: boolean;
+  s3_region_configured: boolean;
   verification_upload_max_bytes: number;
 };
 
@@ -77,6 +84,7 @@ export type WorkerDiagnostics = {
   expense_retention_interval_seconds: number;
   expense_retention_limit: number;
   expense_retention_lock_provider: string;
+  expense_retention_lock_ready: boolean;
   mwf_sync_interval_seconds: number;
   notification_digest_interval_seconds: number;
 };

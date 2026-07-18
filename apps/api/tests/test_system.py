@@ -121,16 +121,25 @@ def test_system_diagnostics_reports_release_and_provider_readiness(
         "https://member.example.com/contributions/flutterwave/{payment_intent_id}",
     )
     monkeypatch.setenv("UPLOAD_STORAGE_PROVIDER", "S3")
+    monkeypatch.setenv("S3_ENDPOINT_URL", "https://s3.example.com")
+    monkeypatch.setenv("S3_REGION", "us-east-1")
     monkeypatch.setenv("PLATFORM_OWNER_ALIASES", "tshiva@yalumni.org,patient0@yalumni.org")
     monkeypatch.setenv("PLATFORM_OWNER_PASSWORD", "Admin@123-Yalumni/*9")
     monkeypatch.setenv("SEED_TEST_ACCOUNTS", "true")
     monkeypatch.setenv("TEST_ACCOUNTS_PASSWORD", "YalumniTest@12345!")
+    monkeypatch.setenv("EMAIL_PROVIDER", "SMTP")
+    monkeypatch.setenv("EMAIL_FROM_ADDRESS", "noreply@yalumni.org")
+    monkeypatch.setenv("SMTP_HOST", "smtp.example.com")
+    monkeypatch.setenv("SMTP_USER", "smtp-user")
+    monkeypatch.setenv("SMTP_PASSWORD", "smtp-password")
+    monkeypatch.setenv("SMTP_USE_TLS", "true")
     monkeypatch.setenv("CONTRIBUTION_EXPENSE_EVIDENCE_MALWARE_SCANNER_PROVIDER", "HTTP")
     monkeypatch.setenv("CONTRIBUTION_EXPENSE_EVIDENCE_MALWARE_SCANNER_URL", "https://scanner.example.com/scan")
     monkeypatch.setenv("CONTRIBUTION_EXPENSE_EVIDENCE_RETENTION_DAYS", "180")
     monkeypatch.setenv("CONTRIBUTION_EXPENSE_EVIDENCE_RETENTION_WORKER_INTERVAL_SECONDS", "43200")
     monkeypatch.setenv("CONTRIBUTION_EXPENSE_EVIDENCE_RETENTION_WORKER_LIMIT", "250")
     monkeypatch.setenv("CONTRIBUTION_EXPENSE_EVIDENCE_RETENTION_WORKER_LOCK_PROVIDER", "redis")
+    monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
     monkeypatch.setenv("MWF_DIRECTORY_SYNC_WORKER_INTERVAL_SECONDS", "7200")
     monkeypatch.setenv("NOTIFICATION_DIGEST_WORKER_INTERVAL_SECONDS", "5400")
     monkeypatch.setenv("LOGIN_RATE_LIMIT_ATTEMPTS", "7")
@@ -168,6 +177,12 @@ def test_system_diagnostics_reports_release_and_provider_readiness(
     )
     assert payload["runtime"]["upload_storage_provider"] == "S3"
     assert payload["runtime"]["sentry_configured"] is True
+    assert payload["runtime"]["email_ready"] is True
+    assert payload["runtime"]["email_from_address_configured"] is True
+    assert payload["runtime"]["smtp_host_configured"] is True
+    assert payload["runtime"]["smtp_user_configured"] is True
+    assert payload["runtime"]["smtp_password_configured"] is True
+    assert payload["runtime"]["smtp_use_tls"] is True
     assert payload["auth"]["platform_owner_alias_count"] == 2
     assert payload["auth"]["platform_owner_password_configured"] is True
     assert payload["auth"]["seed_test_accounts_enabled"] is True
@@ -178,6 +193,8 @@ def test_system_diagnostics_reports_release_and_provider_readiness(
     assert payload["rate_limits"]["admin_action_attempts"] == 12
     assert payload["storage"]["provider"] == "S3"
     assert payload["storage"]["s3_bucket_configured"] is True
+    assert payload["storage"]["s3_endpoint_configured"] is True
+    assert payload["storage"]["s3_region_configured"] is True
     assert payload["storage"]["malware_scanner_provider"] == "HTTP"
     assert payload["storage"]["malware_scanner_ready"] is True
     assert payload["storage"]["retention_days"] == 180
@@ -186,3 +203,4 @@ def test_system_diagnostics_reports_release_and_provider_readiness(
     assert payload["workers"]["expense_retention_interval_seconds"] == 43200
     assert payload["workers"]["expense_retention_limit"] == 250
     assert payload["workers"]["expense_retention_lock_provider"] == "REDIS"
+    assert payload["workers"]["expense_retention_lock_ready"] is True

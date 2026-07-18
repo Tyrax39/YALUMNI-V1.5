@@ -185,6 +185,7 @@ export function SuperAdminConsole({ pageId }: SuperAdminConsoleProps) {
           <div className="grid gap-5">
             <SystemChecks diagnostics={state.systemDiagnostics} overview={state.overview} />
             <ReleaseReadinessPanel diagnostics={state.systemDiagnostics} />
+            <ReleaseChecklistPanel diagnostics={state.systemDiagnostics} />
             <SecurityHardeningPanel diagnostics={state.systemDiagnostics} />
             <OperationsHardeningPanel diagnostics={state.systemDiagnostics} />
             <MwfCachePanel />
@@ -556,6 +557,83 @@ function ReleaseReadinessPanel({ diagnostics }: { diagnostics: SystemDiagnostics
   );
 }
 
+function ReleaseChecklistPanel({ diagnostics }: { diagnostics: SystemDiagnostics | null }) {
+  if (!diagnostics) {
+    return (
+      <section className="rounded-lg border border-border bg-white p-5 shadow-soft">
+        <p className="text-sm font-semibold text-muted">
+          Release checklist signals will appear here when the system endpoint is reachable.
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="rounded-lg border border-border bg-white p-5 shadow-soft sm:p-6">
+      <p className="text-xs font-bold uppercase tracking-[0.12em] text-muted">Release checklist</p>
+      <h2 className="mt-2 font-display text-2xl font-semibold text-ink">Staging parity gate</h2>
+      <p className="mt-3 text-sm leading-6 text-muted">
+        A compact release gate view for the staging deployment: runtime identity, payment readiness,
+        email transport completeness, storage target completeness, and worker lock viability.
+      </p>
+      <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <CheckRow
+          label="Release metadata reported"
+          status={diagnostics.release.commit_sha ? "reported" : "missing"}
+        />
+        <CheckRow
+          label="Checkout provider ready"
+          status={
+            diagnostics.payments.checkout_provider === "STRIPE"
+              ? diagnostics.payments.stripe.checkout_ready
+                ? "ready"
+                : "incomplete"
+              : diagnostics.payments.checkout_provider === "FLUTTERWAVE"
+                ? diagnostics.payments.flutterwave.checkout_ready
+                  ? "ready"
+                  : "incomplete"
+                : diagnostics.payments.checkout_provider.toLowerCase()
+          }
+        />
+        <CheckRow
+          label="Refund provider ready"
+          status={
+            diagnostics.payments.refund_provider === "STRIPE"
+              ? diagnostics.payments.stripe.secret_key_configured
+                ? "ready"
+                : "incomplete"
+              : diagnostics.payments.refund_provider === "FLUTTERWAVE"
+                ? diagnostics.payments.flutterwave.secret_key_configured
+                  ? "ready"
+                  : "incomplete"
+                : diagnostics.payments.refund_provider.toLowerCase()
+          }
+        />
+        <CheckRow
+          label="Email transport"
+          status={diagnostics.runtime.email_ready ? "ready" : "incomplete"}
+        />
+        <CheckRow
+          label="Storage target details"
+          status={
+            diagnostics.storage.provider === "S3"
+              ? diagnostics.storage.s3_bucket_configured &&
+                diagnostics.storage.s3_endpoint_configured &&
+                diagnostics.storage.s3_region_configured
+                ? "ready"
+                : "incomplete"
+              : diagnostics.storage.provider.toLowerCase()
+          }
+        />
+        <CheckRow
+          label="Retention worker lock"
+          status={diagnostics.workers.expense_retention_lock_ready ? "ready" : "incomplete"}
+        />
+      </div>
+    </section>
+  );
+}
+
 function SecurityHardeningPanel({ diagnostics }: { diagnostics: SystemDiagnostics | null }) {
   if (!diagnostics) {
     return (
@@ -630,6 +708,35 @@ function SecurityHardeningPanel({ diagnostics }: { diagnostics: SystemDiagnostic
           value={`${diagnostics.rate_limits.admin_action_attempts} / ${formatDuration(diagnostics.rate_limits.admin_action_window_seconds)}`}
         />
       </div>
+
+      <div className="mt-3 grid gap-3 md:grid-cols-3 xl:grid-cols-5">
+        <SystemMetric
+          label="Email provider"
+          value={`${diagnostics.runtime.email_provider} · ${diagnostics.runtime.email_ready ? "ready" : "incomplete"}`}
+        />
+        <SystemMetric
+          label="From address"
+          value={diagnostics.runtime.email_from_address_configured ? "configured" : "missing"}
+        />
+        <SystemMetric
+          label="SMTP host"
+          value={diagnostics.runtime.smtp_host_configured ? "configured" : "missing"}
+        />
+        <SystemMetric
+          label="SMTP user"
+          value={diagnostics.runtime.smtp_user_configured ? "configured" : "missing"}
+        />
+        <SystemMetric
+          label="SMTP auth"
+          value={
+            diagnostics.runtime.smtp_password_configured
+              ? diagnostics.runtime.smtp_use_tls
+                ? "password + tls"
+                : "password only"
+              : "missing password"
+          }
+        />
+      </div>
     </section>
   );
 }
@@ -661,6 +768,14 @@ function OperationsHardeningPanel({ diagnostics }: { diagnostics: SystemDiagnost
               value={diagnostics.storage.provider === "S3" ? (diagnostics.storage.s3_bucket_configured ? "configured" : "missing") : "not required"}
             />
             <SystemMetric
+              label="S3 endpoint"
+              value={diagnostics.storage.provider === "S3" ? (diagnostics.storage.s3_endpoint_configured ? "configured" : "missing") : "not required"}
+            />
+            <SystemMetric
+              label="S3 region"
+              value={diagnostics.storage.provider === "S3" ? (diagnostics.storage.s3_region_configured ? "configured" : "missing") : "not required"}
+            />
+            <SystemMetric
               label="Malware scanner"
               value={`${diagnostics.storage.malware_scanner_provider} · ${diagnostics.storage.malware_scanner_ready ? "ready" : "incomplete"}`}
             />
@@ -687,7 +802,11 @@ function OperationsHardeningPanel({ diagnostics }: { diagnostics: SystemDiagnost
           />
           <CheckRow
             label="Expense retention worker lock"
-            status={diagnostics.workers.expense_retention_lock_provider.toLowerCase()}
+            status={
+              diagnostics.workers.expense_retention_lock_ready
+                ? diagnostics.workers.expense_retention_lock_provider.toLowerCase()
+                : `${diagnostics.workers.expense_retention_lock_provider.toLowerCase()} incomplete`
+            }
           />
           <CheckRow
             label="Redis dependency"

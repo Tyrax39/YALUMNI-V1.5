@@ -27,6 +27,11 @@ class RuntimeDiagnostics(BaseModel):
     upload_storage_provider: str
     email_provider: str
     email_ready: bool
+    email_from_address_configured: bool
+    smtp_host_configured: bool
+    smtp_user_configured: bool
+    smtp_password_configured: bool
+    smtp_use_tls: bool
 
 
 class AuthDiagnostics(BaseModel):
@@ -50,6 +55,8 @@ class RateLimitDiagnostics(BaseModel):
 class StorageDiagnostics(BaseModel):
     provider: str
     s3_bucket_configured: bool
+    s3_endpoint_configured: bool
+    s3_region_configured: bool
     malware_scanner_provider: str
     malware_scanner_ready: bool
     retention_days: int
@@ -64,6 +71,7 @@ class WorkerDiagnostics(BaseModel):
     expense_retention_interval_seconds: int
     expense_retention_limit: int
     expense_retention_lock_provider: str
+    expense_retention_lock_ready: bool
 
 
 class StripeDiagnostics(BaseModel):

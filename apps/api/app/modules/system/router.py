@@ -45,6 +45,15 @@ def _malware_scanner_ready(settings) -> bool:
     return bool(settings.contribution_expense_evidence_malware_scanner_url)
 
 
+def _expense_retention_lock_ready(settings) -> bool:
+    provider = settings.contribution_expense_evidence_retention_worker_lock_provider.strip().upper()
+    if provider == "NONE":
+        return True
+    if provider == "REDIS":
+        return bool(settings.redis_url)
+    return False
+
+
 @router.get("/status", response_model=SystemStatusResponse)
 def system_status() -> SystemStatusResponse:
     settings = get_settings()
@@ -114,6 +123,11 @@ def system_diagnostics(
             upload_storage_provider=settings.upload_storage_provider,
             email_provider=settings.email_provider,
             email_ready=_email_ready(settings),
+            email_from_address_configured=bool(settings.email_from_address.strip()),
+            smtp_host_configured=bool(settings.smtp_host),
+            smtp_user_configured=bool(settings.smtp_user),
+            smtp_password_configured=bool(settings.smtp_password),
+            smtp_use_tls=settings.smtp_use_tls,
         ),
         auth=AuthDiagnostics(
             platform_owner_email=settings.platform_owner_email,
@@ -136,6 +150,8 @@ def system_diagnostics(
         storage=StorageDiagnostics(
             provider=settings.upload_storage_provider,
             s3_bucket_configured=bool(settings.s3_bucket_name),
+            s3_endpoint_configured=bool(settings.s3_endpoint_url),
+            s3_region_configured=bool(settings.s3_region),
             malware_scanner_provider=(
                 settings.contribution_expense_evidence_malware_scanner_provider.strip().upper()
             ),
@@ -157,6 +173,7 @@ def system_diagnostics(
             expense_retention_lock_provider=(
                 settings.contribution_expense_evidence_retention_worker_lock_provider.strip().upper()
             ),
+            expense_retention_lock_ready=_expense_retention_lock_ready(settings),
         ),
         payments=PaymentDiagnostics(
             checkout_provider=settings.contribution_checkout_provider.strip().upper(),
