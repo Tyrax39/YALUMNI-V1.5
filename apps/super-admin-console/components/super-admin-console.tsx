@@ -908,9 +908,38 @@ function OperationsHardeningPanel({ diagnostics }: { diagnostics: SystemDiagnost
             status={
               diagnostics.storage.malware_scanner_provider === "SIGNATURE_ONLY"
                 ? "signature only"
-                : diagnostics.storage.malware_scanner_url_configured
-                  ? "configured"
-                  : "missing url"
+                : diagnostics.storage.malware_scanner_transport_ready
+                  ? "ready"
+                  : diagnostics.storage.malware_scanner_url_configured
+                    ? "timeout invalid"
+                    : "missing url"
+            }
+          />
+          <CheckRow
+            label="Expense evidence signatures"
+            status={
+              diagnostics.storage.contribution_expense_evidence_blocked_signature_count > 0
+                ? `${diagnostics.storage.contribution_expense_evidence_blocked_signature_count} blocked`
+                : "none configured"
+            }
+          />
+          <CheckRow
+            label="MWF source endpoints"
+            status={
+              diagnostics.workers.mwf_fellows_source_configured &&
+              diagnostics.workers.mwf_filters_source_configured
+                ? "official endpoints"
+                : "review sources"
+            }
+          />
+          <CheckRow
+            label="Expense category policy"
+            status={
+              diagnostics.workers.expense_category_taxonomy_configured
+                ? diagnostics.workers.expense_category_budget_policy_configured
+                  ? "taxonomy + budget policy"
+                  : "taxonomy only"
+                : "not configured"
             }
           />
           <CheckRow
@@ -957,6 +986,14 @@ function OperationsHardeningPanel({ diagnostics }: { diagnostics: SystemDiagnost
           label="Digest cadence"
           value={formatDuration(diagnostics.workers.notification_digest_interval_seconds)}
         />
+        <SystemMetric
+          label="Digest frequencies"
+          value={
+            diagnostics.workers.notification_digest_frequencies_configured
+              ? String(diagnostics.workers.notification_digest_frequency_count)
+              : "missing"
+          }
+        />
       </div>
 
       <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
@@ -980,16 +1017,32 @@ function OperationsHardeningPanel({ diagnostics }: { diagnostics: SystemDiagnost
           label="Digest payload"
           value={`${diagnostics.workers.notification_digest_limit} runs / ${diagnostics.workers.notification_digest_max_items_per_email} items`}
         />
+        <SystemMetric
+          label="Expense policy mode"
+          value={`${diagnostics.workers.expense_category_enforcement_mode} · ${diagnostics.workers.expense_category_default_currency}`}
+        />
       </div>
 
-      <div className="mt-3 grid gap-3 md:grid-cols-3">
+      <div className="mt-3 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
         <SystemMetric
           label="MWF user agent"
           value={diagnostics.workers.mwf_user_agent_configured ? "configured" : "missing"}
         />
         <SystemMetric
+          label="MWF fellows source"
+          value={diagnostics.workers.mwf_fellows_source_configured ? "official" : "review"}
+        />
+        <SystemMetric
+          label="MWF filters source"
+          value={diagnostics.workers.mwf_filters_source_configured ? "official" : "review"}
+        />
+        <SystemMetric
           label="Digest include read"
           value={diagnostics.workers.notification_digest_include_read ? "enabled" : "disabled"}
+        />
+        <SystemMetric
+          label="Allowed upload types"
+          value={`${diagnostics.storage.verification_upload_allowed_type_count}/${diagnostics.storage.profile_photo_upload_allowed_type_count}/${diagnostics.storage.community_post_media_allowed_type_count}/${diagnostics.storage.contribution_expense_evidence_allowed_type_count}`}
         />
         <SystemMetric
           label="Local disk mode"

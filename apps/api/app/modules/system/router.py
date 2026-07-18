@@ -65,6 +65,10 @@ def _local_upload_paths_configured(settings) -> bool:
     )
 
 
+def _csv_count(value: str) -> int:
+    return len([item for item in value.split(",") if item.strip()])
+
+
 def _s3_credentials_ready(settings) -> bool:
     return bool(
         settings.s3_access_key_id
@@ -91,6 +95,11 @@ def _malware_scanner_transport_ready(settings) -> bool:
         settings.contribution_expense_evidence_malware_scanner_url
         and settings.contribution_expense_evidence_malware_scanner_timeout_seconds > 0
     )
+
+
+def _mwf_source_configured(url: str) -> bool:
+    normalized = url.strip().lower()
+    return normalized.startswith("https://") and "mandelawashingtonfellowship.org" in normalized
 
 
 def _worker_pipeline_ready(settings) -> bool:
@@ -329,6 +338,7 @@ def system_diagnostics(
                 settings.contribution_expense_evidence_malware_scanner_provider.strip().upper()
             ),
             malware_scanner_ready=_malware_scanner_ready(settings),
+            malware_scanner_transport_ready=_malware_scanner_transport_ready(settings),
             malware_scanner_url_configured=bool(
                 settings.contribution_expense_evidence_malware_scanner_url
             ),
@@ -337,17 +347,44 @@ def system_diagnostics(
             ),
             retention_days=settings.contribution_expense_evidence_retention_days,
             verification_upload_max_bytes=settings.verification_upload_max_bytes,
+            verification_upload_allowed_type_count=_csv_count(
+                settings.verification_upload_allowed_types
+            ),
             profile_photo_upload_max_bytes=settings.profile_photo_upload_max_bytes,
+            profile_photo_upload_allowed_type_count=_csv_count(
+                settings.profile_photo_upload_allowed_types
+            ),
             community_post_media_upload_max_bytes=settings.community_post_media_upload_max_bytes,
+            community_post_media_allowed_type_count=_csv_count(
+                settings.community_post_media_allowed_types
+            ),
             contribution_expense_evidence_upload_max_bytes=(
                 settings.contribution_expense_evidence_upload_max_bytes
+            ),
+            contribution_expense_evidence_allowed_type_count=_csv_count(
+                settings.contribution_expense_evidence_allowed_types
+            ),
+            contribution_expense_evidence_blocked_signature_count=_csv_count(
+                settings.contribution_expense_evidence_blocked_signatures
             ),
         ),
         workers=WorkerDiagnostics(
             mwf_sync_interval_seconds=settings.mwf_directory_sync_worker_interval_seconds,
             mwf_cache_ttl_hours=settings.mwf_directory_cache_ttl_hours,
             mwf_user_agent_configured=bool(settings.mwf_directory_user_agent.strip()),
+            mwf_fellows_source_configured=_mwf_source_configured(
+                settings.mwf_directory_fellows_url
+            ),
+            mwf_filters_source_configured=_mwf_source_configured(
+                settings.mwf_directory_filters_url
+            ),
             notification_digest_interval_seconds=settings.notification_digest_worker_interval_seconds,
+            notification_digest_frequency_count=_csv_count(
+                settings.notification_digest_worker_frequencies
+            ),
+            notification_digest_frequencies_configured=bool(
+                settings.notification_digest_worker_frequencies.strip()
+            ),
             notification_digest_limit=settings.notification_digest_worker_limit,
             notification_digest_max_items_per_email=(
                 settings.notification_digest_worker_max_items_per_email
@@ -363,6 +400,18 @@ def system_diagnostics(
             expense_retention_lock_ready=_expense_retention_lock_ready(settings),
             expense_retention_lock_ttl_seconds=(
                 settings.contribution_expense_evidence_retention_worker_lock_ttl_seconds
+            ),
+            expense_category_taxonomy_configured=bool(
+                settings.contribution_expense_category_taxonomy.strip()
+            ),
+            expense_category_budget_policy_configured=bool(
+                settings.contribution_expense_category_budget_policy.strip()
+            ),
+            expense_category_enforcement_mode=(
+                settings.contribution_expense_category_enforcement_mode.strip().upper()
+            ),
+            expense_category_default_currency=(
+                settings.contribution_expense_category_policy_default_currency.strip().upper()
             ),
             worker_pipeline_ready=_worker_pipeline_ready(settings),
         ),

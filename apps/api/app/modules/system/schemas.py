@@ -86,20 +86,30 @@ class StorageDiagnostics(BaseModel):
     s3_credentials_ready: bool
     malware_scanner_provider: str
     malware_scanner_ready: bool
+    malware_scanner_transport_ready: bool
     malware_scanner_url_configured: bool
     malware_scanner_timeout_seconds: float
     retention_days: int
     verification_upload_max_bytes: int
+    verification_upload_allowed_type_count: int
     profile_photo_upload_max_bytes: int
+    profile_photo_upload_allowed_type_count: int
     community_post_media_upload_max_bytes: int
+    community_post_media_allowed_type_count: int
     contribution_expense_evidence_upload_max_bytes: int
+    contribution_expense_evidence_allowed_type_count: int
+    contribution_expense_evidence_blocked_signature_count: int
 
 
 class WorkerDiagnostics(BaseModel):
     mwf_sync_interval_seconds: int
     mwf_cache_ttl_hours: int
     mwf_user_agent_configured: bool
+    mwf_fellows_source_configured: bool
+    mwf_filters_source_configured: bool
     notification_digest_interval_seconds: int
+    notification_digest_frequency_count: int
+    notification_digest_frequencies_configured: bool
     notification_digest_limit: int
     notification_digest_max_items_per_email: int
     notification_digest_include_read: bool
@@ -108,6 +118,10 @@ class WorkerDiagnostics(BaseModel):
     expense_retention_lock_provider: str
     expense_retention_lock_ready: bool
     expense_retention_lock_ttl_seconds: int
+    expense_category_taxonomy_configured: bool
+    expense_category_budget_policy_configured: bool
+    expense_category_enforcement_mode: str
+    expense_category_default_currency: str
     worker_pipeline_ready: bool
 
 

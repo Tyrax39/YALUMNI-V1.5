@@ -156,11 +156,26 @@ def test_system_diagnostics_reports_release_and_provider_readiness(
     monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
     monkeypatch.setenv("MWF_DIRECTORY_CACHE_TTL_HOURS", "36")
     monkeypatch.setenv("MWF_DIRECTORY_SYNC_WORKER_INTERVAL_SECONDS", "7200")
+    monkeypatch.setenv(
+        "MWF_DIRECTORY_FELLOWS_URL",
+        "https://www.mandelawashingtonfellowship.org/wp-json/yali/v1/fellows/",
+    )
+    monkeypatch.setenv(
+        "MWF_DIRECTORY_FILTERS_URL",
+        "https://www.mandelawashingtonfellowship.org/wp-json/yali/v1/directory_filters/",
+    )
     monkeypatch.setenv("MWF_DIRECTORY_USER_AGENT", "YALUMNI-V1.5/1.0 test")
     monkeypatch.setenv("NOTIFICATION_DIGEST_WORKER_INTERVAL_SECONDS", "5400")
+    monkeypatch.setenv("NOTIFICATION_DIGEST_WORKER_FREQUENCIES", "DAILY,WEEKLY,MONTHLY")
     monkeypatch.setenv("NOTIFICATION_DIGEST_WORKER_LIMIT", "150")
     monkeypatch.setenv("NOTIFICATION_DIGEST_WORKER_MAX_ITEMS_PER_EMAIL", "12")
     monkeypatch.setenv("NOTIFICATION_DIGEST_WORKER_INCLUDE_READ", "true")
+    monkeypatch.setenv(
+        "CONTRIBUTION_EXPENSE_CATEGORY_BUDGET_POLICY",
+        "TRAVEL<=2500,TECHNOLOGY<=5000",
+    )
+    monkeypatch.setenv("CONTRIBUTION_EXPENSE_CATEGORY_ENFORCEMENT_MODE", "STRICT")
+    monkeypatch.setenv("CONTRIBUTION_EXPENSE_CATEGORY_POLICY_DEFAULT_CURRENCY", "KES")
     monkeypatch.setenv("LOGIN_RATE_LIMIT_ATTEMPTS", "7")
     monkeypatch.setenv("LOGIN_RATE_LIMIT_WINDOW_SECONDS", "600")
     monkeypatch.setenv("PASSWORD_RESET_RATE_LIMIT_ATTEMPTS", "4")
@@ -250,14 +265,24 @@ def test_system_diagnostics_reports_release_and_provider_readiness(
     assert payload["storage"]["s3_credentials_ready"] is True
     assert payload["storage"]["malware_scanner_provider"] == "HTTP"
     assert payload["storage"]["malware_scanner_ready"] is True
+    assert payload["storage"]["malware_scanner_transport_ready"] is True
     assert payload["storage"]["malware_scanner_url_configured"] is True
     assert payload["storage"]["malware_scanner_timeout_seconds"] == 5.0
     assert payload["storage"]["retention_days"] == 180
+    assert payload["storage"]["verification_upload_allowed_type_count"] == 4
+    assert payload["storage"]["profile_photo_upload_allowed_type_count"] == 3
+    assert payload["storage"]["community_post_media_allowed_type_count"] == 4
+    assert payload["storage"]["contribution_expense_evidence_allowed_type_count"] == 4
+    assert payload["storage"]["contribution_expense_evidence_blocked_signature_count"] == 1
     assert payload["storage"]["community_post_media_upload_max_bytes"] == 8 * 1024 * 1024
     assert payload["workers"]["mwf_sync_interval_seconds"] == 7200
     assert payload["workers"]["mwf_cache_ttl_hours"] == 36
     assert payload["workers"]["mwf_user_agent_configured"] is True
+    assert payload["workers"]["mwf_fellows_source_configured"] is True
+    assert payload["workers"]["mwf_filters_source_configured"] is True
     assert payload["workers"]["notification_digest_interval_seconds"] == 5400
+    assert payload["workers"]["notification_digest_frequency_count"] == 3
+    assert payload["workers"]["notification_digest_frequencies_configured"] is True
     assert payload["workers"]["notification_digest_limit"] == 150
     assert payload["workers"]["notification_digest_max_items_per_email"] == 12
     assert payload["workers"]["notification_digest_include_read"] is True
@@ -266,4 +291,8 @@ def test_system_diagnostics_reports_release_and_provider_readiness(
     assert payload["workers"]["expense_retention_lock_provider"] == "REDIS"
     assert payload["workers"]["expense_retention_lock_ready"] is True
     assert payload["workers"]["expense_retention_lock_ttl_seconds"] == 1800
+    assert payload["workers"]["expense_category_taxonomy_configured"] is True
+    assert payload["workers"]["expense_category_budget_policy_configured"] is True
+    assert payload["workers"]["expense_category_enforcement_mode"] == "STRICT"
+    assert payload["workers"]["expense_category_default_currency"] == "KES"
     assert payload["workers"]["worker_pipeline_ready"] is True

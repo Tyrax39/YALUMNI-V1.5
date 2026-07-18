@@ -90,13 +90,18 @@ export type RateLimitDiagnostics = {
 
 export type StorageDiagnostics = {
   contribution_expense_evidence_upload_max_bytes: number;
+  contribution_expense_evidence_allowed_type_count: number;
+  contribution_expense_evidence_blocked_signature_count: number;
   community_post_media_upload_max_bytes: number;
+  community_post_media_allowed_type_count: number;
   local_upload_paths_configured: boolean;
   malware_scanner_provider: string;
   malware_scanner_ready: boolean;
+  malware_scanner_transport_ready: boolean;
   malware_scanner_timeout_seconds: number;
   malware_scanner_url_configured: boolean;
   profile_photo_upload_max_bytes: number;
+  profile_photo_upload_allowed_type_count: number;
   provider: string;
   retention_days: number;
   s3_access_key_configured: boolean;
@@ -108,17 +113,26 @@ export type StorageDiagnostics = {
   storage_target_ready: boolean;
   uses_local_disk: boolean;
   verification_upload_max_bytes: number;
+  verification_upload_allowed_type_count: number;
 };
 
 export type WorkerDiagnostics = {
+  expense_category_budget_policy_configured: boolean;
+  expense_category_default_currency: string;
+  expense_category_enforcement_mode: string;
+  expense_category_taxonomy_configured: boolean;
   expense_retention_interval_seconds: number;
   expense_retention_limit: number;
   expense_retention_lock_provider: string;
   expense_retention_lock_ready: boolean;
   expense_retention_lock_ttl_seconds: number;
+  mwf_fellows_source_configured: boolean;
+  mwf_filters_source_configured: boolean;
   mwf_sync_interval_seconds: number;
   mwf_cache_ttl_hours: number;
   mwf_user_agent_configured: boolean;
+  notification_digest_frequencies_configured: boolean;
+  notification_digest_frequency_count: number;
   notification_digest_interval_seconds: number;
   notification_digest_include_read: boolean;
   notification_digest_limit: number;
