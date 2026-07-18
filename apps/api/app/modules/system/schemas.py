@@ -75,24 +75,40 @@ class RateLimitDiagnostics(BaseModel):
 
 class StorageDiagnostics(BaseModel):
     provider: str
+    uses_local_disk: bool
+    local_upload_paths_configured: bool
+    storage_target_ready: bool
     s3_bucket_configured: bool
     s3_endpoint_configured: bool
     s3_region_configured: bool
+    s3_access_key_configured: bool
+    s3_secret_key_configured: bool
+    s3_credentials_ready: bool
     malware_scanner_provider: str
     malware_scanner_ready: bool
+    malware_scanner_url_configured: bool
+    malware_scanner_timeout_seconds: float
     retention_days: int
     verification_upload_max_bytes: int
     profile_photo_upload_max_bytes: int
+    community_post_media_upload_max_bytes: int
     contribution_expense_evidence_upload_max_bytes: int
 
 
 class WorkerDiagnostics(BaseModel):
     mwf_sync_interval_seconds: int
+    mwf_cache_ttl_hours: int
+    mwf_user_agent_configured: bool
     notification_digest_interval_seconds: int
+    notification_digest_limit: int
+    notification_digest_max_items_per_email: int
+    notification_digest_include_read: bool
     expense_retention_interval_seconds: int
     expense_retention_limit: int
     expense_retention_lock_provider: str
     expense_retention_lock_ready: bool
+    expense_retention_lock_ttl_seconds: int
+    worker_pipeline_ready: bool
 
 
 class StripeDiagnostics(BaseModel):

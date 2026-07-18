@@ -90,14 +90,23 @@ export type RateLimitDiagnostics = {
 
 export type StorageDiagnostics = {
   contribution_expense_evidence_upload_max_bytes: number;
+  community_post_media_upload_max_bytes: number;
+  local_upload_paths_configured: boolean;
   malware_scanner_provider: string;
   malware_scanner_ready: boolean;
+  malware_scanner_timeout_seconds: number;
+  malware_scanner_url_configured: boolean;
   profile_photo_upload_max_bytes: number;
   provider: string;
   retention_days: number;
+  s3_access_key_configured: boolean;
   s3_bucket_configured: boolean;
+  s3_credentials_ready: boolean;
   s3_endpoint_configured: boolean;
   s3_region_configured: boolean;
+  s3_secret_key_configured: boolean;
+  storage_target_ready: boolean;
+  uses_local_disk: boolean;
   verification_upload_max_bytes: number;
 };
 
@@ -106,8 +115,15 @@ export type WorkerDiagnostics = {
   expense_retention_limit: number;
   expense_retention_lock_provider: string;
   expense_retention_lock_ready: boolean;
+  expense_retention_lock_ttl_seconds: number;
   mwf_sync_interval_seconds: number;
+  mwf_cache_ttl_hours: number;
+  mwf_user_agent_configured: boolean;
   notification_digest_interval_seconds: number;
+  notification_digest_include_read: boolean;
+  notification_digest_limit: number;
+  notification_digest_max_items_per_email: number;
+  worker_pipeline_ready: boolean;
 };
 
 export type StripeDiagnostics = {

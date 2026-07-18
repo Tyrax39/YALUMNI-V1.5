@@ -849,6 +849,10 @@ function OperationsHardeningPanel({ diagnostics }: { diagnostics: SystemDiagnost
           <div className="mt-5 grid gap-3 md:grid-cols-2">
             <SystemMetric label="Storage provider" value={diagnostics.storage.provider} />
             <SystemMetric
+              label="Storage target"
+              value={diagnostics.storage.storage_target_ready ? "ready" : "incomplete"}
+            />
+            <SystemMetric
               label="S3 bucket"
               value={diagnostics.storage.provider === "S3" ? (diagnostics.storage.s3_bucket_configured ? "configured" : "missing") : "not required"}
             />
@@ -859,6 +863,16 @@ function OperationsHardeningPanel({ diagnostics }: { diagnostics: SystemDiagnost
             <SystemMetric
               label="S3 region"
               value={diagnostics.storage.provider === "S3" ? (diagnostics.storage.s3_region_configured ? "configured" : "missing") : "not required"}
+            />
+            <SystemMetric
+              label="S3 credentials"
+              value={
+                diagnostics.storage.provider === "S3"
+                  ? diagnostics.storage.s3_credentials_ready
+                    ? "configured"
+                    : "incomplete"
+                  : "not required"
+              }
             />
             <SystemMetric
               label="Malware scanner"
@@ -875,15 +889,29 @@ function OperationsHardeningPanel({ diagnostics }: { diagnostics: SystemDiagnost
             label="Upload storage target"
             status={
               diagnostics.storage.provider === "S3"
-                ? diagnostics.storage.s3_bucket_configured
+                ? diagnostics.storage.storage_target_ready
                   ? "s3 configured"
                   : "s3 incomplete"
                 : diagnostics.storage.provider.toLowerCase()
             }
           />
           <CheckRow
+            label="Local upload paths"
+            status={diagnostics.storage.local_upload_paths_configured ? "configured" : "incomplete"}
+          />
+          <CheckRow
             label="Evidence malware scanning"
             status={diagnostics.storage.malware_scanner_ready ? "ready" : "incomplete"}
+          />
+          <CheckRow
+            label="Scanner transport"
+            status={
+              diagnostics.storage.malware_scanner_provider === "SIGNATURE_ONLY"
+                ? "signature only"
+                : diagnostics.storage.malware_scanner_url_configured
+                  ? "configured"
+                  : "missing url"
+            }
           />
           <CheckRow
             label="Expense retention worker lock"
@@ -896,6 +924,10 @@ function OperationsHardeningPanel({ diagnostics }: { diagnostics: SystemDiagnost
           <CheckRow
             label="Redis dependency"
             status={diagnostics.runtime.redis_configured ? "configured" : "not configured"}
+          />
+          <CheckRow
+            label="Worker pipeline"
+            status={diagnostics.workers.worker_pipeline_ready ? "ready" : "incomplete"}
           />
         </div>
       </div>
@@ -914,6 +946,10 @@ function OperationsHardeningPanel({ diagnostics }: { diagnostics: SystemDiagnost
           value={formatBytes(diagnostics.storage.contribution_expense_evidence_upload_max_bytes)}
         />
         <SystemMetric
+          label="Community media uploads"
+          value={formatBytes(diagnostics.storage.community_post_media_upload_max_bytes)}
+        />
+        <SystemMetric
           label="MWF sync cadence"
           value={formatDuration(diagnostics.workers.mwf_sync_interval_seconds)}
         />
@@ -923,7 +959,7 @@ function OperationsHardeningPanel({ diagnostics }: { diagnostics: SystemDiagnost
         />
       </div>
 
-      <div className="mt-3 grid gap-3 md:grid-cols-2">
+      <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         <SystemMetric
           label="Expense retention cadence"
           value={formatDuration(diagnostics.workers.expense_retention_interval_seconds)}
@@ -931,6 +967,33 @@ function OperationsHardeningPanel({ diagnostics }: { diagnostics: SystemDiagnost
         <SystemMetric
           label="Retention batch limit"
           value={String(diagnostics.workers.expense_retention_limit)}
+        />
+        <SystemMetric
+          label="Lock TTL"
+          value={formatDuration(diagnostics.workers.expense_retention_lock_ttl_seconds)}
+        />
+        <SystemMetric
+          label="MWF cache TTL"
+          value={`${diagnostics.workers.mwf_cache_ttl_hours}h`}
+        />
+        <SystemMetric
+          label="Digest payload"
+          value={`${diagnostics.workers.notification_digest_limit} runs / ${diagnostics.workers.notification_digest_max_items_per_email} items`}
+        />
+      </div>
+
+      <div className="mt-3 grid gap-3 md:grid-cols-3">
+        <SystemMetric
+          label="MWF user agent"
+          value={diagnostics.workers.mwf_user_agent_configured ? "configured" : "missing"}
+        />
+        <SystemMetric
+          label="Digest include read"
+          value={diagnostics.workers.notification_digest_include_read ? "enabled" : "disabled"}
+        />
+        <SystemMetric
+          label="Local disk mode"
+          value={diagnostics.storage.uses_local_disk ? "enabled" : "disabled"}
         />
       </div>
     </section>

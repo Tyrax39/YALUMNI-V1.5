@@ -126,6 +126,8 @@ def test_system_diagnostics_reports_release_and_provider_readiness(
     monkeypatch.setenv("SUPER_ADMIN_CONSOLE_BASE_URL", "https://superadmin.example.com")
     monkeypatch.setenv("UPLOAD_STORAGE_PROVIDER", "S3")
     monkeypatch.setenv("S3_ENDPOINT_URL", "https://s3.example.com")
+    monkeypatch.setenv("S3_ACCESS_KEY_ID", "access-key")
+    monkeypatch.setenv("S3_SECRET_ACCESS_KEY", "secret-key")
     monkeypatch.setenv("S3_REGION", "us-east-1")
     monkeypatch.setenv("PLATFORM_OWNER_ALIASES", "tshiva@yalumni.org,patient0@yalumni.org")
     monkeypatch.setenv("PLATFORM_OWNER_PASSWORD", "Admin@123-Yalumni/*9")
@@ -150,9 +152,15 @@ def test_system_diagnostics_reports_release_and_provider_readiness(
     monkeypatch.setenv("CONTRIBUTION_EXPENSE_EVIDENCE_RETENTION_WORKER_INTERVAL_SECONDS", "43200")
     monkeypatch.setenv("CONTRIBUTION_EXPENSE_EVIDENCE_RETENTION_WORKER_LIMIT", "250")
     monkeypatch.setenv("CONTRIBUTION_EXPENSE_EVIDENCE_RETENTION_WORKER_LOCK_PROVIDER", "redis")
+    monkeypatch.setenv("CONTRIBUTION_EXPENSE_EVIDENCE_RETENTION_WORKER_LOCK_TTL_SECONDS", "1800")
     monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
+    monkeypatch.setenv("MWF_DIRECTORY_CACHE_TTL_HOURS", "36")
     monkeypatch.setenv("MWF_DIRECTORY_SYNC_WORKER_INTERVAL_SECONDS", "7200")
+    monkeypatch.setenv("MWF_DIRECTORY_USER_AGENT", "YALUMNI-V1.5/1.0 test")
     monkeypatch.setenv("NOTIFICATION_DIGEST_WORKER_INTERVAL_SECONDS", "5400")
+    monkeypatch.setenv("NOTIFICATION_DIGEST_WORKER_LIMIT", "150")
+    monkeypatch.setenv("NOTIFICATION_DIGEST_WORKER_MAX_ITEMS_PER_EMAIL", "12")
+    monkeypatch.setenv("NOTIFICATION_DIGEST_WORKER_INCLUDE_READ", "true")
     monkeypatch.setenv("LOGIN_RATE_LIMIT_ATTEMPTS", "7")
     monkeypatch.setenv("LOGIN_RATE_LIMIT_WINDOW_SECONDS", "600")
     monkeypatch.setenv("PASSWORD_RESET_RATE_LIMIT_ATTEMPTS", "4")
@@ -231,15 +239,31 @@ def test_system_diagnostics_reports_release_and_provider_readiness(
     assert payload["rate_limits"]["password_reset_attempts"] == 4
     assert payload["rate_limits"]["admin_action_attempts"] == 12
     assert payload["storage"]["provider"] == "S3"
+    assert payload["storage"]["uses_local_disk"] is False
+    assert payload["storage"]["local_upload_paths_configured"] is True
+    assert payload["storage"]["storage_target_ready"] is True
     assert payload["storage"]["s3_bucket_configured"] is True
     assert payload["storage"]["s3_endpoint_configured"] is True
     assert payload["storage"]["s3_region_configured"] is True
+    assert payload["storage"]["s3_access_key_configured"] is True
+    assert payload["storage"]["s3_secret_key_configured"] is True
+    assert payload["storage"]["s3_credentials_ready"] is True
     assert payload["storage"]["malware_scanner_provider"] == "HTTP"
     assert payload["storage"]["malware_scanner_ready"] is True
+    assert payload["storage"]["malware_scanner_url_configured"] is True
+    assert payload["storage"]["malware_scanner_timeout_seconds"] == 5.0
     assert payload["storage"]["retention_days"] == 180
+    assert payload["storage"]["community_post_media_upload_max_bytes"] == 8 * 1024 * 1024
     assert payload["workers"]["mwf_sync_interval_seconds"] == 7200
+    assert payload["workers"]["mwf_cache_ttl_hours"] == 36
+    assert payload["workers"]["mwf_user_agent_configured"] is True
     assert payload["workers"]["notification_digest_interval_seconds"] == 5400
+    assert payload["workers"]["notification_digest_limit"] == 150
+    assert payload["workers"]["notification_digest_max_items_per_email"] == 12
+    assert payload["workers"]["notification_digest_include_read"] is True
     assert payload["workers"]["expense_retention_interval_seconds"] == 43200
     assert payload["workers"]["expense_retention_limit"] == 250
     assert payload["workers"]["expense_retention_lock_provider"] == "REDIS"
     assert payload["workers"]["expense_retention_lock_ready"] is True
+    assert payload["workers"]["expense_retention_lock_ttl_seconds"] == 1800
+    assert payload["workers"]["worker_pipeline_ready"] is True

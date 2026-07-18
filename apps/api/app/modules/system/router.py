@@ -56,6 +56,58 @@ def _expense_retention_lock_ready(settings) -> bool:
     return False
 
 
+def _local_upload_paths_configured(settings) -> bool:
+    return bool(
+        settings.verification_upload_dir
+        and settings.profile_photo_upload_dir
+        and settings.community_post_media_upload_dir
+        and settings.contribution_expense_evidence_upload_dir
+    )
+
+
+def _s3_credentials_ready(settings) -> bool:
+    return bool(
+        settings.s3_access_key_id
+        and settings.s3_secret_access_key
+        and settings.s3_bucket_name
+        and settings.s3_region
+    )
+
+
+def _storage_target_ready(settings) -> bool:
+    provider = settings.upload_storage_provider.strip().upper()
+    if provider == "LOCAL":
+        return _local_upload_paths_configured(settings)
+    if provider == "S3":
+        return _s3_credentials_ready(settings)
+    return False
+
+
+def _malware_scanner_transport_ready(settings) -> bool:
+    provider = settings.contribution_expense_evidence_malware_scanner_provider.strip().upper()
+    if provider == "SIGNATURE_ONLY":
+        return True
+    return bool(
+        settings.contribution_expense_evidence_malware_scanner_url
+        and settings.contribution_expense_evidence_malware_scanner_timeout_seconds > 0
+    )
+
+
+def _worker_pipeline_ready(settings) -> bool:
+    return bool(
+        settings.mwf_directory_cache_ttl_hours > 0
+        and settings.mwf_directory_sync_worker_interval_seconds > 0
+        and settings.mwf_directory_user_agent.strip()
+        and settings.notification_digest_worker_interval_seconds > 0
+        and settings.notification_digest_worker_limit > 0
+        and settings.notification_digest_worker_max_items_per_email > 0
+        and settings.contribution_expense_evidence_retention_worker_interval_seconds > 0
+        and settings.contribution_expense_evidence_retention_worker_limit > 0
+        and settings.contribution_expense_evidence_retention_worker_lock_ttl_seconds > 0
+        and _expense_retention_lock_ready(settings)
+    )
+
+
 def _resolve_cookie_same_site(settings) -> str:
     configured_value = settings.yalumni_cookie_same_site.strip().lower()
     if configured_value in {"strict", "none"}:
@@ -264,23 +316,43 @@ def system_diagnostics(
         ),
         storage=StorageDiagnostics(
             provider=settings.upload_storage_provider,
+            uses_local_disk=settings.upload_storage_provider.strip().upper() == "LOCAL",
+            local_upload_paths_configured=_local_upload_paths_configured(settings),
+            storage_target_ready=_storage_target_ready(settings),
             s3_bucket_configured=bool(settings.s3_bucket_name),
             s3_endpoint_configured=bool(settings.s3_endpoint_url),
             s3_region_configured=bool(settings.s3_region),
+            s3_access_key_configured=bool(settings.s3_access_key_id),
+            s3_secret_key_configured=bool(settings.s3_secret_access_key),
+            s3_credentials_ready=_s3_credentials_ready(settings),
             malware_scanner_provider=(
                 settings.contribution_expense_evidence_malware_scanner_provider.strip().upper()
             ),
             malware_scanner_ready=_malware_scanner_ready(settings),
+            malware_scanner_url_configured=bool(
+                settings.contribution_expense_evidence_malware_scanner_url
+            ),
+            malware_scanner_timeout_seconds=(
+                settings.contribution_expense_evidence_malware_scanner_timeout_seconds
+            ),
             retention_days=settings.contribution_expense_evidence_retention_days,
             verification_upload_max_bytes=settings.verification_upload_max_bytes,
             profile_photo_upload_max_bytes=settings.profile_photo_upload_max_bytes,
+            community_post_media_upload_max_bytes=settings.community_post_media_upload_max_bytes,
             contribution_expense_evidence_upload_max_bytes=(
                 settings.contribution_expense_evidence_upload_max_bytes
             ),
         ),
         workers=WorkerDiagnostics(
             mwf_sync_interval_seconds=settings.mwf_directory_sync_worker_interval_seconds,
+            mwf_cache_ttl_hours=settings.mwf_directory_cache_ttl_hours,
+            mwf_user_agent_configured=bool(settings.mwf_directory_user_agent.strip()),
             notification_digest_interval_seconds=settings.notification_digest_worker_interval_seconds,
+            notification_digest_limit=settings.notification_digest_worker_limit,
+            notification_digest_max_items_per_email=(
+                settings.notification_digest_worker_max_items_per_email
+            ),
+            notification_digest_include_read=settings.notification_digest_worker_include_read,
             expense_retention_interval_seconds=(
                 settings.contribution_expense_evidence_retention_worker_interval_seconds
             ),
@@ -289,6 +361,10 @@ def system_diagnostics(
                 settings.contribution_expense_evidence_retention_worker_lock_provider.strip().upper()
             ),
             expense_retention_lock_ready=_expense_retention_lock_ready(settings),
+            expense_retention_lock_ttl_seconds=(
+                settings.contribution_expense_evidence_retention_worker_lock_ttl_seconds
+            ),
+            worker_pipeline_ready=_worker_pipeline_ready(settings),
         ),
         payments=PaymentDiagnostics(
             checkout_provider=settings.contribution_checkout_provider.strip().upper(),
