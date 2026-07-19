@@ -102,6 +102,22 @@ The release is rejected if any endpoint is unavailable, reports the wrong
 service identity, omits release metadata, or differs from the expected SHA or
 version.
 
+## Current Verified Staging Release
+
+Verified on July 19, 2026:
+
+- Git SHA: `640dc1f`
+- Release version: `v1.5.0-staging-20260719`
+- ACR builds: API `cag`, member `cah`, admin `caf`, super-admin `caj`
+- API health and migrations: passed
+- Four-service release parity: passed
+- Member, admin, and super-admin route smokes: passed
+- Credentialed super-admin access across all three frontend apps: passed
+
+Stripe and Flutterwave staging credentials are not configured in the current
+Azure environment. The protected diagnostics endpoint therefore correctly
+reports `LOCAL_TEST` provider mode and payment staging readiness as false.
+
 ## Staging Limitations
 
 This staging deployment intentionally does not add custom domains, Key Vault,
