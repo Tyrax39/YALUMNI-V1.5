@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel
 
 
@@ -101,6 +103,19 @@ class StorageDiagnostics(BaseModel):
     contribution_expense_evidence_blocked_signature_count: int
 
 
+class StorageProbeResponse(BaseModel):
+    provider: str
+    reachable: bool
+    checked_at: datetime
+    detail: str
+
+
+class WorkerRuntimeDiagnostics(BaseModel):
+    last_run_at: datetime | None
+    last_run_status: str
+    overdue: bool
+
+
 class WorkerDiagnostics(BaseModel):
     mwf_sync_interval_seconds: int
     mwf_cache_ttl_hours: int
@@ -123,6 +138,9 @@ class WorkerDiagnostics(BaseModel):
     expense_category_enforcement_mode: str
     expense_category_default_currency: str
     worker_pipeline_ready: bool
+    mwf_runtime: WorkerRuntimeDiagnostics
+    notification_digest_runtime: WorkerRuntimeDiagnostics
+    expense_retention_runtime: WorkerRuntimeDiagnostics
 
 
 class StripeDiagnostics(BaseModel):

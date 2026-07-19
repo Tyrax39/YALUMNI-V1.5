@@ -1,4 +1,5 @@
 from collections.abc import Generator
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -11,7 +12,9 @@ from app.core.database import Base, get_db_session
 from app.core.email import clear_email_outbox
 from app.core.rate_limit import clear_rate_limits
 from app.main import app
+from app.modules.alumni.models import MwfAlumniSyncRun
 from app.modules.auth import models as auth_models
+from app.modules.auth.models import SecurityEvent
 
 _ = auth_models
 
@@ -79,6 +82,17 @@ def test_system_diagnostics_requires_super_admin(client: TestClient) -> None:
 
     response = client.get(
         "/api/v1/system/diagnostics",
+        headers=auth_headers(registered["access_token"]),
+    )
+
+    assert response.status_code == 403
+
+
+def test_storage_probe_requires_super_admin(client: TestClient) -> None:
+    registered = register_user(client, "storage.member@example.com")
+
+    response = client.post(
+        "/api/v1/system/storage-probe",
         headers=auth_headers(registered["access_token"]),
     )
 
@@ -296,3 +310,120 @@ def test_system_diagnostics_reports_release_and_provider_readiness(
     assert payload["workers"]["expense_category_enforcement_mode"] == "STRICT"
     assert payload["workers"]["expense_category_default_currency"] == "KES"
     assert payload["workers"]["worker_pipeline_ready"] is True
+    assert payload["workers"]["mwf_runtime"] == {
+        "last_run_at": None,
+        "last_run_status": "never",
+        "overdue": True,
+    }
+    assert payload["workers"]["notification_digest_runtime"] == {
+        "last_run_at": None,
+        "last_run_status": "never",
+        "overdue": True,
+    }
+    assert payload["workers"]["expense_retention_runtime"] == {
+        "last_run_at": None,
+        "last_run_status": "never",
+        "overdue": True,
+    }
+
+
+def test_system_diagnostics_reports_worker_execution_recency() -> None:
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    testing_session_local = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    Base.metadata.create_all(bind=engine)
+
+    def override_get_db_session() -> Generator[Session]:
+        db = testing_session_local()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    app.dependency_overrides[get_db_session] = override_get_db_session
+    now = datetime.now(UTC)
+    try:
+        with TestClient(app) as test_client:
+            registered = register_user(test_client, "worker.owner@example.com")
+            bootstrap_response = test_client.post(
+                "/api/v1/auth/dev/bootstrap-admin",
+                headers=auth_headers(registered["access_token"]),
+            )
+            assert bootstrap_response.status_code == 200
+
+            with testing_session_local() as db:
+                db.add_all(
+                    [
+                        MwfAlumniSyncRun(
+                            source_url="https://www.mandelawashingtonfellowship.org/directory/",
+                            status="SUCCEEDED",
+                            started_at=now - timedelta(minutes=3),
+                            finished_at=now - timedelta(minutes=2),
+                        ),
+                        SecurityEvent(
+                            event_type="notifications.email_digest_worker.daily_succeeded",
+                            metadata_json={"status": "succeeded"},
+                            created_at=now - timedelta(minutes=2),
+                            updated_at=now - timedelta(minutes=1),
+                        ),
+                        SecurityEvent(
+                            event_type="contributions.expense_evidence_retention_worker_run",
+                            metadata_json={"status": "succeeded"},
+                            created_at=now - timedelta(minutes=2),
+                            updated_at=now - timedelta(minutes=1),
+                        ),
+                    ]
+                )
+                db.commit()
+
+            response = test_client.get(
+                "/api/v1/system/diagnostics",
+                headers=auth_headers(registered["access_token"]),
+            )
+            assert response.status_code == 200
+            workers = response.json()["workers"]
+            assert workers["mwf_runtime"]["last_run_status"] == "succeeded"
+            assert workers["mwf_runtime"]["overdue"] is False
+            assert workers["notification_digest_runtime"]["last_run_status"] == "succeeded"
+            assert workers["notification_digest_runtime"]["overdue"] is False
+            assert workers["expense_retention_runtime"]["last_run_status"] == "succeeded"
+            assert workers["expense_retention_runtime"]["overdue"] is False
+    finally:
+        app.dependency_overrides.clear()
+        Base.metadata.drop_all(bind=engine)
+
+
+def test_storage_probe_reports_local_connectivity(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    registered = register_user(client, "storage.owner@example.com")
+    bootstrap_response = client.post(
+        "/api/v1/auth/dev/bootstrap-admin",
+        headers=auth_headers(registered["access_token"]),
+    )
+    assert bootstrap_response.status_code == 200
+    monkeypatch.setenv("UPLOAD_STORAGE_PROVIDER", "LOCAL")
+    for variable in (
+        "VERIFICATION_UPLOAD_DIR",
+        "PROFILE_PHOTO_UPLOAD_DIR",
+        "COMMUNITY_POST_MEDIA_UPLOAD_DIR",
+        "CONTRIBUTION_EXPENSE_EVIDENCE_UPLOAD_DIR",
+    ):
+        monkeypatch.setenv(variable, str(tmp_path))
+    get_settings.cache_clear()
+    try:
+        response = client.post(
+            "/api/v1/system/storage-probe",
+            headers=auth_headers(registered["access_token"]),
+        )
+    finally:
+        get_settings.cache_clear()
+
+    assert response.status_code == 200
+    assert response.json()["provider"] == "LOCAL"
+    assert response.json()["reachable"] is True

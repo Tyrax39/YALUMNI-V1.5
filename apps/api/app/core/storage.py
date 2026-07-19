@@ -1,4 +1,6 @@
+import os
 from dataclasses import dataclass
+from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import Protocol
@@ -7,6 +9,7 @@ from fastapi import HTTPException, status
 from fastapi.responses import FileResponse, StreamingResponse
 
 from app.core.config import get_settings
+from app.core.security import utcnow
 
 
 class UploadCategory(StrEnum):
@@ -20,6 +23,14 @@ class UploadCategory(StrEnum):
 class StorageObject:
     provider: str
     key: str
+
+
+@dataclass(frozen=True)
+class StorageProbeResult:
+    provider: str
+    reachable: bool
+    checked_at: datetime
+    detail: str
 
 
 class StorageBackend(Protocol):
@@ -256,6 +267,55 @@ def storage_backend(provider: str | None = None) -> StorageBackend:
     raise HTTPException(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         detail=f"Unsupported upload storage provider: {normalized_provider}",
+    )
+
+
+def probe_storage_backend(provider: str | None = None) -> StorageProbeResult:
+    normalized_provider = normalized_storage_provider(provider)
+    checked_at = utcnow()
+
+    try:
+        if normalized_provider == "LOCAL":
+            upload_paths = [
+                Path(_local_base_dir(category)).resolve() for category in UploadCategory
+            ]
+            reachable = all(
+                path.is_dir() and os.access(path, os.R_OK | os.W_OK) for path in upload_paths
+            )
+            return StorageProbeResult(
+                provider=normalized_provider,
+                reachable=reachable,
+                checked_at=checked_at,
+                detail=(
+                    "All configured local upload paths are readable and writable"
+                    if reachable
+                    else "One or more configured local upload paths are unavailable"
+                ),
+            )
+
+        if normalized_provider == "S3":
+            backend = S3StorageBackend()
+            client, bucket_name = backend._client_and_bucket()
+            client.head_bucket(Bucket=bucket_name)
+            return StorageProbeResult(
+                provider=normalized_provider,
+                reachable=True,
+                checked_at=checked_at,
+                detail="Configured S3 bucket is reachable",
+            )
+    except Exception:
+        return StorageProbeResult(
+            provider=normalized_provider,
+            reachable=False,
+            checked_at=checked_at,
+            detail="Configured storage backend could not be reached",
+        )
+
+    return StorageProbeResult(
+        provider=normalized_provider,
+        reachable=False,
+        checked_at=checked_at,
+        detail="Configured storage provider is unsupported",
     )
 
 

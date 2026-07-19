@@ -20,6 +20,7 @@ import {
   fetchMwfSyncStatus,
   fetchSessionUser,
   fetchSystemDiagnostics,
+  probeStorageBackend,
   refreshMwfSync,
   isSuperAdmin
 } from "@yalumni/frontend-shared";
@@ -827,6 +828,27 @@ function SecurityHardeningPanel({ diagnostics }: { diagnostics: SystemDiagnostic
 }
 
 function OperationsHardeningPanel({ diagnostics }: { diagnostics: SystemDiagnostics | null }) {
+  const [probeMessage, setProbeMessage] = useState<string | null>(null);
+  const [probeRunning, setProbeRunning] = useState(false);
+  const [probeReachable, setProbeReachable] = useState<boolean | null>(null);
+
+  async function handleStorageProbe() {
+    setProbeRunning(true);
+    setProbeMessage(null);
+    try {
+      const response = await probeStorageBackend();
+      setProbeReachable(response.reachable);
+      setProbeMessage(`${response.detail} · ${formatDate(response.checked_at)}`);
+    } catch (caught) {
+      setProbeReachable(false);
+      setProbeMessage(
+        caught instanceof ApiClientError ? caught.message : "Storage connectivity check failed."
+      );
+    } finally {
+      setProbeRunning(false);
+    }
+  }
+
   if (!diagnostics) {
     return (
       <section className="rounded-lg border border-border bg-white p-5 shadow-soft">
@@ -846,6 +868,22 @@ function OperationsHardeningPanel({ diagnostics }: { diagnostics: SystemDiagnost
           <p className="mt-3 text-sm leading-6 text-muted">
             Read-only readiness checks for upload storage, evidence scanning, and scheduled worker cadence.
           </p>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <button
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={probeRunning}
+              onClick={handleStorageProbe}
+              type="button"
+            >
+              <RefreshCw aria-hidden="true" className={`h-4 w-4 ${probeRunning ? "animate-spin" : ""}`} />
+              {probeRunning ? "Checking storage" : "Check storage connectivity"}
+            </button>
+            {probeMessage ? (
+              <p className={`text-sm font-semibold ${probeReachable ? "text-secondary" : "text-danger"}`}>
+                {probeMessage}
+              </p>
+            ) : null}
+          </div>
           <div className="mt-5 grid gap-3 md:grid-cols-2">
             <SystemMetric label="Storage provider" value={diagnostics.storage.provider} />
             <SystemMetric
@@ -958,6 +996,30 @@ function OperationsHardeningPanel({ diagnostics }: { diagnostics: SystemDiagnost
             label="Worker pipeline"
             status={diagnostics.workers.worker_pipeline_ready ? "ready" : "incomplete"}
           />
+          <CheckRow
+            label="MWF worker execution"
+            status={
+              diagnostics.workers.mwf_runtime.overdue
+                ? `${diagnostics.workers.mwf_runtime.last_run_status} · overdue`
+                : diagnostics.workers.mwf_runtime.last_run_status
+            }
+          />
+          <CheckRow
+            label="Digest worker execution"
+            status={
+              diagnostics.workers.notification_digest_runtime.overdue
+                ? `${diagnostics.workers.notification_digest_runtime.last_run_status} · overdue`
+                : diagnostics.workers.notification_digest_runtime.last_run_status
+            }
+          />
+          <CheckRow
+            label="Retention worker execution"
+            status={
+              diagnostics.workers.expense_retention_runtime.overdue
+                ? `${diagnostics.workers.expense_retention_runtime.last_run_status} · overdue`
+                : diagnostics.workers.expense_retention_runtime.last_run_status
+            }
+          />
         </div>
       </div>
 
@@ -1020,6 +1082,30 @@ function OperationsHardeningPanel({ diagnostics }: { diagnostics: SystemDiagnost
         <SystemMetric
           label="Expense policy mode"
           value={`${diagnostics.workers.expense_category_enforcement_mode} · ${diagnostics.workers.expense_category_default_currency}`}
+        />
+        <SystemMetric
+          label="Last MWF worker run"
+          value={
+            diagnostics.workers.mwf_runtime.last_run_at
+              ? formatDate(diagnostics.workers.mwf_runtime.last_run_at)
+              : "not observed"
+          }
+        />
+        <SystemMetric
+          label="Last digest worker run"
+          value={
+            diagnostics.workers.notification_digest_runtime.last_run_at
+              ? formatDate(diagnostics.workers.notification_digest_runtime.last_run_at)
+              : "not observed"
+          }
+        />
+        <SystemMetric
+          label="Last retention worker run"
+          value={
+            diagnostics.workers.expense_retention_runtime.last_run_at
+              ? formatDate(diagnostics.workers.expense_retention_runtime.last_run_at)
+              : "not observed"
+          }
         />
       </div>
 

@@ -1,5 +1,14 @@
+import sys
+from types import SimpleNamespace
+
 from app.core.config import get_settings
-from app.core.storage import UploadCategory, build_storage_key, delete_upload, put_upload_bytes
+from app.core.storage import (
+    UploadCategory,
+    build_storage_key,
+    delete_upload,
+    probe_storage_backend,
+    put_upload_bytes,
+)
 
 
 def test_storage_key_keeps_local_keys_relative(monkeypatch) -> None:
@@ -63,5 +72,52 @@ def test_local_storage_backend_puts_and_deletes_files(monkeypatch, tmp_path) -> 
             storage_provider=stored_object.provider,
         )
         assert not (tmp_path / "profile-id" / "photo.png").exists()
+    finally:
+        get_settings.cache_clear()
+
+
+def test_local_storage_probe_checks_all_upload_paths(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("UPLOAD_STORAGE_PROVIDER", "LOCAL")
+    for variable in (
+        "VERIFICATION_UPLOAD_DIR",
+        "PROFILE_PHOTO_UPLOAD_DIR",
+        "COMMUNITY_POST_MEDIA_UPLOAD_DIR",
+        "CONTRIBUTION_EXPENSE_EVIDENCE_UPLOAD_DIR",
+    ):
+        monkeypatch.setenv(variable, str(tmp_path))
+    get_settings.cache_clear()
+    try:
+        result = probe_storage_backend()
+        assert result.provider == "LOCAL"
+        assert result.reachable is True
+        assert result.detail == "All configured local upload paths are readable and writable"
+    finally:
+        get_settings.cache_clear()
+
+
+def test_s3_storage_probe_checks_configured_bucket(monkeypatch) -> None:
+    calls: list[str] = []
+
+    class FakeS3Client:
+        def head_bucket(self, *, Bucket: str) -> None:
+            calls.append(Bucket)
+
+    monkeypatch.setenv("UPLOAD_STORAGE_PROVIDER", "S3")
+    monkeypatch.setenv("S3_BUCKET_NAME", "yalumni-private")
+    monkeypatch.setenv("S3_REGION", "us-east-1")
+    monkeypatch.setenv("S3_ACCESS_KEY_ID", "access-key")
+    monkeypatch.setenv("S3_SECRET_ACCESS_KEY", "secret-key")
+    monkeypatch.setitem(
+        sys.modules,
+        "boto3",
+        SimpleNamespace(client=lambda *args, **kwargs: FakeS3Client()),
+    )
+    get_settings.cache_clear()
+    try:
+        result = probe_storage_backend()
+        assert result.provider == "S3"
+        assert result.reachable is True
+        assert result.detail == "Configured S3 bucket is reachable"
+        assert calls == ["yalumni-private"]
     finally:
         get_settings.cache_clear()

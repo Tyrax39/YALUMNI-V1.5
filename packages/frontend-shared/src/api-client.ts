@@ -116,6 +116,19 @@ export type StorageDiagnostics = {
   verification_upload_allowed_type_count: number;
 };
 
+export type StorageProbeResponse = {
+  checked_at: string;
+  detail: string;
+  provider: string;
+  reachable: boolean;
+};
+
+export type WorkerRuntimeDiagnostics = {
+  last_run_at: string | null;
+  last_run_status: string;
+  overdue: boolean;
+};
+
 export type WorkerDiagnostics = {
   expense_category_budget_policy_configured: boolean;
   expense_category_default_currency: string;
@@ -138,6 +151,9 @@ export type WorkerDiagnostics = {
   notification_digest_limit: number;
   notification_digest_max_items_per_email: number;
   worker_pipeline_ready: boolean;
+  mwf_runtime: WorkerRuntimeDiagnostics;
+  notification_digest_runtime: WorkerRuntimeDiagnostics;
+  expense_retention_runtime: WorkerRuntimeDiagnostics;
 };
 
 export type StripeDiagnostics = {
@@ -1283,6 +1299,10 @@ export function fetchAdminOverview(): Promise<AdminOverview> {
 
 export function fetchSystemDiagnostics(): Promise<SystemDiagnostics> {
   return fetchJson<SystemDiagnostics>("/api/backend/api/v1/system/diagnostics");
+}
+
+export function probeStorageBackend(): Promise<StorageProbeResponse> {
+  return mutateJson<StorageProbeResponse>("/api/backend/api/v1/system/storage-probe", "POST");
 }
 
 export function fetchMwfSyncStatus(): Promise<MwfAlumniSyncStatus> {

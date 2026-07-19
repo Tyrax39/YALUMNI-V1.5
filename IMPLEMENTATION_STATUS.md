@@ -21,8 +21,11 @@ the documents disagree.
   provider-backed contribution checkout/webhook/refund foundations now in place,
   cookie/CSRF/session-edge hardening advanced across member/admin/super-admin
   runtimes, release/provider diagnostics now surfaced in the super-admin
-  console, Azure staging release parity verified at `640dc1f`, and the remaining
-  launch work concentrated in real payment credentials plus storage/worker hardening
+  console, Azure staging release parity verified at `640dc1f`, and owner
+  diagnostics now include a protected live storage probe plus persisted
+  execution-recency signals for all three scheduled worker families. Remaining
+  launch work is concentrated in real payment credentials and production
+  storage/worker deployment validation.
 
 ## Frozen Baseline
 
@@ -66,7 +69,7 @@ future task slice explicitly touches them:
 | Public informational/discovery breadth | broader public marketing/institutional breadth from long-form spec | intentionally reduced for pilot | partial | partial | not required for pilot launch | post-launch | no |
 | Payments productionization | real providers, callbacks, reconciliation | partially implemented | implemented via intent-based member pay UX | implemented foundation for Stripe + Flutterwave checkout, refunds, and webhook normalization | local verified; staging/provider credential validation still needed | launch blocker | no |
 | Security hardening | 2FA recovery, cookie review, CSRF/session review, SSR role checks | partially implemented | unchanged | partially implemented with cookie-policy controls, same-origin CSRF checks, SSR-aware proxy enforcement, and persisted 2FA recovery-code lifecycle | needs staging validation | launch blocker | no |
-| Storage/search/ops hardening | storage policy, background workers, search threshold, runbooks | partially implemented | unchanged | partially implemented | needs runbook/release gate completion | launch blocker | no |
+| Storage/search/ops hardening | storage policy, background workers, search threshold, runbooks | implemented foundation with deployment follow-up | owner console now exposes live storage reachability and worker recency | storage probe, worker telemetry, audit events, and recovery runbook implemented | focused API/worker/UI checks present; production targets still need deployment validation | launch blocker | no |
 | Azure release parity | same code/env behavior in staging | implemented for the current staging release | implemented read-only release/provider diagnostics in owner console | additive release-identity endpoints and a strict four-service SHA/version parity gate are implemented | API/member/admin/super-admin verified at `640dc1f` on 2026-07-19 | complete for current staging release; repeat per release | yes |
 
 ## Active Partial Routes And Workflows
@@ -94,9 +97,10 @@ broader post-launch work:
    - proxy-backed SSR route enforcement validation across deployed apps
    - 2FA recovery workflow is now implemented locally; staging cookie and recovery-path validation remain
 3. Storage and operations hardening
-   - production storage policy validation
-   - upload retention/scanning decisions
-   - worker/runbook coverage for scheduled and recovery paths
+   - owner-only storage connectivity probe is implemented and audited
+   - MWF, notification-digest, and expense-retention execution recency is visible
+   - recovery runbook now covers controlled probes, previews, retries, and audit closure
+   - production storage credentials/policy and dedicated worker deployment still require validation
 4. Canonical release verification
    - critical-path smoke + staging validation across member/admin/super-admin/API
    - current staging release `640dc1f` passes release parity, route smoke, and credentialed RBAC checks
@@ -143,7 +147,7 @@ Execute in this order unless a user explicitly reprioritizes:
 
 1. Provision Stripe + Flutterwave staging credentials and callback/webhook configuration.
 2. Validate both provider flows in staging, including payment, receipt, reconciliation, failure, and refund paths.
-3. Close the remaining auth/session/security recovery-path validation and storage/worker production hardening gaps.
+3. Validate auth/session recovery paths in staging, configure the production storage target, and deploy the three scheduled worker processes with monitored cadence.
 4. Repeat the verified four-service Azure parity, route smoke, and credentialed RBAC gate for the final release candidate.
 5. Add only the minimum remaining public informational surfaces needed for pilot
    credibility; defer broader public-marketing breadth post-launch.

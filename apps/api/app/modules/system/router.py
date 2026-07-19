@@ -1,12 +1,19 @@
 import os
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.core.database import get_db_session
 from app.core.permissions import GlobalRole
+from app.core.storage import probe_storage_backend
 from app.core.totp import RECOVERY_CODE_COUNT, TOTP_DIGITS, TOTP_PERIOD_SECONDS
+from app.modules.alumni.models import MwfAlumniSyncRun
 from app.modules.auth.dependencies import require_roles
+from app.modules.auth.models import SecurityEvent, User
 from app.modules.system.schemas import (
     AuthDiagnostics,
     FlutterwaveDiagnostics,
@@ -16,10 +23,12 @@ from app.modules.system.schemas import (
     RuntimeDiagnostics,
     SessionDiagnostics,
     StorageDiagnostics,
+    StorageProbeResponse,
     StripeDiagnostics,
     SystemDiagnosticsResponse,
     SystemStatusResponse,
     WorkerDiagnostics,
+    WorkerRuntimeDiagnostics,
 )
 
 router = APIRouter()
@@ -153,6 +162,79 @@ def _release_metadata_complete(
     )
 
 
+def _aware_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
+def _worker_runtime_status(
+    *,
+    last_run_at: datetime | None,
+    last_run_status: str | None,
+    interval_seconds: int,
+) -> WorkerRuntimeDiagnostics:
+    normalized_run_at = _aware_utc(last_run_at) if last_run_at else None
+    overdue = (
+        normalized_run_at is None
+        or datetime.now(UTC) - normalized_run_at > timedelta(seconds=max(1, interval_seconds) * 2)
+    )
+    return WorkerRuntimeDiagnostics(
+        last_run_at=normalized_run_at,
+        last_run_status=(last_run_status or "never").lower(),
+        overdue=overdue,
+    )
+
+
+def _latest_worker_event(
+    db: Session,
+    event_type: str,
+    *,
+    prefix: bool = False,
+) -> SecurityEvent | None:
+    predicate = (
+        SecurityEvent.event_type.like(f"{event_type}%")
+        if prefix
+        else SecurityEvent.event_type == event_type
+    )
+    return db.scalar(
+        select(SecurityEvent)
+        .where(predicate)
+        .order_by(SecurityEvent.created_at.desc())
+        .limit(1)
+    )
+
+
+def _event_status(event: SecurityEvent | None) -> str | None:
+    if event is None:
+        return None
+    metadata = event.metadata_json or {}
+    status_value = metadata.get("status")
+    if status_value:
+        return str(status_value)
+    return event.event_type.rsplit("_", 1)[-1]
+
+
+def _mwf_expected_execution_interval(settings) -> int:
+    return max(
+        settings.mwf_directory_sync_worker_interval_seconds,
+        settings.mwf_directory_cache_ttl_hours * 60 * 60,
+    )
+
+
+def _digest_expected_execution_interval(settings) -> int:
+    frequencies = {
+        value.strip().upper()
+        for value in settings.notification_digest_worker_frequencies.split(",")
+        if value.strip()
+    }
+    if "DAILY" in frequencies:
+        return 24 * 60 * 60
+    if "WEEKLY" in frequencies:
+        return 7 * 24 * 60 * 60
+    return settings.notification_digest_worker_interval_seconds
+
+
 @router.get("/status", response_model=SystemStatusResponse)
 def system_status() -> SystemStatusResponse:
     settings = get_settings()
@@ -166,6 +248,7 @@ def system_status() -> SystemStatusResponse:
 @router.get("/diagnostics", response_model=SystemDiagnosticsResponse)
 def system_diagnostics(
     current_user: Annotated[object, Depends(super_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
 ) -> SystemDiagnosticsResponse:
     _ = current_user
     settings = get_settings()
@@ -189,6 +272,18 @@ def system_diagnostics(
         source_control_ref,
     )
     azure_app_service_target = bool(deployment_target and deployment_target.strip())
+    latest_mwf_run = db.scalar(
+        select(MwfAlumniSyncRun).order_by(MwfAlumniSyncRun.started_at.desc()).limit(1)
+    )
+    latest_digest_run = _latest_worker_event(
+        db,
+        "notifications.email_digest_worker.",
+        prefix=True,
+    )
+    latest_retention_run = _latest_worker_event(
+        db,
+        "contributions.expense_evidence_retention_worker_run",
+    )
 
     stripe = StripeDiagnostics(
         secret_key_configured=bool(settings.stripe_secret_key),
@@ -414,6 +509,29 @@ def system_diagnostics(
                 settings.contribution_expense_category_policy_default_currency.strip().upper()
             ),
             worker_pipeline_ready=_worker_pipeline_ready(settings),
+            mwf_runtime=_worker_runtime_status(
+                last_run_at=(latest_mwf_run.finished_at or latest_mwf_run.started_at)
+                if latest_mwf_run
+                else None,
+                last_run_status=latest_mwf_run.status if latest_mwf_run else None,
+                interval_seconds=_mwf_expected_execution_interval(settings),
+            ),
+            notification_digest_runtime=_worker_runtime_status(
+                last_run_at=(latest_digest_run.updated_at or latest_digest_run.created_at)
+                if latest_digest_run
+                else None,
+                last_run_status=_event_status(latest_digest_run),
+                interval_seconds=_digest_expected_execution_interval(settings),
+            ),
+            expense_retention_runtime=_worker_runtime_status(
+                last_run_at=(latest_retention_run.updated_at or latest_retention_run.created_at)
+                if latest_retention_run
+                else None,
+                last_run_status=_event_status(latest_retention_run),
+                interval_seconds=(
+                    settings.contribution_expense_evidence_retention_worker_interval_seconds
+                ),
+            ),
         ),
         payments=PaymentDiagnostics(
             checkout_provider=settings.contribution_checkout_provider.strip().upper(),
@@ -435,5 +553,30 @@ def system_diagnostics(
             stripe=stripe,
             flutterwave=flutterwave,
         ),
+    )
+
+
+@router.post("/storage-probe", response_model=StorageProbeResponse)
+def storage_probe(
+    current_user: Annotated[User, Depends(super_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> StorageProbeResponse:
+    result = probe_storage_backend()
+    db.add(
+        SecurityEvent(
+            user_id=current_user.id,
+            event_type="system.storage_probe",
+            metadata_json={
+                "provider": result.provider,
+                "reachable": result.reachable,
+            },
+        )
+    )
+    db.commit()
+    return StorageProbeResponse(
+        provider=result.provider,
+        reachable=result.reachable,
+        checked_at=result.checked_at,
+        detail=result.detail,
     )
 
