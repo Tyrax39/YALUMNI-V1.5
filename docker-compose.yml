@@ -26,6 +26,7 @@ services:
       retries: 5
 
   api:
+    image: yalumni-api-local
     build:
       context: .
       dockerfile: apps/api/Dockerfile
@@ -41,6 +42,63 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    volumes:
+      - ./apps/api:/app/apps/api
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  worker-mwf-sync:
+    image: yalumni-api-local
+    env_file:
+      - .env.example
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/yali_alumni
+      REDIS_URL: redis://redis:6379/0
+    command: python -m app.workers.mwf_alumni_sync
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes:
+      - ./apps/api:/app/apps/api
+
+  worker-notification-digests:
+    image: yalumni-api-local
+    env_file:
+      - .env.example
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/yali_alumni
+      REDIS_URL: redis://redis:6379/0
+    command: python -m app.workers.notification_digests
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes:
+      - ./apps/api:/app/apps/api
+
+  worker-expense-retention:
+    image: yalumni-api-local
+    env_file:
+      - .env.example
+    environment:
+      CONTRIBUTION_EXPENSE_EVIDENCE_RETENTION_WORKER_LOCK_PROVIDER: REDIS
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/yali_alumni
+      REDIS_URL: redis://redis:6379/0
+    command: python -m app.workers.contribution_expense_retention
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
     volumes:
       - ./apps/api:/app/apps/api
 
@@ -63,4 +121,3 @@ services:
 
 volumes:
   postgres_data:
-

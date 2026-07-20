@@ -14,6 +14,9 @@ from app.modules.alumni.mwf_directory import (
     mwf_cache_status,
     sync_mwf_cache_if_needed,
 )
+from app.modules.auth.models import SecurityEvent
+
+MWF_SYNC_WORKER_CYCLE_EVENT = "alumni.mwf_sync_worker_cycle"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -51,7 +54,7 @@ def run_mwf_sync_worker_cycle(db: Session, *, force: bool = False) -> dict:
     if run is not None:
         status = run.status.lower()
 
-    return {
+    payload = {
         "active_profile_count": after["active_profile_count"],
         "cache_stale_before": before["cache_stale"],
         "cache_stale_after": after["cache_stale"],
@@ -62,6 +65,22 @@ def run_mwf_sync_worker_cycle(db: Session, *, force: bool = False) -> dict:
         "started_at": _isoformat(started_at),
         "status": status,
     }
+    db.add(
+        SecurityEvent(
+            event_type=MWF_SYNC_WORKER_CYCLE_EVENT,
+            metadata_json={
+                "active_profile_count": payload["active_profile_count"],
+                "cache_stale_after": payload["cache_stale_after"],
+                "error": error[:500] if error else None,
+                "force": force,
+                "status": status,
+            },
+            created_at=started_at,
+            updated_at=finished_at,
+        )
+    )
+    db.commit()
+    return payload
 
 
 def run_mwf_sync_worker_loop(db_factory, *, interval_seconds: int, force: bool = False):

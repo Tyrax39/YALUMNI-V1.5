@@ -14,6 +14,7 @@ from app.core.totp import RECOVERY_CODE_COUNT, TOTP_DIGITS, TOTP_PERIOD_SECONDS
 from app.modules.alumni.models import MwfAlumniSyncRun
 from app.modules.auth.dependencies import require_roles
 from app.modules.auth.models import SecurityEvent, User
+from app.modules.notifications.worker import DIGEST_WORKER_CYCLE_EVENT
 from app.modules.system.schemas import (
     AuthDiagnostics,
     FlutterwaveDiagnostics,
@@ -30,6 +31,7 @@ from app.modules.system.schemas import (
     WorkerDiagnostics,
     WorkerRuntimeDiagnostics,
 )
+from app.workers.mwf_alumni_sync import MWF_SYNC_WORKER_CYCLE_EVENT
 
 router = APIRouter()
 super_admin_dependency = require_roles(GlobalRole.SUPER_ADMIN.value)
@@ -275,6 +277,8 @@ def system_diagnostics(
     latest_mwf_run = db.scalar(
         select(MwfAlumniSyncRun).order_by(MwfAlumniSyncRun.started_at.desc()).limit(1)
     )
+    latest_mwf_heartbeat = _latest_worker_event(db, MWF_SYNC_WORKER_CYCLE_EVENT)
+    latest_digest_heartbeat = _latest_worker_event(db, DIGEST_WORKER_CYCLE_EVENT)
     latest_digest_run = _latest_worker_event(
         db,
         "notifications.email_digest_worker.",
@@ -429,6 +433,14 @@ def system_diagnostics(
             s3_access_key_configured=bool(settings.s3_access_key_id),
             s3_secret_key_configured=bool(settings.s3_secret_access_key),
             s3_credentials_ready=_s3_credentials_ready(settings),
+            s3_connect_timeout_seconds=settings.s3_connect_timeout_seconds,
+            s3_read_timeout_seconds=settings.s3_read_timeout_seconds,
+            s3_max_attempts=settings.s3_max_attempts,
+            s3_resilience_policy_ready=bool(
+                settings.s3_connect_timeout_seconds > 0
+                and settings.s3_read_timeout_seconds > 0
+                and settings.s3_max_attempts > 0
+            ),
             malware_scanner_provider=(
                 settings.contribution_expense_evidence_malware_scanner_provider.strip().upper()
             ),
@@ -510,18 +522,40 @@ def system_diagnostics(
             ),
             worker_pipeline_ready=_worker_pipeline_ready(settings),
             mwf_runtime=_worker_runtime_status(
-                last_run_at=(latest_mwf_run.finished_at or latest_mwf_run.started_at)
-                if latest_mwf_run
-                else None,
-                last_run_status=latest_mwf_run.status if latest_mwf_run else None,
-                interval_seconds=_mwf_expected_execution_interval(settings),
+                last_run_at=(
+                    latest_mwf_heartbeat.updated_at or latest_mwf_heartbeat.created_at
+                    if latest_mwf_heartbeat
+                    else (latest_mwf_run.finished_at or latest_mwf_run.started_at)
+                    if latest_mwf_run
+                    else None
+                ),
+                last_run_status=(
+                    _event_status(latest_mwf_heartbeat)
+                    if latest_mwf_heartbeat
+                    else latest_mwf_run.status
+                    if latest_mwf_run
+                    else None
+                ),
+                interval_seconds=(
+                    settings.mwf_directory_sync_worker_interval_seconds
+                    if latest_mwf_heartbeat
+                    else _mwf_expected_execution_interval(settings)
+                ),
             ),
             notification_digest_runtime=_worker_runtime_status(
-                last_run_at=(latest_digest_run.updated_at or latest_digest_run.created_at)
-                if latest_digest_run
-                else None,
-                last_run_status=_event_status(latest_digest_run),
-                interval_seconds=_digest_expected_execution_interval(settings),
+                last_run_at=(
+                    latest_digest_heartbeat.updated_at or latest_digest_heartbeat.created_at
+                    if latest_digest_heartbeat
+                    else (latest_digest_run.updated_at or latest_digest_run.created_at)
+                    if latest_digest_run
+                    else None
+                ),
+                last_run_status=_event_status(latest_digest_heartbeat or latest_digest_run),
+                interval_seconds=(
+                    settings.notification_digest_worker_interval_seconds
+                    if latest_digest_heartbeat
+                    else _digest_expected_execution_interval(settings)
+                ),
             ),
             expense_retention_runtime=_worker_runtime_status(
                 last_run_at=(latest_retention_run.updated_at or latest_retention_run.created_at)

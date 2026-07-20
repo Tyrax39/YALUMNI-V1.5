@@ -23,6 +23,8 @@ restricted to `SUPER_ADMIN`.
   existing super-admin MWF cache control.
 - For a dedicated worker runtime, run:
   `python -m app.workers.mwf_alumni_sync --once`
+- Every polling cycle records `alumni.mwf_sync_worker_cycle`, including cycles
+  that correctly skip because the cache is fresh.
 - Do not loop manual refreshes. Capture the latest run error and verify the
   official source URLs and user agent before retrying.
 
@@ -34,6 +36,9 @@ restricted to `SUPER_ADMIN`.
   `python -m app.workers.notification_digests --once`
 - Worker outcomes are recorded under the
   `notifications.email_digest_worker.*` security-event prefix.
+- Every poll also records `notifications.email_digest_worker_cycle`, including
+  cadence skips, so owner diagnostics can distinguish an idle worker from a
+  stopped worker.
 - Repeated failures require email transport validation before another retry.
 
 ## Expense Evidence Retention Recovery
@@ -54,6 +59,8 @@ restricted to `SUPER_ADMIN`.
   writable by the API process.
 - `S3`: verify bucket, region, endpoint, access key, and secret are supplied via
   deployment settings, then rerun the owner-only storage probe.
+- Confirm positive `S3_CONNECT_TIMEOUT_SECONDS`, `S3_READ_TIMEOUT_SECONDS`, and
+  `S3_MAX_ATTEMPTS` values before enabling S3 in staging.
 - Never print storage credentials or return provider exception details through
   diagnostics. Rotate credentials if logs or handoff artifacts expose them.
 - Do not delete evidence manually. Use the retention workflow so database state
@@ -64,3 +71,10 @@ restricted to `SUPER_ADMIN`.
 Record the release SHA, affected worker/storage provider, observed status,
 recovery action, audit event, and final verification result. Run the four-service
 release parity gate before accepting a restarted or promoted staging release.
+
+## Local Worker Deployment Check
+
+`docker compose up --build` now starts the API and three dedicated worker
+services. Workers wait for the API health check, which confirms database
+migrations and API startup have completed. The expense-retention service uses a
+Redis lock in Compose to prevent concurrent cleanup cycles.

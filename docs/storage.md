@@ -26,6 +26,9 @@ S3_ACCESS_KEY_ID=
 S3_SECRET_ACCESS_KEY=
 S3_BUCKET_NAME=
 S3_REGION=
+S3_CONNECT_TIMEOUT_SECONDS=3
+S3_READ_TIMEOUT_SECONDS=10
+S3_MAX_ATTEMPTS=3
 ```
 
 S3 keys are stored under:
@@ -39,6 +42,10 @@ S3 keys are stored under:
 
 The bucket must remain private. The API streams objects only after the same
 member/admin authorization checks used by local storage.
+
+S3 calls use bounded connection/read timeouts and standard retry behavior. Keep
+the values positive and conservative so an unavailable storage provider cannot
+hold API or owner-probe requests indefinitely.
 
 ## Remaining Production Work
 

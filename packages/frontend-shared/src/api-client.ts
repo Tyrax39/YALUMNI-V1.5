@@ -107,6 +107,10 @@ export type StorageDiagnostics = {
   s3_access_key_configured: boolean;
   s3_bucket_configured: boolean;
   s3_credentials_ready: boolean;
+  s3_connect_timeout_seconds: number;
+  s3_read_timeout_seconds: number;
+  s3_max_attempts: number;
+  s3_resilience_policy_ready: boolean;
   s3_endpoint_configured: boolean;
   s3_region_configured: boolean;
   s3_secret_key_configured: boolean;

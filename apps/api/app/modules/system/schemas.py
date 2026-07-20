@@ -86,6 +86,10 @@ class StorageDiagnostics(BaseModel):
     s3_access_key_configured: bool
     s3_secret_key_configured: bool
     s3_credentials_ready: bool
+    s3_connect_timeout_seconds: float
+    s3_read_timeout_seconds: float
+    s3_max_attempts: int
+    s3_resilience_policy_ready: bool
     malware_scanner_provider: str
     malware_scanner_ready: bool
     malware_scanner_transport_ready: bool

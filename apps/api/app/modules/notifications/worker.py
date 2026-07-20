@@ -10,6 +10,7 @@ from app.modules.auth.models import SecurityEvent
 from app.modules.notifications.digests import NotificationDigestRunResult, run_email_digest
 
 DIGEST_WORKER_EVENT_PREFIX = "notifications.email_digest_worker"
+DIGEST_WORKER_CYCLE_EVENT = "notifications.email_digest_worker_cycle"
 DIGEST_WORKER_CADENCE = {
     "DAILY": timedelta(days=1),
     "WEEKLY": timedelta(days=7),
@@ -147,13 +148,15 @@ def run_notification_digest_worker_cycle(
         )
         results.append(_frequency_result_from_digest(digest_result, dry_run=dry_run))
 
-    return NotificationDigestWorkerCycleResult(
+    cycle_result = NotificationDigestWorkerCycleResult(
         started_at=started_at,
         finished_at=utcnow(),
         dry_run=dry_run,
         force=force,
         results=results,
     )
+    _record_worker_cycle_event(db, cycle_result)
+    return cycle_result
 
 
 def run_notification_digest_worker_loop(
@@ -280,6 +283,35 @@ def _record_worker_event(
 
 def _worker_event_type(frequency: str, status: str) -> str:
     return f"{DIGEST_WORKER_EVENT_PREFIX}.{frequency.lower()}_{status}"
+
+
+def _record_worker_cycle_event(
+    db: Session,
+    result: NotificationDigestWorkerCycleResult,
+) -> None:
+    status = (
+        "failed"
+        if result.failed_count
+        else "succeeded"
+        if result.attempted_count
+        else "skipped"
+    )
+    db.add(
+        SecurityEvent(
+            event_type=DIGEST_WORKER_CYCLE_EVENT,
+            metadata_json={
+                "attempted_count": result.attempted_count,
+                "dry_run": result.dry_run,
+                "failed_count": result.failed_count,
+                "force": result.force,
+                "sent_count": result.sent_count,
+                "status": status,
+            },
+            created_at=result.started_at,
+            updated_at=result.finished_at,
+        )
+    )
+    db.commit()
 
 
 def _aware_datetime(value: datetime) -> datetime:

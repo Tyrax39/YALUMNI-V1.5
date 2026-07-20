@@ -97,6 +97,8 @@ def test_local_storage_probe_checks_all_upload_paths(monkeypatch, tmp_path) -> N
 
 def test_s3_storage_probe_checks_configured_bucket(monkeypatch) -> None:
     calls: list[str] = []
+    client_options: dict = {}
+    config_options: dict = {}
 
     class FakeS3Client:
         def head_bucket(self, *, Bucket: str) -> None:
@@ -106,12 +108,25 @@ def test_s3_storage_probe_checks_configured_bucket(monkeypatch) -> None:
     monkeypatch.setenv("S3_BUCKET_NAME", "yalumni-private")
     monkeypatch.setenv("S3_REGION", "us-east-1")
     monkeypatch.setenv("S3_ACCESS_KEY_ID", "access-key")
+    class FakeConfig:
+        def __init__(self, **kwargs) -> None:
+            config_options.update(kwargs)
+
+    def fake_client(*args, **kwargs):
+        client_options.update(kwargs)
+        return FakeS3Client()
+
     monkeypatch.setenv("S3_SECRET_ACCESS_KEY", "secret-key")
+    monkeypatch.setenv("S3_CONNECT_TIMEOUT_SECONDS", "2.5")
+    monkeypatch.setenv("S3_READ_TIMEOUT_SECONDS", "7.5")
+    monkeypatch.setenv("S3_MAX_ATTEMPTS", "4")
     monkeypatch.setitem(
         sys.modules,
         "boto3",
-        SimpleNamespace(client=lambda *args, **kwargs: FakeS3Client()),
+        SimpleNamespace(client=fake_client),
     )
+    monkeypatch.setitem(sys.modules, "botocore", SimpleNamespace())
+    monkeypatch.setitem(sys.modules, "botocore.config", SimpleNamespace(Config=FakeConfig))
     get_settings.cache_clear()
     try:
         result = probe_storage_backend()
@@ -119,5 +134,11 @@ def test_s3_storage_probe_checks_configured_bucket(monkeypatch) -> None:
         assert result.reachable is True
         assert result.detail == "Configured S3 bucket is reachable"
         assert calls == ["yalumni-private"]
+        assert client_options["config"].__class__ is FakeConfig
+        assert config_options == {
+            "connect_timeout": 2.5,
+            "read_timeout": 7.5,
+            "retries": {"max_attempts": 4, "mode": "standard"},
+        }
     finally:
         get_settings.cache_clear()

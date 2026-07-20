@@ -143,6 +143,9 @@ def test_system_diagnostics_reports_release_and_provider_readiness(
     monkeypatch.setenv("S3_ACCESS_KEY_ID", "access-key")
     monkeypatch.setenv("S3_SECRET_ACCESS_KEY", "secret-key")
     monkeypatch.setenv("S3_REGION", "us-east-1")
+    monkeypatch.setenv("S3_CONNECT_TIMEOUT_SECONDS", "2.5")
+    monkeypatch.setenv("S3_READ_TIMEOUT_SECONDS", "8.5")
+    monkeypatch.setenv("S3_MAX_ATTEMPTS", "4")
     monkeypatch.setenv("PLATFORM_OWNER_ALIASES", "tshiva@yalumni.org,patient0@yalumni.org")
     monkeypatch.setenv("PLATFORM_OWNER_PASSWORD", "Admin@123-Yalumni/*9")
     monkeypatch.setenv("SEED_TEST_ACCOUNTS", "true")
@@ -277,6 +280,10 @@ def test_system_diagnostics_reports_release_and_provider_readiness(
     assert payload["storage"]["s3_access_key_configured"] is True
     assert payload["storage"]["s3_secret_key_configured"] is True
     assert payload["storage"]["s3_credentials_ready"] is True
+    assert payload["storage"]["s3_connect_timeout_seconds"] == 2.5
+    assert payload["storage"]["s3_read_timeout_seconds"] == 8.5
+    assert payload["storage"]["s3_max_attempts"] == 4
+    assert payload["storage"]["s3_resilience_policy_ready"] is True
     assert payload["storage"]["malware_scanner_provider"] == "HTTP"
     assert payload["storage"]["malware_scanner_ready"] is True
     assert payload["storage"]["malware_scanner_transport_ready"] is True
@@ -364,7 +371,13 @@ def test_system_diagnostics_reports_worker_execution_recency() -> None:
                             finished_at=now - timedelta(minutes=2),
                         ),
                         SecurityEvent(
-                            event_type="notifications.email_digest_worker.daily_succeeded",
+                            event_type="alumni.mwf_sync_worker_cycle",
+                            metadata_json={"status": "skipped"},
+                            created_at=now - timedelta(minutes=2),
+                            updated_at=now - timedelta(minutes=1),
+                        ),
+                        SecurityEvent(
+                            event_type="notifications.email_digest_worker_cycle",
                             metadata_json={"status": "succeeded"},
                             created_at=now - timedelta(minutes=2),
                             updated_at=now - timedelta(minutes=1),
@@ -385,7 +398,7 @@ def test_system_diagnostics_reports_worker_execution_recency() -> None:
             )
             assert response.status_code == 200
             workers = response.json()["workers"]
-            assert workers["mwf_runtime"]["last_run_status"] == "succeeded"
+            assert workers["mwf_runtime"]["last_run_status"] == "skipped"
             assert workers["mwf_runtime"]["overdue"] is False
             assert workers["notification_digest_runtime"]["last_run_status"] == "succeeded"
             assert workers["notification_digest_runtime"]["overdue"] is False

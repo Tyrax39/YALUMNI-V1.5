@@ -997,6 +997,10 @@ function OperationsHardeningPanel({ diagnostics }: { diagnostics: SystemDiagnost
             status={diagnostics.workers.worker_pipeline_ready ? "ready" : "incomplete"}
           />
           <CheckRow
+            label="S3 timeout and retry policy"
+            status={diagnostics.storage.s3_resilience_policy_ready ? "ready" : "incomplete"}
+          />
+          <CheckRow
             label="MWF worker execution"
             status={
               diagnostics.workers.mwf_runtime.overdue
@@ -1082,6 +1086,14 @@ function OperationsHardeningPanel({ diagnostics }: { diagnostics: SystemDiagnost
         <SystemMetric
           label="Expense policy mode"
           value={`${diagnostics.workers.expense_category_enforcement_mode} · ${diagnostics.workers.expense_category_default_currency}`}
+        />
+        <SystemMetric
+          label="S3 connect/read timeout"
+          value={`${diagnostics.storage.s3_connect_timeout_seconds}s / ${diagnostics.storage.s3_read_timeout_seconds}s`}
+        />
+        <SystemMetric
+          label="S3 max attempts"
+          value={String(diagnostics.storage.s3_max_attempts)}
         />
         <SystemMetric
           label="Last MWF worker run"

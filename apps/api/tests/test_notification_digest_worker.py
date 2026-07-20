@@ -14,6 +14,7 @@ from app.modules.auth.models import SecurityEvent, User
 from app.modules.notifications import models as notification_models
 from app.modules.notifications.models import Notification, NotificationPreference
 from app.modules.notifications.worker import (
+    DIGEST_WORKER_CYCLE_EVENT,
     run_notification_digest_worker_cycle,
 )
 
@@ -106,6 +107,11 @@ def test_notification_digest_worker_sends_records_and_respects_cadence(
     assert recorded_event is not None
     assert recorded_event.metadata_json["sent_count"] == 1
     assert recorded_event.metadata_json["notification_count"] == 1
+    first_heartbeat = db_session.scalar(
+        select(SecurityEvent).where(SecurityEvent.event_type == DIGEST_WORKER_CYCLE_EVENT)
+    )
+    assert first_heartbeat is not None
+    assert first_heartbeat.metadata_json["status"] == "succeeded"
 
     second_cycle = run_notification_digest_worker_cycle(
         db_session,
@@ -117,6 +123,13 @@ def test_notification_digest_worker_sends_records_and_respects_cadence(
     assert second_cycle.sent_count == 0
     assert second_cycle.results[0].status == "skipped"
     assert second_cycle.results[0].skipped_reason == "cadence_not_due"
+    heartbeats = db_session.scalars(
+        select(SecurityEvent)
+        .where(SecurityEvent.event_type == DIGEST_WORKER_CYCLE_EVENT)
+        .order_by(SecurityEvent.created_at.asc())
+    ).all()
+    assert len(heartbeats) == 2
+    assert heartbeats[1].metadata_json["status"] == "skipped"
 
 
 def test_notification_digest_worker_dry_run_does_not_mark_sent_or_block_delivery(

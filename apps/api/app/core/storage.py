@@ -165,6 +165,16 @@ class S3StorageBackend:
             )
 
         import boto3
+        from botocore.config import Config
+
+        client_config = Config(
+            connect_timeout=max(0.1, settings.s3_connect_timeout_seconds),
+            read_timeout=max(0.1, settings.s3_read_timeout_seconds),
+            retries={
+                "max_attempts": max(1, settings.s3_max_attempts),
+                "mode": "standard",
+            },
+        )
 
         client = boto3.client(
             "s3",
@@ -172,6 +182,7 @@ class S3StorageBackend:
             aws_secret_access_key=settings.s3_secret_access_key or None,
             endpoint_url=settings.s3_endpoint_url or None,
             region_name=settings.s3_region or None,
+            config=client_config,
         )
         return client, settings.s3_bucket_name
 

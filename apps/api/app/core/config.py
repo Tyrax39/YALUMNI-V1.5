@@ -114,6 +114,9 @@ class Settings(BaseSettings):
     s3_secret_access_key: str | None = None
     s3_bucket_name: str | None = None
     s3_region: str | None = None
+    s3_connect_timeout_seconds: float = 3.0
+    s3_read_timeout_seconds: float = 10.0
+    s3_max_attempts: int = 3
     cors_origins: str = (
         "http://localhost:3000,http://127.0.0.1:3000,"
         "http://localhost:3010,http://127.0.0.1:3010,"
