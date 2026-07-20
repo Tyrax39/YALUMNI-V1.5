@@ -9,6 +9,16 @@ class SystemStatusResponse(BaseModel):
     environment: str
 
 
+class SystemReadinessResponse(BaseModel):
+    status: str
+    service: str
+    environment: str
+    database_reachable: bool
+    migrations_current: bool
+    redis_required: bool
+    redis_reachable: bool
+
+
 class ReleaseDiagnostics(BaseModel):
     commit_sha: str | None
     release_version: str | None

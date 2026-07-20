@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     super_admin_console_base_url: str = "http://localhost:3012"
     database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/yali_alumni"
     redis_url: str = "redis://localhost:6379/0"
+    infrastructure_probe_timeout_seconds: float = 2.0
     jwt_secret_key: str = "change-me"
     jwt_access_token_minutes: int = 15
     jwt_refresh_token_days: int = 30

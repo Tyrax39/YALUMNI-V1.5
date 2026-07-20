@@ -4,6 +4,23 @@ Use this runbook for staging and pilot operations. All administrative API action
 require an authenticated role with the documented permission; system probes are
 restricted to `SUPER_ADMIN`.
 
+## Runtime Readiness Gate
+
+Use the readiness endpoint to distinguish process liveness from deployable
+runtime health. It verifies database connectivity, the applied Alembic head,
+and Redis reachability when Redis is required by the environment or worker
+lock policy.
+
+```powershell
+$env:RELEASE_API_URL="https://yalumni-v15-api-954095.azurewebsites.net"
+$env:RELEASE_EXPECTED_ENVIRONMENT="staging"
+npm run verify:runtime-readiness
+```
+
+`/health` remains the liveness check. A `503` from
+`/api/v1/system/readiness` must block promotion until migrations or required
+Redis connectivity are repaired.
+
 ## First Response
 
 1. Confirm `/health` and `/api/v1/system/status` return `200`.

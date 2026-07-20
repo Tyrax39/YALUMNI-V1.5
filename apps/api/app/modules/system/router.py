@@ -2,13 +2,14 @@ import os
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.database import get_db_session
 from app.core.permissions import GlobalRole
+from app.core.readiness import probe_runtime_readiness
 from app.core.storage import probe_storage_backend
 from app.core.totp import RECOVERY_CODE_COUNT, TOTP_DIGITS, TOTP_PERIOD_SECONDS
 from app.modules.alumni.models import MwfAlumniSyncRun
@@ -27,6 +28,7 @@ from app.modules.system.schemas import (
     StorageProbeResponse,
     StripeDiagnostics,
     SystemDiagnosticsResponse,
+    SystemReadinessResponse,
     SystemStatusResponse,
     WorkerDiagnostics,
     WorkerRuntimeDiagnostics,
@@ -244,6 +246,30 @@ def system_status() -> SystemStatusResponse:
         status="ok",
         service=settings.app_name,
         environment=settings.app_env,
+    )
+
+
+@router.get(
+    "/readiness",
+    response_model=SystemReadinessResponse,
+    responses={status.HTTP_503_SERVICE_UNAVAILABLE: {"model": SystemReadinessResponse}},
+)
+def system_readiness(
+    response: Response,
+    db: Annotated[Session, Depends(get_db_session)],
+) -> SystemReadinessResponse:
+    settings = get_settings()
+    readiness = probe_runtime_readiness(db, settings)
+    if not readiness.ready:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    return SystemReadinessResponse(
+        status="ready" if readiness.ready else "not_ready",
+        service=settings.app_name,
+        environment=settings.app_env,
+        database_reachable=readiness.database_reachable,
+        migrations_current=readiness.migrations_current,
+        redis_required=readiness.redis_required,
+        redis_reachable=readiness.redis_reachable,
     )
 
 

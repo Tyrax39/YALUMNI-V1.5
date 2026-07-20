@@ -11,6 +11,7 @@ from app.core.config import get_settings
 from app.core.database import Base, get_db_session
 from app.core.email import clear_email_outbox
 from app.core.rate_limit import clear_rate_limits
+from app.core.readiness import RuntimeReadiness
 from app.main import app
 from app.modules.alumni.models import MwfAlumniSyncRun
 from app.modules.auth import models as auth_models
@@ -75,6 +76,60 @@ def test_system_status_remains_public_and_minimal(client: TestClient) -> None:
         "service": "YALI Alumni Platform",
         "status": "ok",
     }
+
+
+def test_system_readiness_returns_503_when_runtime_is_not_ready(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "app.modules.system.router.probe_runtime_readiness",
+        lambda db, settings: RuntimeReadiness(
+            database_reachable=True,
+            migrations_current=False,
+            migration_current_revisions=("old-revision",),
+            migration_expected_heads=("current-head",),
+            redis_configured=True,
+            redis_required=True,
+            redis_reachable=False,
+        ),
+    )
+
+    response = client.get("/api/v1/system/readiness")
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "status": "not_ready",
+        "service": "YALI Alumni Platform",
+        "environment": "local",
+        "database_reachable": True,
+        "migrations_current": False,
+        "redis_required": True,
+        "redis_reachable": False,
+    }
+
+
+def test_system_readiness_returns_200_when_runtime_is_ready(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "app.modules.system.router.probe_runtime_readiness",
+        lambda db, settings: RuntimeReadiness(
+            database_reachable=True,
+            migrations_current=True,
+            migration_current_revisions=("current-head",),
+            migration_expected_heads=("current-head",),
+            redis_configured=False,
+            redis_required=False,
+            redis_reachable=False,
+        ),
+    )
+
+    response = client.get("/api/v1/system/readiness")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "ready"
 
 
 def test_system_diagnostics_requires_super_admin(client: TestClient) -> None:

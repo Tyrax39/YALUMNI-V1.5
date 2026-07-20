@@ -81,6 +81,7 @@ docker build -f apps/super-admin-console/Dockerfile -t yalumni-superadmin:local 
 After deployment, verify:
 
 - API health: `https://yalumni-v15-api-954095.azurewebsites.net/health`
+- API readiness: `https://yalumni-v15-api-954095.azurewebsites.net/api/v1/system/readiness`
 - Member app: `https://yalumni-v15-member-954095.azurewebsites.net`
 - Admin app: `https://yalumni-v15-admin-954095.azurewebsites.net/login`
 - Super-admin app: `https://yalumni-v15-superadmin-954095.azurewebsites.net/login`
@@ -96,11 +97,14 @@ $env:RELEASE_SUPERADMIN_URL="https://yalumni-v15-superadmin-954095.azurewebsites
 $env:RELEASE_EXPECTED_SHA="<sha>"
 $env:RELEASE_EXPECTED_VERSION="<release-version>"
 npm run verify:release-parity
+$env:RELEASE_EXPECTED_ENVIRONMENT="staging"
+npm run verify:runtime-readiness
 ```
 
 The release is rejected if any endpoint is unavailable, reports the wrong
-service identity, omits release metadata, or differs from the expected SHA or
-version.
+service identity, omits release metadata, differs from the expected SHA or
+version, cannot reach its database, is behind the Alembic head, or cannot reach
+required Redis infrastructure.
 
 ## Current Verified Staging Release
 

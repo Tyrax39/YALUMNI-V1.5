@@ -28,6 +28,8 @@ the documents disagree.
   storage/worker deployment validation. MWF and digest poll heartbeats now
   distinguish healthy cadence skips from stopped processes, S3 calls use bounded
   timeout/retry policy, and Compose defines all three dedicated worker services.
+  Deployment readiness now separately gates database connectivity, Alembic head
+  parity, and required Redis reachability without changing liveness behavior.
 
 ## Frozen Baseline
 
@@ -154,6 +156,8 @@ Execute in this order unless a user explicitly reprioritizes:
 2. Validate both provider flows in staging, including payment, receipt, reconciliation, failure, and refund paths.
 3. Validate auth/session recovery paths in staging, configure the production storage target, and deploy the three scheduled worker processes with monitored cadence.
 4. Repeat the verified four-service Azure parity, route smoke, and credentialed RBAC gate for the final release candidate.
+   Run `npm run verify:runtime-readiness` before promotion so database,
+   migration, and Redis drift cannot pass as a healthy release.
 5. Add only the minimum remaining public informational surfaces needed for pilot
    credibility; defer broader public-marketing breadth post-launch.
 
