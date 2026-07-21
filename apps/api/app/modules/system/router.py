@@ -275,10 +275,9 @@ def system_readiness(
 
 @router.get("/diagnostics", response_model=SystemDiagnosticsResponse)
 def system_diagnostics(
-    current_user: Annotated[object, Depends(super_admin_dependency)],
+    current_user: Annotated[User, Depends(super_admin_dependency)],
     db: Annotated[Session, Depends(get_db_session)],
 ) -> SystemDiagnosticsResponse:
-    _ = current_user
     settings = get_settings()
     webhook_base_url = f"{settings.api_base_url.rstrip('/')}/api/v1/contributions/webhooks"
     cookie_same_site = _resolve_cookie_same_site(settings)
@@ -413,6 +412,7 @@ def system_diagnostics(
             ),
             platform_owner_password_configured=bool(settings.platform_owner_password),
             admin_two_factor_required=settings.admin_two_factor_required,
+            current_user_two_factor_enabled=current_user.two_factor_enabled_at is not None,
             seed_test_accounts_enabled=settings.seed_test_accounts,
             test_accounts_password_configured=bool(settings.test_accounts_password),
             two_factor_recovery_supported=True,

@@ -21,6 +21,22 @@ npm run verify:runtime-readiness
 `/api/v1/system/readiness` must block promotion until migrations or required
 Redis connectivity are repaired.
 
+After runtime readiness passes, run the credentialed pilot gate from a secure
+operator shell:
+
+```powershell
+$env:RELEASE_SUPERADMIN_URL="https://yalumni-v15-superadmin-954095.azurewebsites.net"
+$env:PILOT_SUPERADMIN_EMAIL="<protected-super-admin-email>"
+$env:PILOT_SUPERADMIN_PASSWORD="<protected-super-admin-password>"
+npm run verify:pilot-launch
+```
+
+The command performs no payment or destructive storage action. It reads owner
+diagnostics and runs the existing audited storage connectivity probe, then
+blocks promotion unless payments, security/session policy, S3, and all three
+worker families are ready. The signed-in platform owner must have two-factor
+authentication enabled before the security gate can pass.
+
 ## First Response
 
 1. Confirm `/health` and `/api/v1/system/status` return `200`.

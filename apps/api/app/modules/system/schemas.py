@@ -56,6 +56,7 @@ class AuthDiagnostics(BaseModel):
     platform_owner_alias_count: int
     platform_owner_password_configured: bool
     admin_two_factor_required: bool
+    current_user_two_factor_enabled: bool
     seed_test_accounts_enabled: bool
     test_accounts_password_configured: bool
     two_factor_recovery_supported: bool

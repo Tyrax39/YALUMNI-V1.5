@@ -307,6 +307,7 @@ def test_system_diagnostics_reports_release_and_provider_readiness(
     assert payload["auth"]["platform_owner_alias_count"] == 2
     assert payload["auth"]["platform_owner_password_configured"] is True
     assert payload["auth"]["seed_test_accounts_enabled"] is True
+    assert payload["auth"]["current_user_two_factor_enabled"] is False
     assert payload["auth"]["test_accounts_password_configured"] is True
     assert payload["auth"]["two_factor_recovery_supported"] is True
     assert payload["auth"]["two_factor_recovery_code_count"] == 8

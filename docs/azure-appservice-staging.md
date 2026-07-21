@@ -99,12 +99,21 @@ $env:RELEASE_EXPECTED_VERSION="<release-version>"
 npm run verify:release-parity
 $env:RELEASE_EXPECTED_ENVIRONMENT="staging"
 npm run verify:runtime-readiness
+$env:RELEASE_SUPERADMIN_URL="https://yalumni-v15-superadmin-954095.azurewebsites.net"
+$env:PILOT_SUPERADMIN_EMAIL="<protected-super-admin-email>"
+$env:PILOT_SUPERADMIN_PASSWORD="<protected-super-admin-password>"
+npm run verify:pilot-launch
 ```
 
 The release is rejected if any endpoint is unavailable, reports the wrong
 service identity, omits release metadata, differs from the expected SHA or
 version, cannot reach its database, is behind the Alembic head, or cannot reach
-required Redis infrastructure.
+required Redis infrastructure. The credentialed pilot gate additionally
+requires dual-provider payment readiness, hardened staging auth/session policy,
+a reachable S3 storage target, and fresh successful worker heartbeats. Operator
+credentials must remain in the process environment and must never be committed.
+The authenticated operator must also have two-factor authentication enabled;
+configuration alone does not satisfy the security gate.
 
 ## Current Verified Staging Release
 

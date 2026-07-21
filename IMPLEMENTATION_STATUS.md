@@ -30,6 +30,9 @@ the documents disagree.
   timeout/retry policy, and Compose defines all three dedicated worker services.
   Deployment readiness now separately gates database connectivity, Alembic head
   parity, and required Redis reachability without changing liveness behavior.
+  A credentialed pilot promotion gate now enforces dual-provider payment
+  readiness, hardened auth/session policy with owner 2FA enrollment, live S3
+  reachability, and fresh successful execution across all three worker families.
 
 ## Frozen Baseline
 
@@ -158,6 +161,8 @@ Execute in this order unless a user explicitly reprioritizes:
 4. Repeat the verified four-service Azure parity, route smoke, and credentialed RBAC gate for the final release candidate.
    Run `npm run verify:runtime-readiness` before promotion so database,
    migration, and Redis drift cannot pass as a healthy release.
+   Run `npm run verify:pilot-launch` after protected credentials are supplied;
+   all payment, security, storage, and worker gates must pass.
 5. Add only the minimum remaining public informational surfaces needed for pilot
    credibility; defer broader public-marketing breadth post-launch.
 
