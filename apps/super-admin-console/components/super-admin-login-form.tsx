@@ -38,6 +38,7 @@ async function readError(response: Response): Promise<string> {
 export function SuperAdminLoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [requiresTwoFactor, setRequiresTwoFactor] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -52,7 +53,17 @@ export function SuperAdminLoginForm() {
       const response = await fetch("/api/session/login", {
         body: JSON.stringify({
           email: String(formData.get("email") ?? ""),
-          password: String(formData.get("password") ?? "")
+          password: String(formData.get("password") ?? ""),
+          ...(String(formData.get("two_factor_code") ?? "").trim()
+            ? { two_factor_code: String(formData.get("two_factor_code") ?? "").trim() }
+            : {}),
+          ...(String(formData.get("two_factor_recovery_code") ?? "").trim()
+            ? {
+                two_factor_recovery_code: String(
+                  formData.get("two_factor_recovery_code") ?? ""
+                ).trim()
+              }
+            : {})
         }),
         cache: "no-store",
         credentials: "include",
@@ -69,7 +80,11 @@ export function SuperAdminLoginForm() {
 
       window.location.assign(nextPath?.startsWith("/") && !nextPath.startsWith("//") ? nextPath : "/");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Invalid email or password");
+      const message = caught instanceof Error ? caught.message : "Invalid email or password";
+      if (message === "Two-factor authentication required") {
+        setRequiresTwoFactor(true);
+      }
+      setError(message);
     } finally {
       setIsSubmitting(false);
     }
@@ -102,6 +117,35 @@ export function SuperAdminLoginForm() {
         required
         type="password"
       />
+
+      {requiresTwoFactor ? (
+        <>
+          <label className="mt-5 block text-sm font-semibold text-ink" htmlFor="two_factor_code">
+            Two-factor code
+          </label>
+          <input
+            autoComplete="one-time-code"
+            className={inputClass}
+            id="two_factor_code"
+            inputMode="numeric"
+            name="two_factor_code"
+            placeholder="6-digit code"
+            type="text"
+          />
+
+          <label className="mt-5 block text-sm font-semibold text-ink" htmlFor="two_factor_recovery_code">
+            Recovery code
+          </label>
+          <input
+            autoComplete="one-time-code"
+            className={inputClass}
+            id="two_factor_recovery_code"
+            name="two_factor_recovery_code"
+            placeholder="Use only if you cannot access your authenticator"
+            type="text"
+          />
+        </>
+      ) : null}
 
       {error ? (
         <p className="mt-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">

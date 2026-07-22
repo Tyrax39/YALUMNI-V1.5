@@ -39,6 +39,7 @@ export function AuthForm({ mode }: AuthFormProps) {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [requiresTwoFactor, setRequiresTwoFactor] = useState(false);
 
   const isRegister = mode === "register";
 
@@ -51,6 +52,8 @@ export function AuthForm({ mode }: AuthFormProps) {
     const formData = new FormData(event.currentTarget);
     const email = String(formData.get("email") ?? "");
     const password = String(formData.get("password") ?? "");
+    const twoFactorCode = String(formData.get("two_factor_code") ?? "").trim();
+    const twoFactorRecoveryCode = String(formData.get("two_factor_recovery_code") ?? "").trim();
 
     try {
       const response = isRegister
@@ -61,7 +64,12 @@ export function AuthForm({ mode }: AuthFormProps) {
             last_name: String(formData.get("last_name") ?? ""),
             password
           } satisfies RegisterPayload)
-        : await login({ email, password } satisfies LoginPayload);
+        : await login({
+            email,
+            password,
+            ...(twoFactorCode ? { two_factor_code: twoFactorCode } : {}),
+            ...(twoFactorRecoveryCode ? { two_factor_recovery_code: twoFactorRecoveryCode } : {})
+          } satisfies LoginPayload);
 
       storeAuth(response);
       setSuccess(isRegister ? "Account created. Opening your dashboard..." : "Signed in. Opening your dashboard...");
@@ -71,6 +79,9 @@ export function AuthForm({ mode }: AuthFormProps) {
     } catch (caught) {
       const message =
         caught instanceof ApiError ? caught.message : "The auth service could not be reached.";
+      if (!isRegister && message === "Two-factor authentication required") {
+        setRequiresTwoFactor(true);
+      }
       setError(message);
     } finally {
       setIsSubmitting(false);
@@ -136,6 +147,35 @@ export function AuthForm({ mode }: AuthFormProps) {
         required
         type="password"
       />
+
+      {!isRegister && requiresTwoFactor ? (
+        <>
+          <label className="mt-5 block text-sm font-semibold text-ink" htmlFor="two_factor_code">
+            Two-factor code
+          </label>
+          <input
+            autoComplete="one-time-code"
+            className={inputClass}
+            id="two_factor_code"
+            inputMode="numeric"
+            name="two_factor_code"
+            placeholder="6-digit code"
+            type="text"
+          />
+
+          <label className="mt-5 block text-sm font-semibold text-ink" htmlFor="two_factor_recovery_code">
+            Recovery code
+          </label>
+          <input
+            autoComplete="one-time-code"
+            className={inputClass}
+            id="two_factor_recovery_code"
+            name="two_factor_recovery_code"
+            placeholder="Use only if you cannot access your authenticator"
+            type="text"
+          />
+        </>
+      ) : null}
 
       {error ? (
         <p className="mt-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">

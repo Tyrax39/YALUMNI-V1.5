@@ -387,6 +387,30 @@ def login(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is not active")
 
     user = restore_platform_owner_if_needed(db, user)
+    if user.two_factor_enabled_at is not None:
+        if not payload.two_factor_code and not payload.two_factor_recovery_code:
+            _create_security_event(db, request, user, "auth.two_factor_login_required")
+            db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Two-factor authentication required",
+            )
+
+        challenge_valid, used_recovery_code = _verify_two_factor_challenge(
+            user,
+            code=payload.two_factor_code,
+            recovery_code=payload.two_factor_recovery_code,
+        )
+        if not challenge_valid:
+            _create_security_event(db, request, user, "auth.two_factor_login_failed")
+            db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid two-factor code or recovery code",
+            )
+        if used_recovery_code:
+            _create_security_event(db, request, user, "auth.two_factor_login_recovery_code_used")
+
     return _issue_auth_response(db, request, user, "auth.login_succeeded")
 
 

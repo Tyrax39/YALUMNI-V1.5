@@ -413,6 +413,7 @@ def system_diagnostics(
             platform_owner_password_configured=bool(settings.platform_owner_password),
             admin_two_factor_required=settings.admin_two_factor_required,
             current_user_two_factor_enabled=current_user.two_factor_enabled_at is not None,
+            login_two_factor_challenge_enforced=True,
             seed_test_accounts_enabled=settings.seed_test_accounts,
             test_accounts_password_configured=bool(settings.test_accounts_password),
             two_factor_recovery_supported=True,

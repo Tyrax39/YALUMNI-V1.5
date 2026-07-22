@@ -27,6 +27,8 @@ export type RegisterPayload = {
 export type LoginPayload = {
   email: string;
   password: string;
+  two_factor_code?: string;
+  two_factor_recovery_code?: string;
 };
 
 export type TwoFactorStatus = {

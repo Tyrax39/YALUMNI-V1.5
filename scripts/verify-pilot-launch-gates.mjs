@@ -13,6 +13,7 @@ export function evaluatePilotLaunchGates(diagnostics, storageProbe) {
     ["production", "staging"].includes(diagnostics.environment) &&
       diagnostics.auth?.admin_two_factor_required &&
       diagnostics.auth?.current_user_two_factor_enabled &&
+      diagnostics.auth?.login_two_factor_challenge_enforced &&
       diagnostics.auth?.platform_owner_password_configured &&
       diagnostics.auth?.two_factor_recovery_supported &&
       !diagnostics.auth?.seed_test_accounts_enabled &&

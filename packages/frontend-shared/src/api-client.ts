@@ -57,6 +57,7 @@ export type RuntimeDiagnostics = {
 export type AuthDiagnostics = {
   admin_two_factor_required: boolean;
   current_user_two_factor_enabled: boolean;
+  login_two_factor_challenge_enforced: boolean;
   platform_owner_email: string;
   platform_owner_alias_count: number;
   platform_owner_password_configured: boolean;

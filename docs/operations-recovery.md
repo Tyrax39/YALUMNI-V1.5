@@ -35,7 +35,9 @@ The command performs no payment or destructive storage action. It reads owner
 diagnostics and runs the existing audited storage connectivity probe, then
 blocks promotion unless payments, security/session policy, S3, and all three
 worker families are ready. The signed-in platform owner must have two-factor
-authentication enabled before the security gate can pass.
+authentication enabled before the security gate can pass, and enrolled admin
+accounts must complete a TOTP or recovery-code challenge before access or
+refresh tokens are issued.
 
 ## First Response
 

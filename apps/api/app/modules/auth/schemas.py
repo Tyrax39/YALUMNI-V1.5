@@ -28,6 +28,8 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: str = Field(min_length=3, max_length=320)
     password: str = Field(min_length=1, max_length=128)
+    two_factor_code: str | None = Field(default=None, min_length=6, max_length=16)
+    two_factor_recovery_code: str | None = Field(default=None, min_length=4, max_length=32)
 
     @field_validator("email")
     @classmethod

@@ -580,6 +580,76 @@ def test_two_factor_setup_confirm_and_disable(client: TestClient) -> None:
     assert disable_response.json()["two_factor_enabled"] is False
 
 
+def test_two_factor_login_requires_totp_or_recovery_code(client: TestClient) -> None:
+    registered = register_user(client, email="two-factor-login@example.com")
+    headers = auth_headers(registered["access_token"])
+
+    setup_response = client.post(
+        "/api/v1/auth/me/2fa/setup",
+        headers=headers,
+        json={"password": "SecurePass123!"},
+    )
+    assert setup_response.status_code == 200
+    secret = setup_response.json()["secret"]
+
+    confirm_response = client.post(
+        "/api/v1/auth/me/2fa/confirm",
+        headers=headers,
+        json={"code": generate_totp_code(secret)},
+    )
+    assert confirm_response.status_code == 200
+    recovery_code = confirm_response.json()["recovery_codes"][0]
+
+    missing_challenge = client.post(
+        "/api/v1/auth/login",
+        json={"email": "two-factor-login@example.com", "password": "SecurePass123!"},
+    )
+    assert missing_challenge.status_code == 403
+    assert missing_challenge.json()["detail"] == "Two-factor authentication required"
+
+    invalid_challenge = client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": "two-factor-login@example.com",
+            "password": "SecurePass123!",
+            "two_factor_code": "000000",
+        },
+    )
+    assert invalid_challenge.status_code == 401
+    assert invalid_challenge.json()["detail"] == "Invalid two-factor code or recovery code"
+
+    code_login = client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": "two-factor-login@example.com",
+            "password": "SecurePass123!",
+            "two_factor_code": generate_totp_code(secret),
+        },
+    )
+    assert code_login.status_code == 200
+    assert code_login.json()["user"]["two_factor_enabled"] is True
+
+    recovery_login = client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": "two-factor-login@example.com",
+            "password": "SecurePass123!",
+            "two_factor_recovery_code": recovery_code,
+        },
+    )
+    assert recovery_login.status_code == 200
+
+    reused_recovery_code = client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": "two-factor-login@example.com",
+            "password": "SecurePass123!",
+            "two_factor_recovery_code": recovery_code,
+        },
+    )
+    assert reused_recovery_code.status_code == 401
+
+
 def test_admin_two_factor_policy_blocks_admin_until_enabled(client: TestClient) -> None:
     settings = get_settings()
     previous_requirement = settings.admin_two_factor_required

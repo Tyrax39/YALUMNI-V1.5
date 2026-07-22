@@ -10,6 +10,7 @@ function readyFixture() {
       auth: {
         admin_two_factor_required: true,
         current_user_two_factor_enabled: true,
+        login_two_factor_challenge_enforced: true,
         platform_owner_password_configured: true,
         seed_test_accounts_enabled: false,
         two_factor_recovery_supported: true
@@ -78,6 +79,12 @@ test("security gate rejects insecure cookies or enabled staging seeds", () => {
   const fixture = readyFixture();
   fixture.diagnostics.session.cookie_secure = false;
   fixture.diagnostics.auth.seed_test_accounts_enabled = true;
+  assert.equal(gateMap(fixture).security, false);
+});
+
+test("security gate requires login-time two-factor challenge enforcement", () => {
+  const fixture = readyFixture();
+  fixture.diagnostics.auth.login_two_factor_challenge_enforced = false;
   assert.equal(gateMap(fixture).security, false);
 });
 

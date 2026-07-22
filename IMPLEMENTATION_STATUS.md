@@ -31,7 +31,8 @@ the documents disagree.
   Deployment readiness now separately gates database connectivity, Alembic head
   parity, and required Redis reachability without changing liveness behavior.
   A credentialed pilot promotion gate now enforces dual-provider payment
-  readiness, hardened auth/session policy with owner 2FA enrollment, live S3
+  readiness, hardened auth/session policy with owner 2FA enrollment plus
+  login-time 2FA challenges, live S3
   reachability, and fresh successful execution across all three worker families.
 
 ## Frozen Baseline
@@ -41,6 +42,7 @@ future task slice explicitly touches them:
 
 - Runtime split and app separation across member, admin, super-admin, and API
 - Cookie/session auth shell, core RBAC menu separation, and current login flows
+  including login-time 2FA challenge enforcement for enrolled accounts
 - Platform-owner bootstrap and local test-account seeding contracts
 - Member dashboard/app shell, admin shell, and super-admin shell navigation
 - MWF alumni hybrid cache model, APIs, sync history, and super-admin controls
@@ -55,7 +57,7 @@ future task slice explicitly touches them:
 | Domain | Spec scope | Current coverage | UI state | Backend state | Test/deploy state | Launch status | Frozen |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Foundation and runtime split | Separate member/admin/super-admin apps, FastAPI backend, shared packages | Implemented | implemented | implemented | local/staging paths present | complete | yes |
-| Auth, session, RBAC | login, logout, sessions, route protection, role-aware consoles | Implemented with hardening follow-up | implemented | implemented with backend-validated proxy session checks and stricter route gating | smoke and contract coverage present | hardening follow-up | yes |
+| Auth, session, RBAC | login, logout, sessions, route protection, role-aware consoles | Implemented with hardening follow-up | implemented with 2FA challenge prompts | implemented with backend-validated proxy session checks, login-time 2FA challenge enforcement, and stricter route gating | smoke and contract coverage present | hardening follow-up | yes |
 | Profile and verification | profile, affiliation, verification request, evidence, admin review | Implemented | implemented | implemented | covered and deployed locally/staging | complete | yes |
 | Directory and MWF alumni | member directory plus MWF alumni cache | Implemented | implemented | implemented | tests and super-admin sync controls present | complete | yes |
 | Communities | discovery, detail, memberships, invitations, leadership views | Implemented for pilot scope | implemented | implemented | local/staging ready | complete for pilot | yes |
@@ -75,7 +77,7 @@ future task slice explicitly touches them:
 | Public landing and trust IA | home, sign-in/join framing, public trust/value surface | Implemented minimum | implemented | not backend-heavy | staging parity review still needed | complete for pilot minimum | yes |
 | Public informational/discovery breadth | broader public marketing/institutional breadth from long-form spec | intentionally reduced for pilot | partial | partial | not required for pilot launch | post-launch | no |
 | Payments productionization | real providers, callbacks, reconciliation | partially implemented | implemented via intent-based member pay UX | implemented foundation for Stripe + Flutterwave checkout, refunds, and webhook normalization | local verified; staging/provider credential validation still needed | launch blocker | no |
-| Security hardening | 2FA recovery, cookie review, CSRF/session review, SSR role checks | partially implemented | unchanged | partially implemented with cookie-policy controls, same-origin CSRF checks, SSR-aware proxy enforcement, and persisted 2FA recovery-code lifecycle | needs staging validation | launch blocker | no |
+| Security hardening | 2FA recovery, cookie review, CSRF/session review, SSR role checks | partially implemented | login challenge UI implemented | partially implemented with cookie-policy controls, same-origin CSRF checks, SSR-aware proxy enforcement, login-time 2FA challenge enforcement, and persisted 2FA recovery-code lifecycle | needs staging validation | launch blocker | no |
 | Storage/search/ops hardening | storage policy, background workers, search threshold, runbooks | implemented foundation with deployment follow-up | owner console exposes live storage reachability, heartbeat-based worker recency, and S3 resilience policy | storage probe, poll heartbeats, bounded S3 retries/timeouts, dedicated Compose workers, audit events, and recovery runbook implemented | focused API/worker/UI/Compose checks present; production targets still need deployment validation | launch blocker | no |
 | Azure release parity | same code/env behavior in staging | implemented for the current staging release | implemented read-only release/provider diagnostics in owner console | additive release-identity endpoints and a strict four-service SHA/version parity gate are implemented | API/member/admin/super-admin verified at `640dc1f` on 2026-07-19 | complete for current staging release; repeat per release | yes |
 
@@ -102,7 +104,7 @@ broader post-launch work:
 2. Security and identity hardening
    - cookie domain/SameSite/secure review in staging
    - proxy-backed SSR route enforcement validation across deployed apps
-   - 2FA recovery workflow is now implemented locally; staging cookie and recovery-path validation remain
+   - 2FA recovery workflow and login-time challenge enforcement are now implemented locally; staging cookie and recovery-path validation remain
 3. Storage and operations hardening
    - owner-only storage connectivity probe is implemented and audited
    - MWF, notification-digest, and expense-retention execution recency is visible
