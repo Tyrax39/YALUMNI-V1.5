@@ -47,6 +47,10 @@ def _configured_env_value(*names: str) -> str | None:
     return None
 
 
+def _missing_settings(*settings: tuple[str, bool]) -> list[str]:
+    return [name for name, configured in settings if not configured]
+
+
 def _email_ready(settings) -> bool:
     if settings.email_provider.strip().lower() == "console":
         return True
@@ -314,35 +318,57 @@ def system_diagnostics(
         "contributions.expense_evidence_retention_worker_run",
     )
 
+    stripe_secret_key_configured = bool(settings.stripe_secret_key)
+    stripe_webhook_secret_configured = bool(settings.stripe_webhook_secret)
+    stripe_success_url_configured = bool(settings.stripe_checkout_success_url)
+    stripe_cancel_url_configured = bool(settings.stripe_checkout_cancel_url)
+    stripe_missing_settings = _missing_settings(
+        ("STRIPE_SECRET_KEY", stripe_secret_key_configured),
+        ("STRIPE_WEBHOOK_SECRET", stripe_webhook_secret_configured),
+        ("STRIPE_CHECKOUT_SUCCESS_URL", stripe_success_url_configured),
+        ("STRIPE_CHECKOUT_CANCEL_URL", stripe_cancel_url_configured),
+    )
     stripe = StripeDiagnostics(
-        secret_key_configured=bool(settings.stripe_secret_key),
-        webhook_secret_configured=bool(settings.stripe_webhook_secret),
-        success_url_configured=bool(settings.stripe_checkout_success_url),
-        cancel_url_configured=bool(settings.stripe_checkout_cancel_url),
+        adapter_ready=True,
+        secret_key_configured=stripe_secret_key_configured,
+        webhook_secret_configured=stripe_webhook_secret_configured,
+        success_url_configured=stripe_success_url_configured,
+        cancel_url_configured=stripe_cancel_url_configured,
         checkout_ready=bool(
-            settings.stripe_secret_key
-            and settings.stripe_webhook_secret
-            and settings.stripe_checkout_success_url
-            and settings.stripe_checkout_cancel_url
+            stripe_secret_key_configured
+            and stripe_webhook_secret_configured
+            and stripe_success_url_configured
+            and stripe_cancel_url_configured
         ),
-        refund_ready=bool(settings.stripe_secret_key),
+        refund_ready=stripe_secret_key_configured,
         return_urls_ready=bool(
-            settings.stripe_checkout_success_url and settings.stripe_checkout_cancel_url
+            stripe_success_url_configured and stripe_cancel_url_configured
         ),
         webhook_url=f"{webhook_base_url}/stripe",
+        missing_settings=stripe_missing_settings,
+    )
+    flutterwave_secret_key_configured = bool(settings.flutterwave_secret_key)
+    flutterwave_webhook_secret_configured = bool(settings.flutterwave_webhook_secret_hash)
+    flutterwave_redirect_url_configured = bool(settings.flutterwave_checkout_redirect_url)
+    flutterwave_missing_settings = _missing_settings(
+        ("FLUTTERWAVE_SECRET_KEY", flutterwave_secret_key_configured),
+        ("FLUTTERWAVE_WEBHOOK_SECRET_HASH", flutterwave_webhook_secret_configured),
+        ("FLUTTERWAVE_CHECKOUT_REDIRECT_URL", flutterwave_redirect_url_configured),
     )
     flutterwave = FlutterwaveDiagnostics(
-        secret_key_configured=bool(settings.flutterwave_secret_key),
-        webhook_secret_configured=bool(settings.flutterwave_webhook_secret_hash),
-        redirect_url_configured=bool(settings.flutterwave_checkout_redirect_url),
+        adapter_ready=True,
+        secret_key_configured=flutterwave_secret_key_configured,
+        webhook_secret_configured=flutterwave_webhook_secret_configured,
+        redirect_url_configured=flutterwave_redirect_url_configured,
         checkout_ready=bool(
-            settings.flutterwave_secret_key
-            and settings.flutterwave_webhook_secret_hash
-            and settings.flutterwave_checkout_redirect_url
+            flutterwave_secret_key_configured
+            and flutterwave_webhook_secret_configured
+            and flutterwave_redirect_url_configured
         ),
-        refund_ready=bool(settings.flutterwave_secret_key),
-        return_url_ready=bool(settings.flutterwave_checkout_redirect_url),
+        refund_ready=flutterwave_secret_key_configured,
+        return_url_ready=flutterwave_redirect_url_configured,
         webhook_url=f"{webhook_base_url}/flutterwave",
+        missing_settings=flutterwave_missing_settings,
     )
     webhook_signing_ready = (
         stripe.webhook_secret_configured
@@ -370,6 +396,23 @@ def system_diagnostics(
         if settings.contribution_checkout_provider.strip().upper() == "LOCAL_TEST"
         else "PROVIDER_BACKED"
     )
+    payment_implementation_ready = bool(
+        stripe.adapter_ready
+        and flutterwave.adapter_ready
+        and webhook_base_url
+        and settings.contribution_provider_request_timeout_seconds > 0
+    )
+    credential_configuration_ready = bool(
+        stripe.checkout_ready
+        and stripe.refund_ready
+        and flutterwave.checkout_ready
+        and flutterwave.refund_ready
+        and metadata_complete
+    )
+    payment_missing_settings = [
+        *stripe.missing_settings,
+        *flutterwave.missing_settings,
+    ]
 
     return SystemDiagnosticsResponse(
         status="ok",
@@ -603,6 +646,9 @@ def system_diagnostics(
             webhook_signing_ready=webhook_signing_ready,
             checkout_return_url_ready=checkout_return_url_ready,
             refund_provider_ready=refund_provider_ready,
+            implementation_ready=payment_implementation_ready,
+            credential_configuration_ready=credential_configuration_ready,
+            live_provider_validation_required=not credential_configuration_ready,
             staging_candidate_ready=bool(
                 provider_mode == "PROVIDER_BACKED"
                 and webhook_signing_ready
@@ -611,6 +657,7 @@ def system_diagnostics(
                 and settings.contribution_provider_request_timeout_seconds > 0
                 and metadata_complete
             ),
+            missing_settings=payment_missing_settings,
             stripe=stripe,
             flutterwave=flutterwave,
         ),

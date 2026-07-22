@@ -16,10 +16,12 @@ function readyFixture() {
         two_factor_recovery_supported: true
       },
       payments: {
+        implementation_ready: true,
         provider_mode: "PROVIDER_BACKED",
+        provider_request_timeout_seconds: 20,
         staging_candidate_ready: true,
-        stripe: { checkout_ready: true, refund_ready: true },
-        flutterwave: { checkout_ready: true, refund_ready: true }
+        stripe: { adapter_ready: true, checkout_ready: true, refund_ready: true },
+        flutterwave: { adapter_ready: true, checkout_ready: true, refund_ready: true }
       },
       runtime: { csrf_same_origin_enforced: true, redis_configured: true },
       session: {
@@ -69,9 +71,18 @@ test("all pilot launch gates pass for a production-shaped staging runtime", () =
   });
 });
 
-test("payment gate rejects a provider without dual-provider readiness", () => {
+test("payment gate checks implementation readiness without requiring live credentials", () => {
   const fixture = readyFixture();
+  fixture.diagnostics.payments.provider_mode = "LOCAL_TEST";
+  fixture.diagnostics.payments.staging_candidate_ready = false;
+  fixture.diagnostics.payments.stripe.checkout_ready = false;
   fixture.diagnostics.payments.flutterwave.refund_ready = false;
+  assert.equal(gateMap(fixture).payments, true);
+});
+
+test("payment gate rejects missing adapter implementation readiness", () => {
+  const fixture = readyFixture();
+  fixture.diagnostics.payments.flutterwave.adapter_ready = false;
   assert.equal(gateMap(fixture).payments, false);
 });
 

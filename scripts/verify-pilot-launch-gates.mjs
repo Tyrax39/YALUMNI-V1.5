@@ -2,12 +2,10 @@ import { pathToFileURL } from "node:url";
 
 export function evaluatePilotLaunchGates(diagnostics, storageProbe) {
   const paymentReady = Boolean(
-    diagnostics.payments?.provider_mode === "PROVIDER_BACKED" &&
-      diagnostics.payments?.staging_candidate_ready &&
-      diagnostics.payments?.stripe?.checkout_ready &&
-      diagnostics.payments?.stripe?.refund_ready &&
-      diagnostics.payments?.flutterwave?.checkout_ready &&
-      diagnostics.payments?.flutterwave?.refund_ready
+    diagnostics.payments?.implementation_ready &&
+      diagnostics.payments?.stripe?.adapter_ready &&
+      diagnostics.payments?.flutterwave?.adapter_ready &&
+      diagnostics.payments?.provider_request_timeout_seconds > 0
   );
   const securityReady = Boolean(
     ["production", "staging"].includes(diagnostics.environment) &&

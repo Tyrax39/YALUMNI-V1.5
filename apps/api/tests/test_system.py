@@ -284,13 +284,21 @@ def test_system_diagnostics_reports_release_and_provider_readiness(
     assert payload["payments"]["webhook_signing_ready"] is True
     assert payload["payments"]["checkout_return_url_ready"] is True
     assert payload["payments"]["refund_provider_ready"] is True
+    assert payload["payments"]["implementation_ready"] is True
+    assert payload["payments"]["credential_configuration_ready"] is True
+    assert payload["payments"]["live_provider_validation_required"] is False
     assert payload["payments"]["staging_candidate_ready"] is True
+    assert payload["payments"]["missing_settings"] == []
+    assert payload["payments"]["stripe"]["adapter_ready"] is True
     assert payload["payments"]["stripe"]["checkout_ready"] is True
     assert payload["payments"]["stripe"]["refund_ready"] is True
     assert payload["payments"]["stripe"]["return_urls_ready"] is True
+    assert payload["payments"]["stripe"]["missing_settings"] == []
+    assert payload["payments"]["flutterwave"]["adapter_ready"] is True
     assert payload["payments"]["flutterwave"]["checkout_ready"] is True
     assert payload["payments"]["flutterwave"]["refund_ready"] is True
     assert payload["payments"]["flutterwave"]["return_url_ready"] is True
+    assert payload["payments"]["flutterwave"]["missing_settings"] == []
     assert payload["payments"]["stripe"]["webhook_url"].endswith(
         "/api/v1/contributions/webhooks/stripe"
     )
@@ -387,6 +395,57 @@ def test_system_diagnostics_reports_release_and_provider_readiness(
         "last_run_at": None,
         "last_run_status": "never",
         "overdue": True,
+    }
+
+
+def test_system_diagnostics_reports_payment_implementation_ready_without_credentials(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    registered = register_user(client)
+    bootstrap_response = client.post(
+        "/api/v1/auth/dev/bootstrap-admin",
+        headers=auth_headers(registered["access_token"]),
+    )
+    assert bootstrap_response.status_code == 200
+
+    monkeypatch.setenv("APP_ENV", "staging")
+    monkeypatch.setenv("CONTRIBUTION_CHECKOUT_PROVIDER", "LOCAL_TEST")
+    monkeypatch.setenv("CONTRIBUTION_REFUND_PROVIDER", "LOCAL_TEST")
+    monkeypatch.delenv("STRIPE_SECRET_KEY", raising=False)
+    monkeypatch.delenv("STRIPE_WEBHOOK_SECRET", raising=False)
+    monkeypatch.delenv("STRIPE_CHECKOUT_SUCCESS_URL", raising=False)
+    monkeypatch.delenv("STRIPE_CHECKOUT_CANCEL_URL", raising=False)
+    monkeypatch.delenv("FLUTTERWAVE_SECRET_KEY", raising=False)
+    monkeypatch.delenv("FLUTTERWAVE_WEBHOOK_SECRET_HASH", raising=False)
+    monkeypatch.delenv("FLUTTERWAVE_CHECKOUT_REDIRECT_URL", raising=False)
+    get_settings.cache_clear()
+
+    try:
+        response = client.get(
+            "/api/v1/system/diagnostics",
+            headers=auth_headers(registered["access_token"]),
+        )
+    finally:
+        get_settings.cache_clear()
+
+    assert response.status_code == 200
+    payments = response.json()["payments"]
+    assert payments["provider_mode"] == "LOCAL_TEST"
+    assert payments["implementation_ready"] is True
+    assert payments["credential_configuration_ready"] is False
+    assert payments["live_provider_validation_required"] is True
+    assert payments["staging_candidate_ready"] is False
+    assert payments["stripe"]["adapter_ready"] is True
+    assert payments["flutterwave"]["adapter_ready"] is True
+    assert set(payments["missing_settings"]) == {
+        "STRIPE_SECRET_KEY",
+        "STRIPE_WEBHOOK_SECRET",
+        "STRIPE_CHECKOUT_SUCCESS_URL",
+        "STRIPE_CHECKOUT_CANCEL_URL",
+        "FLUTTERWAVE_SECRET_KEY",
+        "FLUTTERWAVE_WEBHOOK_SECRET_HASH",
+        "FLUTTERWAVE_CHECKOUT_REDIRECT_URL",
     }
 
 

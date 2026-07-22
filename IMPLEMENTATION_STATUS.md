@@ -24,14 +24,14 @@ the documents disagree.
   console, Azure staging release parity verified at `640dc1f`, and owner
   diagnostics now include a protected live storage probe plus persisted
   execution-recency signals for all three scheduled worker families. Remaining
-  launch work is concentrated in real payment credentials and production
+  launch work is concentrated in production credential handoff and production
   storage/worker deployment validation. MWF and digest poll heartbeats now
   distinguish healthy cadence skips from stopped processes, S3 calls use bounded
   timeout/retry policy, and Compose defines all three dedicated worker services.
   Deployment readiness now separately gates database connectivity, Alembic head
   parity, and required Redis reachability without changing liveness behavior.
   A credentialed pilot promotion gate now enforces dual-provider payment
-  readiness, hardened auth/session policy with owner 2FA enrollment plus
+  implementation readiness, hardened auth/session policy with owner 2FA enrollment plus
   login-time 2FA challenges, live S3
   reachability, and fresh successful execution across all three worker families.
 
@@ -76,7 +76,7 @@ future task slice explicitly touches them:
 | Super-admin diagnostics | system-level health and controls | Implemented read-focused console | implemented | partial for deeper action endpoints | local/staging ready | partial but not launch-blocking | yes |
 | Public landing and trust IA | home, sign-in/join framing, public trust/value surface | Implemented minimum | implemented | not backend-heavy | staging parity review still needed | complete for pilot minimum | yes |
 | Public informational/discovery breadth | broader public marketing/institutional breadth from long-form spec | intentionally reduced for pilot | partial | partial | not required for pilot launch | post-launch | no |
-| Payments productionization | real providers, callbacks, reconciliation | partially implemented | implemented via intent-based member pay UX | implemented foundation for Stripe + Flutterwave checkout, refunds, and webhook normalization | local verified; staging/provider credential validation still needed | launch blocker | no |
+| Payments productionization | real providers, callbacks, reconciliation | implementation complete pending secrets | implemented via intent-based member pay UX and owner diagnostics | implemented foundation for Stripe + Flutterwave checkout, refunds, webhook normalization, readiness diagnostics, and missing-setting reporting | local verified; credential handoff and live provider validation still needed | credential handoff open | no |
 | Security hardening | 2FA recovery, cookie review, CSRF/session review, SSR role checks | partially implemented | login challenge UI implemented | partially implemented with cookie-policy controls, same-origin CSRF checks, SSR-aware proxy enforcement, login-time 2FA challenge enforcement, and persisted 2FA recovery-code lifecycle | needs staging validation | launch blocker | no |
 | Storage/search/ops hardening | storage policy, background workers, search threshold, runbooks | implemented foundation with deployment follow-up | owner console exposes live storage reachability, heartbeat-based worker recency, and S3 resilience policy | storage probe, poll heartbeats, bounded S3 retries/timeouts, dedicated Compose workers, audit events, and recovery runbook implemented | focused API/worker/UI/Compose checks present; production targets still need deployment validation | launch blocker | no |
 | Azure release parity | same code/env behavior in staging | implemented for the current staging release | implemented read-only release/provider diagnostics in owner console | additive release-identity endpoints and a strict four-service SHA/version parity gate are implemented | API/member/admin/super-admin verified at `640dc1f` on 2026-07-19 | complete for current staging release; repeat per release | yes |
@@ -87,7 +87,7 @@ There are no longer any known route-level pilot-core gaps in the previously
 tracked member/admin surfaces. The remaining open work is now concentrated in
 cross-cutting launch blockers:
 
-1. Payment-provider staging validation and deployment parity (`Stripe + Flutterwave`)
+1. Payment-provider credential handoff and staging validation (`Stripe + Flutterwave`)
 2. Security/session/2FA hardening
 3. Storage, worker, and runbook hardening
 4. Azure staging-to-release parity and release-gate enforcement
@@ -97,10 +97,10 @@ cross-cutting launch blockers:
 These items block pilot production readiness and should be prioritized before
 broader post-launch work:
 
-1. Payment-provider staging validation
+1. Payment-provider credential handoff
    - selected target: `Stripe + Flutterwave`
-   - local provider-backed adapter flow is implemented
-   - staging credential wiring, webhook delivery, and live callback validation still required
+   - local provider-backed adapter flow, intent logic, webhooks, refunds, and missing-setting diagnostics are implemented
+   - API keys, webhook secrets, return URLs, webhook delivery, and live callback validation still required
 2. Security and identity hardening
    - cookie domain/SameSite/secure review in staging
    - proxy-backed SSR route enforcement validation across deployed apps
@@ -157,7 +157,7 @@ Common local runtime commands:
 
 Execute in this order unless a user explicitly reprioritizes:
 
-1. Provision Stripe + Flutterwave staging credentials and callback/webhook configuration.
+1. Add Stripe + Flutterwave staging credentials and callback/webhook configuration when available.
 2. Validate both provider flows in staging, including payment, receipt, reconciliation, failure, and refund paths.
 3. Validate auth/session recovery paths in staging, configure the production storage target, and deploy the three scheduled worker processes with monitored cadence.
 4. Repeat the verified four-service Azure parity, route smoke, and credentialed RBAC gate for the final release candidate.

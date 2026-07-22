@@ -163,8 +163,10 @@ export type WorkerDiagnostics = {
 };
 
 export type StripeDiagnostics = {
+  adapter_ready: boolean;
   cancel_url_configured: boolean;
   checkout_ready: boolean;
+  missing_settings: string[];
   refund_ready: boolean;
   return_urls_ready: boolean;
   secret_key_configured: boolean;
@@ -174,7 +176,9 @@ export type StripeDiagnostics = {
 };
 
 export type FlutterwaveDiagnostics = {
+  adapter_ready: boolean;
   checkout_ready: boolean;
+  missing_settings: string[];
   refund_ready: boolean;
   redirect_url_configured: boolean;
   return_url_ready: boolean;
@@ -187,6 +191,10 @@ export type PaymentDiagnostics = {
   checkout_return_url_ready: boolean;
   checkout_provider: string;
   flutterwave: FlutterwaveDiagnostics;
+  credential_configuration_ready: boolean;
+  implementation_ready: boolean;
+  live_provider_validation_required: boolean;
+  missing_settings: string[];
   provider_mode: string;
   provider_request_timeout_seconds: number;
   refund_provider: string;

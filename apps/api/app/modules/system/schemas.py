@@ -160,6 +160,7 @@ class WorkerDiagnostics(BaseModel):
 
 
 class StripeDiagnostics(BaseModel):
+    adapter_ready: bool
     secret_key_configured: bool
     webhook_secret_configured: bool
     success_url_configured: bool
@@ -168,9 +169,11 @@ class StripeDiagnostics(BaseModel):
     refund_ready: bool
     return_urls_ready: bool
     webhook_url: str
+    missing_settings: list[str]
 
 
 class FlutterwaveDiagnostics(BaseModel):
+    adapter_ready: bool
     secret_key_configured: bool
     webhook_secret_configured: bool
     redirect_url_configured: bool
@@ -178,6 +181,7 @@ class FlutterwaveDiagnostics(BaseModel):
     refund_ready: bool
     return_url_ready: bool
     webhook_url: str
+    missing_settings: list[str]
 
 
 class PaymentDiagnostics(BaseModel):
@@ -189,7 +193,11 @@ class PaymentDiagnostics(BaseModel):
     webhook_signing_ready: bool
     checkout_return_url_ready: bool
     refund_provider_ready: bool
+    implementation_ready: bool
+    credential_configuration_ready: bool
+    live_provider_validation_required: bool
     staging_candidate_ready: bool
+    missing_settings: list[str]
     stripe: StripeDiagnostics
     flutterwave: FlutterwaveDiagnostics
 

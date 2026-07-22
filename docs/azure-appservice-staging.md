@@ -129,7 +129,13 @@ Verified on July 19, 2026:
 
 Stripe and Flutterwave staging credentials are not configured in the current
 Azure environment. The protected diagnostics endpoint therefore correctly
-reports `LOCAL_TEST` provider mode and payment staging readiness as false.
+reports payment implementation readiness as true while live credential
+configuration remains incomplete. Add these App Settings when the gateway
+accounts are ready: `CONTRIBUTION_CHECKOUT_PROVIDER`,
+`CONTRIBUTION_REFUND_PROVIDER`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`,
+`STRIPE_CHECKOUT_SUCCESS_URL`, `STRIPE_CHECKOUT_CANCEL_URL`,
+`FLUTTERWAVE_SECRET_KEY`, `FLUTTERWAVE_WEBHOOK_SECRET_HASH`, and
+`FLUTTERWAVE_CHECKOUT_REDIRECT_URL`.
 
 ## Staging Limitations
 

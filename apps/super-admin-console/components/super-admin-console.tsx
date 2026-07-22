@@ -553,6 +553,18 @@ function ReleaseReadinessPanel({ diagnostics }: { diagnostics: SystemDiagnostics
             status={diagnostics.payments.flutterwave.checkout_ready ? "ready" : "missing settings"}
           />
           <CheckRow
+            label="Payment implementation"
+            status={diagnostics.payments.implementation_ready ? "ready" : "incomplete"}
+          />
+          <CheckRow
+            label="Live payment credentials"
+            status={
+              diagnostics.payments.credential_configuration_ready
+                ? "configured"
+                : `${diagnostics.payments.missing_settings.length} missing`
+            }
+          />
+          <CheckRow
             label="Release metadata completeness"
             status={diagnostics.release.metadata_complete ? "complete" : "incomplete"}
           />
@@ -637,6 +649,18 @@ function ReleaseChecklistPanel({ diagnostics }: { diagnostics: SystemDiagnostics
         <CheckRow
           label="Checkout return URLs"
           status={diagnostics.payments.checkout_return_url_ready ? "ready" : "incomplete"}
+        />
+        <CheckRow
+          label="Payment implementation"
+          status={diagnostics.payments.implementation_ready ? "ready" : "incomplete"}
+        />
+        <CheckRow
+          label="Payment credential handoff"
+          status={
+            diagnostics.payments.credential_configuration_ready
+              ? "configured"
+              : formatMissingSettings(diagnostics.payments.missing_settings)
+          }
         />
         <CheckRow
           label="Secure auth cookies"
@@ -1414,6 +1438,13 @@ function formatBytes(value: number) {
     return `${(value / 1024).toFixed(1)} KB`;
   }
   return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatMissingSettings(settings: string[]) {
+  if (!settings.length) {
+    return "configured";
+  }
+  return settings.length > 2 ? `${settings.length} settings` : settings.join(", ");
 }
 
 function shortRuntimeUrl(value: string) {
