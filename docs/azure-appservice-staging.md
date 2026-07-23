@@ -83,6 +83,22 @@ npm run verify:payment-readiness
 This check validates provider selection, return URLs, webhook-secret presence,
 API-key presence, and request timeout shape without printing secret values.
 
+Run the storage and worker handoff check before promoting a staging build:
+
+```powershell
+npm run verify:ops-readiness
+```
+
+After S3 and Redis worker-lock App Settings are supplied, run the strict version:
+
+```powershell
+$env:OPS_REQUIRE_PRODUCTION_TARGETS="true"
+npm run verify:ops-readiness
+```
+
+This confirms production-shaped storage and worker configuration before the
+credentialed pilot launch gate performs the live storage probe.
+
 ## Verification
 
 Run local checks before deployment:
@@ -156,6 +172,10 @@ accounts are ready: `CONTRIBUTION_CHECKOUT_PROVIDER`,
 
 Until those secrets are supplied, `npm run verify:payment-readiness` is expected
 to pass in default handoff mode and fail only when strict secret mode is enabled.
+
+Similarly, `npm run verify:ops-readiness` is expected to pass in default
+handoff mode with local storage, while strict production-target mode requires S3
+settings and the Redis retention-worker lock.
 
 ## Staging Limitations
 

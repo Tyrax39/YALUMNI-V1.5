@@ -64,6 +64,25 @@ npm run verify:payment-readiness
 
 The command reports only setting names, never secret values.
 
+Before production storage credentials or worker hosting are finalized, verify
+that upload paths, scanner policy, worker cadences, source URLs, and retention
+settings are structurally ready:
+
+```powershell
+npm run verify:ops-readiness
+```
+
+When production S3 settings and the Redis retention-worker lock are supplied,
+rerun the same check in strict production-target mode:
+
+```powershell
+$env:OPS_REQUIRE_PRODUCTION_TARGETS="true"
+npm run verify:ops-readiness
+```
+
+This command reports missing setting names only. It does not open network
+connections or print object-storage credentials.
+
 ## First Response
 
 1. Confirm `/health` and `/api/v1/system/status` return `200`.
