@@ -45,6 +45,25 @@ entered. Use super-admin `/system` payment diagnostics to review
 the same gate and verify the live checkout, webhook, receipt, reconciliation,
 failure, and refund paths.
 
+Before protected provider secrets are available, verify that all non-secret
+payment handoff configuration is present:
+
+```powershell
+npm run verify:payment-readiness
+```
+
+This check validates supported provider names, positive provider timeouts, and
+the required return/redirect URL settings without requiring API keys or webhook
+secrets. When Stripe and Flutterwave secrets are supplied in the operator
+environment, rerun it in strict mode:
+
+```powershell
+$env:PAYMENT_REQUIRE_PROVIDER_SECRETS="true"
+npm run verify:payment-readiness
+```
+
+The command reports only setting names, never secret values.
+
 ## First Response
 
 1. Confirm `/health` and `/api/v1/system/status` return `200`.

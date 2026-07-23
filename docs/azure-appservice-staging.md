@@ -66,6 +66,23 @@ restarting them.
 Generated secret values must stay out of git. Store local deployment handoff
 metadata only under `.local/`.
 
+Run the non-secret payment handoff check before adding gateway secrets:
+
+```powershell
+npm run verify:payment-readiness
+```
+
+After Stripe and Flutterwave App Settings are supplied from the gateway
+dashboards, run the same check in strict mode from a protected shell:
+
+```powershell
+$env:PAYMENT_REQUIRE_PROVIDER_SECRETS="true"
+npm run verify:payment-readiness
+```
+
+This check validates provider selection, return URLs, webhook-secret presence,
+API-key presence, and request timeout shape without printing secret values.
+
 ## Verification
 
 Run local checks before deployment:
@@ -136,6 +153,9 @@ accounts are ready: `CONTRIBUTION_CHECKOUT_PROVIDER`,
 `STRIPE_CHECKOUT_SUCCESS_URL`, `STRIPE_CHECKOUT_CANCEL_URL`,
 `FLUTTERWAVE_SECRET_KEY`, `FLUTTERWAVE_WEBHOOK_SECRET_HASH`, and
 `FLUTTERWAVE_CHECKOUT_REDIRECT_URL`.
+
+Until those secrets are supplied, `npm run verify:payment-readiness` is expected
+to pass in default handoff mode and fail only when strict secret mode is enabled.
 
 ## Staging Limitations
 

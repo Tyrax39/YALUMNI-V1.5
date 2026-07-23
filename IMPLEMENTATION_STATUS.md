@@ -14,6 +14,8 @@ the documents disagree.
 ## Snapshot
 
 - Overall pilot-core completion estimate: `98%`
+- Current payment credential posture: implementation and non-secret handoff
+  checks are available; live provider secrets remain a protected operator step.
 - Confidence: `medium-high`
 - Current branch at audit: `Tyrax0/yalumni-v1.5-foundation`
 - Current state: late-stage staging build with strong module coverage, pilot
@@ -158,6 +160,10 @@ Common local runtime commands:
 Execute in this order unless a user explicitly reprioritizes:
 
 1. Add Stripe + Flutterwave staging credentials and callback/webhook configuration when available.
+   Before secrets are available, run `npm run verify:payment-readiness` to
+   confirm provider names, return URLs, redirect URLs, and request timeout shape
+   are ready. After secrets are supplied, rerun it with
+   `PAYMENT_REQUIRE_PROVIDER_SECRETS=true`.
 2. Validate both provider flows in staging, including payment, receipt, reconciliation, failure, and refund paths.
 3. Validate auth/session recovery paths in staging, configure the production storage target, and deploy the three scheduled worker processes with monitored cadence.
 4. Repeat the verified four-service Azure parity, route smoke, and credentialed RBAC gate for the final release candidate.
