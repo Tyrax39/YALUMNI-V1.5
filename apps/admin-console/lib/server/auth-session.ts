@@ -114,13 +114,46 @@ function getRequestOrigin(request: NextRequest): string | null {
   }
 }
 
+function firstHeaderValue(value: string | null): string | null {
+  return value
+    ?.split(",")
+    .map((item) => item.trim())
+    .find(Boolean) ?? null;
+}
+
+function addOriginForHost(origins: Set<string>, protocol: string, host: string | null) {
+  if (!host) {
+    return;
+  }
+
+  try {
+    origins.add(new URL(`${protocol}://${host}`).origin);
+  } catch {
+    // Ignore malformed proxy headers and fall back to the explicit allowlist.
+  }
+}
+
+function getSameRequestOrigins(request: NextRequest): Set<string> {
+  const origins = new Set([request.nextUrl.origin]);
+  const forwardedProto =
+    firstHeaderValue(request.headers.get("x-forwarded-proto")) ??
+    request.nextUrl.protocol.replace(/:$/, "");
+  const forwardedHost = firstHeaderValue(request.headers.get("x-forwarded-host"));
+  const host = firstHeaderValue(request.headers.get("host"));
+
+  addOriginForHost(origins, forwardedProto, forwardedHost);
+  addOriginForHost(origins, forwardedProto, host);
+
+  return origins;
+}
+
 function isTrustedOrigin(request: NextRequest): boolean {
   const requestOrigin = getRequestOrigin(request);
   if (!requestOrigin) {
     return true;
   }
 
-  return requestOrigin === request.nextUrl.origin || trustedOriginSet.has(requestOrigin);
+  return getSameRequestOrigins(request).has(requestOrigin) || trustedOriginSet.has(requestOrigin);
 }
 
 export function getAccessToken(request: NextRequest): string | null {
