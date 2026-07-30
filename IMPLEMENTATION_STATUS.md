@@ -18,6 +18,8 @@ the documents disagree.
   checks are available; live provider secrets remain a protected operator step.
 - Current storage/worker posture: local handoff checks are available; strict
   production-target validation requires S3 settings and Redis worker locking.
+- Current deployment/session posture: non-secret URL, origin, cookie, and
+  release-metadata handoff checks are available before live Azure parity tests.
 - Confidence: `medium-high`
 - Current branch at audit: `Tyrax0/yalumni-v1.5-foundation`
 - Current state: late-stage staging build with strong module coverage, pilot
@@ -172,6 +174,9 @@ Execute in this order unless a user explicitly reprioritizes:
    available, then rerun with `OPS_REQUIRE_PRODUCTION_TARGETS=true` after S3 and
    Redis worker-lock settings are supplied.
 4. Repeat the verified four-service Azure parity, route smoke, and credentialed RBAC gate for the final release candidate.
+   Run `npm run verify:deployment-readiness` first, then rerun with
+   `DEPLOYMENT_REQUIRE_STRICT_RELEASE=true` for the final staging or production
+   environment shape.
    Run `npm run verify:runtime-readiness` before promotion so database,
    migration, and Redis drift cannot pass as a healthy release.
    Run `npm run verify:pilot-launch` after protected credentials are supplied;

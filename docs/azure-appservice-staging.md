@@ -66,6 +66,24 @@ restarting them.
 Generated secret values must stay out of git. Store local deployment handoff
 metadata only under `.local/`.
 
+Run the non-secret deployment handoff check before image promotion:
+
+```powershell
+npm run verify:deployment-readiness
+```
+
+For a staging or production release candidate, supply the four HTTPS service
+URLs, trusted origins, secure-cookie setting, and release metadata, then run the
+strict form:
+
+```powershell
+$env:DEPLOYMENT_REQUIRE_STRICT_RELEASE="true"
+npm run verify:deployment-readiness
+```
+
+This check does not contact Azure. It confirms that the environment shape is
+ready before the live release parity and runtime-readiness checks run.
+
 Run the non-secret payment handoff check before adding gateway secrets:
 
 ```powershell
@@ -129,6 +147,7 @@ $env:RELEASE_ADMIN_URL="https://yalumni-v15-admin-954095.azurewebsites.net"
 $env:RELEASE_SUPERADMIN_URL="https://yalumni-v15-superadmin-954095.azurewebsites.net"
 $env:RELEASE_EXPECTED_SHA="<sha>"
 $env:RELEASE_EXPECTED_VERSION="<release-version>"
+npm run verify:deployment-readiness -- --strict
 npm run verify:release-parity
 $env:RELEASE_EXPECTED_ENVIRONMENT="staging"
 npm run verify:runtime-readiness

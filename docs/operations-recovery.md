@@ -11,6 +11,15 @@ runtime health. It verifies database connectivity, the applied Alembic head,
 and Redis reachability when Redis is required by the environment or worker
 lock policy.
 
+Before contacting deployed services, verify that release URLs, CORS origins,
+trusted origins, cookie policy, frontend API base URL, and release metadata are
+structurally consistent:
+
+```powershell
+$env:DEPLOYMENT_REQUIRE_STRICT_RELEASE="true"
+npm run verify:deployment-readiness
+```
+
 ```powershell
 $env:RELEASE_API_URL="https://yalumni-v15-api-954095.azurewebsites.net"
 $env:RELEASE_EXPECTED_ENVIRONMENT="staging"
