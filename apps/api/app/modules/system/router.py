@@ -23,6 +23,7 @@ from app.modules.system.schemas import (
     RateLimitDiagnostics,
     ReleaseDiagnostics,
     RuntimeDiagnostics,
+    RuntimeReadinessDiagnostics,
     SessionDiagnostics,
     StorageDiagnostics,
     StorageProbeResponse,
@@ -285,6 +286,7 @@ def system_diagnostics(
     db: Annotated[Session, Depends(get_db_session)],
 ) -> SystemDiagnosticsResponse:
     settings = get_settings()
+    readiness = probe_runtime_readiness(db, settings)
     webhook_base_url = f"{settings.api_base_url.rstrip('/')}/api/v1/contributions/webhooks"
     cookie_same_site = _resolve_cookie_same_site(settings)
     cookie_secure = _resolve_cookie_secure(settings, cookie_same_site)
@@ -430,6 +432,16 @@ def system_diagnostics(
             metadata_complete=metadata_complete,
             source_control_reported=bool(source_control_ref),
             azure_app_service_target=azure_app_service_target,
+        ),
+        readiness=RuntimeReadinessDiagnostics(
+            ready=readiness.ready,
+            database_reachable=readiness.database_reachable,
+            migrations_current=readiness.migrations_current,
+            migration_current_revisions=list(readiness.migration_current_revisions),
+            migration_expected_heads=list(readiness.migration_expected_heads),
+            redis_configured=readiness.redis_configured,
+            redis_required=readiness.redis_required,
+            redis_reachable=readiness.redis_reachable,
         ),
         runtime=RuntimeDiagnostics(
             api_base_url=settings.api_base_url,

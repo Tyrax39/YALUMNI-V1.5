@@ -21,6 +21,17 @@ class SystemReadinessResponse(BaseModel):
     redis_reachable: bool
 
 
+class RuntimeReadinessDiagnostics(BaseModel):
+    ready: bool
+    database_reachable: bool
+    migrations_current: bool
+    migration_current_revisions: list[str]
+    migration_expected_heads: list[str]
+    redis_configured: bool
+    redis_required: bool
+    redis_reachable: bool
+
+
 class ReleaseDiagnostics(BaseModel):
     commit_sha: str | None
     release_version: str | None
@@ -209,6 +220,7 @@ class SystemDiagnosticsResponse(BaseModel):
     service: str
     environment: str
     release: ReleaseDiagnostics
+    readiness: RuntimeReadinessDiagnostics
     runtime: RuntimeDiagnostics
     auth: AuthDiagnostics
     session: SessionDiagnostics

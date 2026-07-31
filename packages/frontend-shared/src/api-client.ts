@@ -211,11 +211,23 @@ export type PaymentDiagnostics = {
   webhook_base_url: string;
 };
 
+export type RuntimeReadinessDiagnostics = {
+  database_reachable: boolean;
+  migration_current_revisions: string[];
+  migration_expected_heads: string[];
+  migrations_current: boolean;
+  ready: boolean;
+  redis_configured: boolean;
+  redis_reachable: boolean;
+  redis_required: boolean;
+};
+
 export type SystemDiagnostics = {
   auth: AuthDiagnostics;
   environment: string;
   payments: PaymentDiagnostics;
   rate_limits: RateLimitDiagnostics;
+  readiness: RuntimeReadinessDiagnostics;
   release: ReleaseDiagnostics;
   runtime: RuntimeDiagnostics;
   session: SessionDiagnostics;

@@ -478,6 +478,11 @@ function SystemChecks({
         label="Super admin"
         value={diagnostics ? shortRuntimeUrl(diagnostics.runtime.super_admin_console_base_url) : "3012"}
       />
+      <SystemCard
+        icon={<DatabaseZap className="h-5 w-5" />}
+        label="Database schema"
+        value={diagnostics ? (diagnostics.readiness.migrations_current ? "current" : "migration pending") : "checking"}
+      />
       <SystemCard icon={<BadgeCheck className="h-5 w-5" />} label="Backend API" value={overview ? "reachable" : "check 8002"} />
     </section>
   );
@@ -569,6 +574,26 @@ function ReleaseReadinessPanel({ diagnostics }: { diagnostics: SystemDiagnostics
           <CheckRow
             label="Release metadata completeness"
             status={diagnostics.release.metadata_complete ? "complete" : "incomplete"}
+          />
+          <CheckRow
+            label="Database reachability"
+            status={diagnostics.readiness.database_reachable ? "reachable" : "unreachable"}
+          />
+          <CheckRow
+            label="Schema migration"
+            status={diagnostics.readiness.migrations_current ? "current" : "migration pending"}
+          />
+          <CheckRow
+            label="Redis runtime"
+            status={
+              diagnostics.readiness.redis_required
+                ? diagnostics.readiness.redis_reachable
+                  ? "reachable"
+                  : "unreachable"
+                : diagnostics.readiness.redis_configured
+                  ? "configured (optional)"
+                  : "not required"
+            }
           />
           <CheckRow
             label="Azure App Service target"

@@ -261,6 +261,18 @@ def test_system_diagnostics_reports_release_and_provider_readiness(
     monkeypatch.setenv("SENTRY_DSN", "https://examplePublicKey@example.ingest.sentry.io/123")
     monkeypatch.setenv("S3_BUCKET_NAME", "yalumni-private")
     get_settings.cache_clear()
+    monkeypatch.setattr(
+        "app.modules.system.router.probe_runtime_readiness",
+        lambda db, settings: RuntimeReadiness(
+            database_reachable=True,
+            migrations_current=True,
+            migration_current_revisions=("current-head",),
+            migration_expected_heads=("current-head",),
+            redis_configured=True,
+            redis_required=True,
+            redis_reachable=True,
+        ),
+    )
 
     try:
         response = client.get(
@@ -282,6 +294,15 @@ def test_system_diagnostics_reports_release_and_provider_readiness(
     assert payload["release"]["metadata_complete"] is True
     assert payload["release"]["source_control_reported"] is True
     assert payload["release"]["azure_app_service_target"] is True
+    assert payload["readiness"]["database_reachable"] is True
+    assert payload["readiness"]["migrations_current"] is True
+    assert payload["readiness"]["ready"] is True
+    assert (
+        payload["readiness"]["migration_current_revisions"]
+        == payload["readiness"]["migration_expected_heads"]
+    )
+    assert payload["readiness"]["redis_configured"] is True
+    assert payload["readiness"]["redis_required"] is True
     assert payload["payments"]["checkout_provider"] == "STRIPE"
     assert payload["payments"]["refund_provider"] == "FLUTTERWAVE"
     assert payload["payments"]["provider_mode"] == "PROVIDER_BACKED"
