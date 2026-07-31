@@ -1,6 +1,6 @@
 # YALUMNI V1.5 Implementation Status
 
-Last updated: 2026-07-20
+Last updated: 2026-08-01
 Canonical scope target: pilot alumni core launch
 Canonical runtime: `apps/web` (`3010`), `apps/admin-console` (`3011`), `apps/super-admin-console` (`3012`), `apps/api` (`8002`)
 
@@ -29,7 +29,7 @@ the documents disagree.
   cookie/CSRF/session-edge hardening advanced across member/admin/super-admin
   runtimes, release/provider diagnostics now surfaced in the super-admin
   console, Azure staging release parity verified at `640dc1f`, and owner
-  diagnostics now include a protected live storage probe plus persisted
+  diagnostics now include protected live storage and runtime-readiness probes plus persisted
   execution-recency signals for all three scheduled worker families. Remaining
   launch work is concentrated in production credential handoff and production
   storage/worker deployment validation. MWF and digest poll heartbeats now
