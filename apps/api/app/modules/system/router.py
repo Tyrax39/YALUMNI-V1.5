@@ -272,6 +272,8 @@ def system_readiness(
         environment=settings.app_env,
         database_reachable=readiness.database_reachable,
         migrations_current=readiness.migrations_current,
+        migration_current_revisions=list(readiness.migration_current_revisions),
+        migration_expected_heads=list(readiness.migration_expected_heads),
         redis_required=readiness.redis_required,
         redis_reachable=readiness.redis_reachable,
     )

@@ -104,6 +104,8 @@ def test_system_readiness_returns_503_when_runtime_is_not_ready(
         "environment": "local",
         "database_reachable": True,
         "migrations_current": False,
+        "migration_current_revisions": ["old-revision"],
+        "migration_expected_heads": ["current-head"],
         "redis_required": True,
         "redis_reachable": False,
     }
@@ -130,6 +132,8 @@ def test_system_readiness_returns_200_when_runtime_is_ready(
 
     assert response.status_code == 200
     assert response.json()["status"] == "ready"
+    assert response.json()["migration_current_revisions"] == ["current-head"]
+    assert response.json()["migration_expected_heads"] == ["current-head"]
 
 
 def test_system_diagnostics_requires_super_admin(client: TestClient) -> None:

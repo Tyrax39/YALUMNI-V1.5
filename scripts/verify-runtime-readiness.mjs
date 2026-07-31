@@ -14,7 +14,15 @@ if (payload.status !== "ready") {
   throw new Error(`API reported readiness status ${payload.status ?? "missing"}`);
 }
 if (!payload.database_reachable || !payload.migrations_current) {
-  throw new Error("Database connectivity or migration readiness is incomplete");
+  const currentRevisions = Array.isArray(payload.migration_current_revisions)
+    ? payload.migration_current_revisions.join(", ") || "none"
+    : "unknown";
+  const expectedHeads = Array.isArray(payload.migration_expected_heads)
+    ? payload.migration_expected_heads.join(", ") || "none"
+    : "unknown";
+  throw new Error(
+    `Database connectivity or migration readiness is incomplete (current: ${currentRevisions}; expected: ${expectedHeads})`
+  );
 }
 if (payload.redis_required && !payload.redis_reachable) {
   throw new Error("Redis is required but unreachable");

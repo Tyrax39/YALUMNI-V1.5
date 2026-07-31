@@ -100,6 +100,7 @@ export function evaluateDeploymentReadiness(env, options = {}) {
   const cookieSameSite = String(env.YALUMNI_COOKIE_SAME_SITE || "lax").trim().toLowerCase();
   const cookieSameSiteReady = ["lax", "strict", "none"].includes(cookieSameSite);
   const cookieSecureReady = isSecureCookieEnabled(env.YALUMNI_COOKIE_SECURE);
+  const proxyHeaderTrustReady = getFlag(env, "YALUMNI_TRUST_PROXY_HEADERS");
   const refreshCookieDays = Number(env.YALUMNI_REFRESH_COOKIE_DAYS ?? 30);
   const refreshCookieReady = Number.isFinite(refreshCookieDays) && refreshCookieDays > 0;
 
@@ -113,7 +114,7 @@ export function evaluateDeploymentReadiness(env, options = {}) {
   const runtimePolicyReady =
     cookieSameSiteReady &&
     refreshCookieReady &&
-    (!requireStrict || (cookieSecureReady && PRODUCTION_ENVS.has(appEnv)));
+    (!requireStrict || (cookieSecureReady && proxyHeaderTrustReady && PRODUCTION_ENVS.has(appEnv)));
   const releaseReady = !requireStrict || releaseMissing.length === 0;
 
   return {
@@ -138,6 +139,7 @@ export function evaluateDeploymentReadiness(env, options = {}) {
     missing_release_settings: releaseMissing,
     cookie_same_site: cookieSameSite,
     cookie_secure_ready: cookieSecureReady,
+    proxy_header_trust_ready: proxyHeaderTrustReady,
     refresh_cookie_days: refreshCookieDays
   };
 }
@@ -170,6 +172,7 @@ async function main() {
   console.log(`Base URLs: ${result.base_urls_ready ? "PASS" : "FAIL"}`);
   console.log(`Origin policy: ${result.origin_policy_ready ? "PASS" : "FAIL"}`);
   console.log(`Runtime policy: ${result.runtime_policy_ready ? "PASS" : "FAIL"}`);
+  console.log(`Proxy header trust: ${result.proxy_header_trust_ready ? "PASS" : "PENDING"}`);
   console.log(`Release metadata: ${result.release_ready ? "PASS" : "PENDING"}`);
   console.log(`Next public API URL: ${result.next_public_api_matches ? "PASS" : "FAIL"}`);
   printList("Missing base URL settings", result.missing_base_url_settings);

@@ -18,8 +18,9 @@ the documents disagree.
   checks are available; live provider secrets remain a protected operator step.
 - Current storage/worker posture: local handoff checks are available; strict
   production-target validation requires S3 settings and Redis worker locking.
-- Current deployment/session posture: non-secret URL, origin, cookie, and
-  release-metadata handoff checks are available before live Azure parity tests.
+- Current deployment/session posture: non-secret URL, origin, cookie, explicit
+  proxy-header trust, migration-revision, and release-metadata handoff checks
+  are available before live Azure parity tests.
 - Confidence: `medium-high`
 - Current branch at audit: `Tyrax0/yalumni-v1.5-foundation`
 - Current state: late-stage staging build with strong module coverage, pilot
@@ -83,7 +84,7 @@ future task slice explicitly touches them:
 | Public landing and trust IA | home, sign-in/join framing, public trust/value surface | Implemented minimum | implemented | not backend-heavy | staging parity review still needed | complete for pilot minimum | yes |
 | Public informational/discovery breadth | broader public marketing/institutional breadth from long-form spec | intentionally reduced for pilot | partial | partial | not required for pilot launch | post-launch | no |
 | Payments productionization | real providers, callbacks, reconciliation | implementation complete pending secrets | implemented via intent-based member pay UX and owner diagnostics | implemented foundation for Stripe + Flutterwave checkout, refunds, webhook normalization, readiness diagnostics, and missing-setting reporting | local verified; credential handoff and live provider validation still needed | credential handoff open | no |
-| Security hardening | 2FA recovery, cookie review, CSRF/session review, SSR role checks | partially implemented | login challenge UI plus super-admin recovery control implemented | partially implemented with cookie-policy controls, same-origin CSRF checks, SSR-aware proxy enforcement, login-time 2FA challenge enforcement, persisted recovery-code lifecycle, and audited super-admin 2FA resets with target-session revocation | needs staging validation | launch blocker | no |
+| Security hardening | 2FA recovery, cookie review, CSRF/session review, SSR role checks | partially implemented | login challenge UI plus super-admin recovery control implemented | partially implemented with cookie-policy controls, same-origin CSRF checks, explicit opt-in proxy-header trust, SSR-aware proxy enforcement, login-time 2FA challenge enforcement, persisted recovery-code lifecycle, and audited super-admin 2FA resets with target-session revocation | needs staging validation | launch blocker | no |
 | Storage/search/ops hardening | storage policy, background workers, search threshold, runbooks | implemented foundation with deployment follow-up | owner console exposes live storage reachability, heartbeat-based worker recency, and S3 resilience policy | storage probe, poll heartbeats, bounded S3 retries/timeouts, dedicated Compose workers, audit events, and recovery runbook implemented | focused API/worker/UI/Compose checks present; production targets still need deployment validation | launch blocker | no |
 | Azure release parity | same code/env behavior in staging | implemented for the current staging release | implemented read-only release/provider diagnostics in owner console | additive release-identity endpoints and a strict four-service SHA/version parity gate are implemented | API/member/admin/super-admin verified at `640dc1f` on 2026-07-19 | complete for current staging release; repeat per release | yes |
 
@@ -109,7 +110,7 @@ broader post-launch work:
    - API keys, webhook secrets, return URLs, webhook delivery, and live callback validation still required
 2. Security and identity hardening
    - cookie domain/SameSite/secure review in staging
-   - proxy-backed SSR route enforcement validation across deployed apps
+   - proxy-backed SSR route enforcement validation across deployed apps with `YALUMNI_TRUST_PROXY_HEADERS=true` only on trusted App Service frontends
    - 2FA recovery workflow, super-admin-assisted 2FA reset with target-session revocation, and login-time challenge enforcement are implemented locally; staging cookie and recovery-path validation remain
 3. Storage and operations hardening
    - owner-only storage connectivity probe is implemented and audited
@@ -122,7 +123,7 @@ broader post-launch work:
 4. Canonical release verification
    - critical-path smoke + staging validation across member/admin/super-admin/API
    - current staging release `640dc1f` passes release parity, route smoke, and credentialed RBAC checks
-   - repeat the same gate for every promoted release
+   - repeat the same gate for every promoted release; runtime readiness now reports both current migration revisions and expected Alembic heads when it fails
 
 ## Protected Contracts
 

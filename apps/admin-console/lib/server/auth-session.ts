@@ -16,6 +16,7 @@ const trustedOriginSet = new Set(
     .map((origin) => origin.trim())
     .filter(Boolean)
 );
+const trustProxyHeaders = process.env.YALUMNI_TRUST_PROXY_HEADERS?.trim().toLowerCase() === "true";
 
 export const serverApiBaseUrl =
   process.env.API_BASE_URL?.replace(/\/$/, "") ??
@@ -135,11 +136,16 @@ function addOriginForHost(origins: Set<string>, protocol: string, host: string |
 
 function getSameRequestOrigins(request: NextRequest): Set<string> {
   const origins = new Set([request.nextUrl.origin]);
-  const forwardedProto =
-    firstHeaderValue(request.headers.get("x-forwarded-proto")) ??
-    request.nextUrl.protocol.replace(/:$/, "");
-  const forwardedHost = firstHeaderValue(request.headers.get("x-forwarded-host"));
   const host = firstHeaderValue(request.headers.get("host"));
+  const requestProtocol = request.nextUrl.protocol.replace(/:$/, "");
+
+  addOriginForHost(origins, requestProtocol, host);
+  if (!trustProxyHeaders) {
+    return origins;
+  }
+
+  const forwardedProto = firstHeaderValue(request.headers.get("x-forwarded-proto")) ?? requestProtocol;
+  const forwardedHost = firstHeaderValue(request.headers.get("x-forwarded-host"));
 
   addOriginForHost(origins, forwardedProto, forwardedHost);
   addOriginForHost(origins, forwardedProto, host);

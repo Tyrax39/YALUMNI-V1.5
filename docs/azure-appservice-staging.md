@@ -54,6 +54,8 @@ Each frontend app requires:
 - `APP_ENV=staging`
 - `API_BASE_URL=https://yalumni-v15-api-954095.azurewebsites.net`
 - `NEXT_PUBLIC_API_BASE_URL=https://yalumni-v15-api-954095.azurewebsites.net`
+- `YALUMNI_TRUSTED_ORIGINS` containing all three HTTPS frontend origins
+- `YALUMNI_TRUST_PROXY_HEADERS=true` because App Service terminates TLS and forwards the public host/protocol
 - `YALUMNI_RELEASE_SHA=<git-sha>`
 - `YALUMNI_RELEASE_VERSION=<release-version>`
 - `PORT=3000`

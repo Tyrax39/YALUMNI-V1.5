@@ -34,6 +34,7 @@ function stagingEnv() {
       "https://yalumni-v15-member-954095.azurewebsites.net,https://yalumni-v15-admin-954095.azurewebsites.net,https://yalumni-v15-superadmin-954095.azurewebsites.net",
     YALUMNI_COOKIE_SAME_SITE: "none",
     YALUMNI_COOKIE_SECURE: "true",
+    YALUMNI_TRUST_PROXY_HEADERS: "true",
     YALUMNI_REFRESH_COOKIE_DAYS: "30",
     YALUMNI_RELEASE_SHA: "abc1234",
     YALUMNI_RELEASE_VERSION: "v1.5.0-staging"
@@ -75,6 +76,17 @@ test("deployment readiness rejects mismatched public API URL", () => {
   });
 
   assert.equal(result.next_public_api_matches, false);
+  assert.equal(result.deployment_ready, false);
+});
+
+test("deployment readiness strict mode requires explicit proxy header trust", () => {
+  const result = evaluateDeploymentReadiness(
+    { ...stagingEnv(), YALUMNI_TRUST_PROXY_HEADERS: "false" },
+    { requireStrict: true }
+  );
+
+  assert.equal(result.proxy_header_trust_ready, false);
+  assert.equal(result.runtime_policy_ready, false);
   assert.equal(result.deployment_ready, false);
 });
 

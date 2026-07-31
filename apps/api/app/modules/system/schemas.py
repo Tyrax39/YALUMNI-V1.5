@@ -15,6 +15,8 @@ class SystemReadinessResponse(BaseModel):
     environment: str
     database_reachable: bool
     migrations_current: bool
+    migration_current_revisions: list[str]
+    migration_expected_heads: list[str]
     redis_required: bool
     redis_reachable: bool
 
