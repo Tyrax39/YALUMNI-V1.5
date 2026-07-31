@@ -47,6 +47,8 @@ from app.modules.auth.schemas import (
     AdminAuditEvent,
     AdminAuditEventListResponse,
     AdminOverview,
+    AdminTwoFactorResetRequest,
+    AdminTwoFactorResetResponse,
     AuthResponse,
     AuthSessionInfo,
     AuthSessionsResponse,
@@ -72,6 +74,7 @@ from app.modules.auth.schemas import (
 
 router = APIRouter()
 admin_user_dependency = require_roles(*ADMIN_ROLE_NAMES)
+super_admin_dependency = require_roles(GlobalRole.SUPER_ADMIN.value)
 
 
 def _request_context(request: Request) -> tuple[str | None, str | None]:
@@ -187,6 +190,7 @@ def _create_security_event(
     request: Request,
     user: User | None,
     event_type: str,
+    metadata: dict | None = None,
 ) -> None:
     ip_address, user_agent = _request_context(request)
     db.add(
@@ -195,6 +199,7 @@ def _create_security_event(
             event_type=event_type,
             ip_address=ip_address,
             user_agent=user_agent,
+            metadata_json=metadata,
         )
     )
 
@@ -781,6 +786,62 @@ def admin_overview(
         admin_users=admin_users,
         pending_verification_users=pending_verification_users,
         latest_security_events=list(latest_events),
+    )
+
+
+@router.post("/admin/two-factor/reset", response_model=AdminTwoFactorResetResponse)
+def reset_user_two_factor(
+    payload: AdminTwoFactorResetRequest,
+    request: Request,
+    current_user: Annotated[User, Depends(super_admin_dependency)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> AdminTwoFactorResetResponse:
+    _enforce_admin_action_rate_limit(request, current_user, "two-factor-reset")
+    target_user = db.scalar(select(User).where(User.email == payload.email))
+    if target_user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+    if target_user.id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Use your personal security settings to manage your own two-factor authentication"
+            ),
+        )
+
+    revoked_session_count = 0
+    for session in db.scalars(
+        select(AuthSession).where(
+            AuthSession.user_id == target_user.id,
+            AuthSession.revoked_at.is_(None),
+        )
+    ):
+        session.revoked_at = utcnow()
+        revoked_session_count += 1
+
+    target_user.two_factor_secret_encrypted = None
+    target_user.two_factor_enabled_at = None
+    target_user.two_factor_recovery_codes_json = None
+    _create_security_event(
+        db,
+        request,
+        target_user,
+        "auth.two_factor_admin_reset",
+        metadata={
+            "performed_by_email": current_user.email,
+            "performed_by_user_id": str(current_user.id),
+            "revoked_session_count": revoked_session_count,
+        },
+    )
+    db.commit()
+    db.refresh(target_user)
+
+    return AdminTwoFactorResetResponse(
+        message="Two-factor authentication was reset and active sessions were revoked.",
+        revoked_session_count=revoked_session_count,
+        user=_serialize_user(target_user),
     )
 
 

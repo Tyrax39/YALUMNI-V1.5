@@ -83,7 +83,7 @@ future task slice explicitly touches them:
 | Public landing and trust IA | home, sign-in/join framing, public trust/value surface | Implemented minimum | implemented | not backend-heavy | staging parity review still needed | complete for pilot minimum | yes |
 | Public informational/discovery breadth | broader public marketing/institutional breadth from long-form spec | intentionally reduced for pilot | partial | partial | not required for pilot launch | post-launch | no |
 | Payments productionization | real providers, callbacks, reconciliation | implementation complete pending secrets | implemented via intent-based member pay UX and owner diagnostics | implemented foundation for Stripe + Flutterwave checkout, refunds, webhook normalization, readiness diagnostics, and missing-setting reporting | local verified; credential handoff and live provider validation still needed | credential handoff open | no |
-| Security hardening | 2FA recovery, cookie review, CSRF/session review, SSR role checks | partially implemented | login challenge UI implemented | partially implemented with cookie-policy controls, same-origin CSRF checks, SSR-aware proxy enforcement, login-time 2FA challenge enforcement, and persisted 2FA recovery-code lifecycle | needs staging validation | launch blocker | no |
+| Security hardening | 2FA recovery, cookie review, CSRF/session review, SSR role checks | partially implemented | login challenge UI plus super-admin recovery control implemented | partially implemented with cookie-policy controls, same-origin CSRF checks, SSR-aware proxy enforcement, login-time 2FA challenge enforcement, persisted recovery-code lifecycle, and audited super-admin 2FA resets with target-session revocation | needs staging validation | launch blocker | no |
 | Storage/search/ops hardening | storage policy, background workers, search threshold, runbooks | implemented foundation with deployment follow-up | owner console exposes live storage reachability, heartbeat-based worker recency, and S3 resilience policy | storage probe, poll heartbeats, bounded S3 retries/timeouts, dedicated Compose workers, audit events, and recovery runbook implemented | focused API/worker/UI/Compose checks present; production targets still need deployment validation | launch blocker | no |
 | Azure release parity | same code/env behavior in staging | implemented for the current staging release | implemented read-only release/provider diagnostics in owner console | additive release-identity endpoints and a strict four-service SHA/version parity gate are implemented | API/member/admin/super-admin verified at `640dc1f` on 2026-07-19 | complete for current staging release; repeat per release | yes |
 
@@ -110,7 +110,7 @@ broader post-launch work:
 2. Security and identity hardening
    - cookie domain/SameSite/secure review in staging
    - proxy-backed SSR route enforcement validation across deployed apps
-   - 2FA recovery workflow and login-time challenge enforcement are now implemented locally; staging cookie and recovery-path validation remain
+   - 2FA recovery workflow, super-admin-assisted 2FA reset with target-session revocation, and login-time challenge enforcement are implemented locally; staging cookie and recovery-path validation remain
 3. Storage and operations hardening
    - owner-only storage connectivity probe is implemented and audited
    - MWF, notification-digest, and expense-retention execution recency is visible

@@ -10,6 +10,12 @@ export type AuthUser = {
   roles: string[];
 };
 
+export type AdminTwoFactorResetResponse = {
+  message: string;
+  revoked_session_count: number;
+  user: AuthUser;
+};
+
 export type AdminOverview = {
   active_users?: number;
   active_sessions?: number;
@@ -1309,6 +1315,12 @@ export function fetchSessionUser(): Promise<AuthUser> {
 
 export function fetchAdminOverview(): Promise<AdminOverview> {
   return fetchJson<AdminOverview>("/api/backend/api/v1/auth/admin/overview");
+}
+
+export function resetAdminUserTwoFactor(email: string): Promise<AdminTwoFactorResetResponse> {
+  return mutateJson<AdminTwoFactorResetResponse>("/api/backend/api/v1/auth/admin/two-factor/reset", "POST", {
+    email
+  });
 }
 
 export function fetchSystemDiagnostics(): Promise<SystemDiagnostics> {

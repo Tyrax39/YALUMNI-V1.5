@@ -780,6 +780,91 @@ def test_two_factor_recovery_code_regeneration_requires_password(client: TestCli
     assert regenerate_response.status_code == 401
 
 
+def test_super_admin_can_reset_another_users_two_factor_and_revoke_sessions(
+    client: TestClient,
+) -> None:
+    target = register_user(client, email="two-factor-reset-target@example.com")
+    target_headers = auth_headers(target["access_token"])
+    setup_response = client.post(
+        "/api/v1/auth/me/2fa/setup",
+        headers=target_headers,
+        json={"password": "SecurePass123!"},
+    )
+    assert setup_response.status_code == 200
+    secret = setup_response.json()["secret"]
+    confirm_response = client.post(
+        "/api/v1/auth/me/2fa/confirm",
+        headers=target_headers,
+        json={"code": generate_totp_code(secret)},
+    )
+    assert confirm_response.status_code == 200
+
+    extra_session = client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": "two-factor-reset-target@example.com",
+            "password": "SecurePass123!",
+            "two_factor_code": generate_totp_code(secret),
+        },
+    )
+    assert extra_session.status_code == 200
+
+    super_admin = register_user(client, email="two-factor-reset-owner@example.com")
+    super_admin_headers = auth_headers(super_admin["access_token"])
+    bootstrap_response = client.post(
+        "/api/v1/auth/dev/bootstrap-admin",
+        headers=super_admin_headers,
+    )
+    assert bootstrap_response.status_code == 200
+
+    forbidden_response = client.post(
+        "/api/v1/auth/admin/two-factor/reset",
+        headers=target_headers,
+        json={"email": "two-factor-reset-target@example.com"},
+    )
+    assert forbidden_response.status_code == 403
+
+    self_reset_response = client.post(
+        "/api/v1/auth/admin/two-factor/reset",
+        headers=super_admin_headers,
+        json={"email": "two-factor-reset-owner@example.com"},
+    )
+    assert self_reset_response.status_code == 409
+
+    reset_response = client.post(
+        "/api/v1/auth/admin/two-factor/reset",
+        headers=super_admin_headers,
+        json={"email": "two-factor-reset-target@example.com"},
+    )
+    assert reset_response.status_code == 200
+    reset_payload = reset_response.json()
+    assert reset_payload["user"]["two_factor_enabled"] is False
+    assert reset_payload["revoked_session_count"] == 2
+
+    revoked_refresh = client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": target["refresh_token"]},
+    )
+    assert revoked_refresh.status_code == 401
+
+    recovered_login = client.post(
+        "/api/v1/auth/login",
+        json={"email": "two-factor-reset-target@example.com", "password": "SecurePass123!"},
+    )
+    assert recovered_login.status_code == 200
+    assert recovered_login.json()["user"]["two_factor_enabled"] is False
+
+    audit_response = client.get(
+        "/api/v1/auth/admin/audit-events?event_type=two_factor_admin_reset",
+        headers=super_admin_headers,
+    )
+    assert audit_response.status_code == 200
+    event = audit_response.json()["events"][0]
+    assert event["user_email"] == "two-factor-reset-target@example.com"
+    assert event["metadata"]["performed_by_email"] == "two-factor-reset-owner@example.com"
+    assert event["metadata"]["revoked_session_count"] == 2
+
+
 def test_admin_audit_events_requires_role_and_supports_filters(client: TestClient) -> None:
     registered = register_user(client, email="audit-viewer@example.com")
     headers = auth_headers(registered["access_token"])

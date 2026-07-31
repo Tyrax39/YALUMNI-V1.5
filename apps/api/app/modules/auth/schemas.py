@@ -185,6 +185,21 @@ class TwoFactorEnableResponse(BaseModel):
     recovery_codes_remaining: int
 
 
+class AdminTwoFactorResetRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=320)
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        return value.strip().lower()
+
+
+class AdminTwoFactorResetResponse(BaseModel):
+    message: str
+    revoked_session_count: int
+    user: "AuthUser"
+
+
 class AuthUser(BaseModel):
     id: uuid.UUID
     email: str
@@ -209,3 +224,4 @@ class AuthResponse(BaseModel):
 
 
 TwoFactorEnableResponse.model_rebuild()
+AdminTwoFactorResetResponse.model_rebuild()

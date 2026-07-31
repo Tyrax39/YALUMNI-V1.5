@@ -22,6 +22,7 @@ import {
   fetchSystemDiagnostics,
   probeStorageBackend,
   refreshMwfSync,
+  resetAdminUserTwoFactor,
   isSuperAdmin
 } from "@yalumni/frontend-shared";
 import {
@@ -188,6 +189,7 @@ export function SuperAdminConsole({ pageId }: SuperAdminConsoleProps) {
             <ReleaseReadinessPanel diagnostics={state.systemDiagnostics} />
             <ReleaseChecklistPanel diagnostics={state.systemDiagnostics} />
             <SecurityHardeningPanel diagnostics={state.systemDiagnostics} />
+            <TwoFactorRecoveryPanel />
             <OperationsHardeningPanel diagnostics={state.systemDiagnostics} />
             <MwfCachePanel />
           </div>
@@ -847,6 +849,79 @@ function SecurityHardeningPanel({ diagnostics }: { diagnostics: SystemDiagnostic
           value={`${diagnostics.runtime.trusted_origin_count} configured`}
         />
       </div>
+    </section>
+  );
+}
+
+function TwoFactorRecoveryPanel() {
+  const [email, setEmail] = useState("");
+  const [message, setMessage] = useState<string | null>(null);
+  const [resetting, setResetting] = useState(false);
+
+  async function handleReset(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail) {
+      setMessage("Enter the account email to reset two-factor authentication.");
+      return;
+    }
+
+    setResetting(true);
+    setMessage(null);
+    try {
+      const response = await resetAdminUserTwoFactor(normalizedEmail);
+      setMessage(`${response.user.email}: ${response.message}`);
+      setEmail("");
+    } catch (caught) {
+      setMessage(caught instanceof ApiClientError ? caught.message : "Two-factor recovery could not be completed.");
+    } finally {
+      setResetting(false);
+    }
+  }
+
+  return (
+    <section className="rounded-lg border border-border bg-white p-5 shadow-soft">
+      <div className="flex items-start gap-3">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary text-white">
+          <ShieldAlert aria-hidden="true" className="h-5 w-5" />
+        </div>
+        <div>
+          <p className="text-sm font-bold uppercase tracking-[0.12em] text-muted">Operator recovery</p>
+          <h2 className="mt-1 font-display text-2xl font-bold text-ink">Reset another user&apos;s 2FA</h2>
+          <p className="mt-3 max-w-3xl text-sm leading-6 text-muted">
+            Use only after confirming the account owner&apos;s identity. This clears their TOTP and recovery codes,
+            then revokes every active refresh session so they can enroll again safely.
+          </p>
+        </div>
+      </div>
+
+      <form className="mt-5 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]" onSubmit={handleReset}>
+        <label className="grid gap-2 text-sm font-bold text-ink">
+          Account email
+          <input
+            autoComplete="off"
+            className="focus-ring min-h-11 rounded-lg border border-border bg-surface px-3 text-sm font-medium text-ink outline-none"
+            disabled={resetting}
+            onChange={(event) => setEmail(event.target.value)}
+            placeholder="member@yalumni.org"
+            type="email"
+            value={email}
+          />
+        </label>
+        <button
+          className="focus-ring min-h-11 self-end rounded-lg border border-red-200 bg-red-50 px-5 text-sm font-bold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={resetting}
+          type="submit"
+        >
+          {resetting ? "Resetting" : "Reset 2FA"}
+        </button>
+      </form>
+
+      {message ? (
+        <p className="mt-4 rounded-lg border border-border bg-surface px-4 py-3 text-sm font-semibold text-muted">
+          {message}
+        </p>
+      ) : null}
     </section>
   );
 }
