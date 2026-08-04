@@ -162,7 +162,10 @@ release parity gate before accepting a restarted or promoted staging release.
 
 ## Local Worker Deployment Check
 
-`docker compose up --build` now starts the API and three dedicated worker
-services. Workers wait for the API health check, which confirms database
+`docker compose up --build` now starts PostgreSQL, Redis, the API, the member
+app on `3000`, the RBAC admin console on `3011`, the super-admin console on
+`3012`, and three dedicated worker services. Each frontend uses the API service
+internally while retaining the host API URL for browser calls. Workers and
+frontends wait for the API readiness health check, which confirms database
 migrations and API startup have completed. The expense-retention service uses a
 Redis lock in Compose to prevent concurrent cleanup cycles.

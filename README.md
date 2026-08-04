@@ -80,8 +80,9 @@ docker compose up --build
 
 ## URLs
 
-- Web app: http://localhost:3000
-- Admin console placeholder: http://localhost:3000/admin
+- Member/public app: http://localhost:3000
+- Admin RBAC console: http://localhost:3011
+- Super-admin console: http://localhost:3012
 - API health: http://localhost:8000/health
 - API docs: http://localhost:8000/docs
 
@@ -96,7 +97,7 @@ The current milestone is platform foundation plus the first identity, alumni pro
 - Current-user alumni profile, profile photo upload/display, program affiliation, visibility JSON settings, dashboard profile completion panel, verification request submission, private storage-backed evidence uploads, admin review queue, and verified alumni directory search
 - Role-gated admin overview, verification queue, audit log viewer, community moderation queues, direct-message report queues, removed-message review, and digest controls
 - Direct conversations with participant guards, unread counts, contact blocking, reporting, admin redaction, and restore controls
-- Docker Compose for PostgreSQL, Redis, API, and web
+- Docker Compose for PostgreSQL, Redis, API, three frontend apps, and dedicated workers
 - CI workflow for web build and API tests
 - Architecture, API, data model, security, migration, development test-account, and project status docs
 
