@@ -66,7 +66,8 @@ test("ops readiness passes production mode with S3 and Redis lock settings", () 
       S3_SECRET_ACCESS_KEY: "secret-key",
       S3_BUCKET_NAME: "yalumni-private",
       S3_REGION: "us-east-1",
-      CONTRIBUTION_EXPENSE_EVIDENCE_RETENTION_WORKER_LOCK_PROVIDER: "REDIS"
+      CONTRIBUTION_EXPENSE_EVIDENCE_RETENTION_WORKER_LOCK_PROVIDER: "REDIS",
+      REDIS_URL: "rediss://redis.example.com:6380/0"
     },
     { requireProduction: true }
   );
@@ -75,6 +76,26 @@ test("ops readiness passes production mode with S3 and Redis lock settings", () 
   assert.equal(result.worker_ready, true);
   assert.equal(result.ops_ready, true);
   assert.deepEqual(result.missing_s3_settings, []);
+});
+
+test("ops readiness requires secure production storage and Redis lock configuration", () => {
+  const result = evaluateOpsReadiness(
+    {
+      ...baseEnv(),
+      UPLOAD_STORAGE_PROVIDER: "S3",
+      S3_ENDPOINT_URL: "http://s3.example.com",
+      S3_ACCESS_KEY_ID: "access-key",
+      S3_SECRET_ACCESS_KEY: "secret-key",
+      S3_BUCKET_NAME: "yalumni-private",
+      S3_REGION: "us-east-1",
+      CONTRIBUTION_EXPENSE_EVIDENCE_RETENTION_WORKER_LOCK_PROVIDER: "REDIS"
+    },
+    { requireProduction: true }
+  );
+
+  assert.equal(result.storage_ready, false);
+  assert.equal(result.worker_ready, false);
+  assert.equal(result.redis_configured, false);
 });
 
 test("ops readiness rejects invalid scanner transport", () => {

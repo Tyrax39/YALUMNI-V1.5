@@ -68,6 +68,10 @@ function validUrl(value) {
   }
 }
 
+function secureUrl(value) {
+  return validUrl(value) && new URL(value).protocol === "https:";
+}
+
 export function evaluateOpsReadiness(env, options = {}) {
   const requireProduction = Boolean(options.requireProduction);
   const storageProvider = normalize(env.UPLOAD_STORAGE_PROVIDER, "LOCAL");
@@ -81,6 +85,7 @@ export function evaluateOpsReadiness(env, options = {}) {
   );
   const missingUploadDirs = missing(env, UPLOAD_DIR_SETTINGS);
   const missingS3Settings = missing(env, S3_SETTINGS);
+  const redisConfigured = configured(env, "REDIS_URL");
   const storageTimeoutsReady = [
     numberValue(env, "S3_CONNECT_TIMEOUT_SECONDS", 3),
     numberValue(env, "S3_READ_TIMEOUT_SECONDS", 10),
@@ -90,12 +95,17 @@ export function evaluateOpsReadiness(env, options = {}) {
     numberValue(env, "CONTRIBUTION_EXPENSE_EVIDENCE_MALWARE_SCANNER_TIMEOUT_SECONDS", 5) > 0;
   const scannerTransportReady =
     scannerProvider === "SIGNATURE_ONLY" ||
-    validUrl(env.CONTRIBUTION_EXPENSE_EVIDENCE_MALWARE_SCANNER_URL);
+    (requireProduction
+      ? secureUrl(env.CONTRIBUTION_EXPENSE_EVIDENCE_MALWARE_SCANNER_URL)
+      : validUrl(env.CONTRIBUTION_EXPENSE_EVIDENCE_MALWARE_SCANNER_URL));
   const storageReady = Boolean(
     SUPPORTED_STORAGE_PROVIDERS.has(storageProvider) &&
       missingUploadDirs.length === 0 &&
       storageTimeoutsReady &&
-      (!requireProduction || (storageProvider === "S3" && missingS3Settings.length === 0))
+      (!requireProduction ||
+        (storageProvider === "S3" &&
+          missingS3Settings.length === 0 &&
+          secureUrl(env.S3_ENDPOINT_URL)))
   );
 
   const workerIntervalsReady = [
@@ -116,7 +126,7 @@ export function evaluateOpsReadiness(env, options = {}) {
   ].every((name) => configured(env, name));
   const lockReady = Boolean(
     SUPPORTED_LOCK_PROVIDERS.has(lockProvider) &&
-      (!requireProduction || lockProvider === "REDIS")
+      (!requireProduction || (lockProvider === "REDIS" && redisConfigured))
   );
   const workerReady = Boolean(workerIntervalsReady && workerSourcesReady && lockReady);
   const scannerReady = Boolean(
@@ -131,6 +141,7 @@ export function evaluateOpsReadiness(env, options = {}) {
     scanner_ready: scannerReady,
     ops_ready: storageReady && workerReady && scannerReady,
     lock_provider: lockProvider,
+    redis_configured: redisConfigured,
     scanner_provider: scannerProvider,
     missing_upload_dir_settings: missingUploadDirs,
     missing_s3_settings: missingS3Settings,
