@@ -16,6 +16,7 @@ const NON_SECRET_SETTINGS = [
 ];
 
 const SUPPORTED_PROVIDERS = new Set(["LOCAL_TEST", "STRIPE", "FLUTTERWAVE"]);
+const REQUIRED_RETURN_URL_TOKENS = ["{campaign_id}", "{payment_intent_id}"];
 
 function parseEnvFile(path) {
   if (!path || !existsSync(path)) return {};
@@ -50,6 +51,23 @@ function normalizeProvider(value) {
   return String(value || "LOCAL_TEST").trim().toUpperCase();
 }
 
+function validHttpsUrlTemplate(value) {
+  try {
+    const url = new URL(String(value));
+    return url.protocol === "https:" && Boolean(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function missingReturnUrlTokens(env) {
+  return NON_SECRET_SETTINGS.flatMap((setting) =>
+    REQUIRED_RETURN_URL_TOKENS.filter((token) => !String(env[setting] ?? "").includes(token)).map(
+      (token) => `${setting}:${token}`
+    )
+  );
+}
+
 export function evaluatePaymentReadiness(env, options = {}) {
   const checkoutProvider = normalizeProvider(env.CONTRIBUTION_CHECKOUT_PROVIDER);
   const refundProvider = normalizeProvider(env.CONTRIBUTION_REFUND_PROVIDER);
@@ -58,15 +76,25 @@ export function evaluatePaymentReadiness(env, options = {}) {
     (provider) => !SUPPORTED_PROVIDERS.has(provider)
   );
   const missingNonSecretSettings = missing(env, NON_SECRET_SETTINGS);
+  const invalidReturnUrls = NON_SECRET_SETTINGS.filter(
+    (setting) => configured(env, setting) && !validHttpsUrlTemplate(env[setting])
+  );
+  const missingReturnUrlTemplateTokens = missingReturnUrlTokens(env);
   const missingSecretSettings = missing(env, SECRET_SETTINGS);
-  const implementationReady = Boolean(invalidProviders.length === 0 && timeoutSeconds > 0);
+  const implementationReady = Boolean(
+    invalidProviders.length === 0 && Number.isFinite(timeoutSeconds) && timeoutSeconds > 0
+  );
   const nonSecretConfigurationReady = missingNonSecretSettings.length === 0;
   const credentialConfigurationReady =
     nonSecretConfigurationReady && missingSecretSettings.length === 0;
   const requireSecrets = Boolean(options.requireSecrets);
+  const requireProduction = Boolean(options.requireProduction);
+  const productionConfigurationReady =
+    invalidReturnUrls.length === 0 && missingReturnUrlTemplateTokens.length === 0;
   const handoffReady =
     implementationReady &&
     nonSecretConfigurationReady &&
+    (!requireProduction || productionConfigurationReady) &&
     (!requireSecrets || credentialConfigurationReady);
 
   return {
@@ -76,10 +104,14 @@ export function evaluatePaymentReadiness(env, options = {}) {
     implementation_ready: implementationReady,
     non_secret_configuration_ready: nonSecretConfigurationReady,
     credential_configuration_ready: credentialConfigurationReady,
+    production_configuration_ready: productionConfigurationReady,
     handoff_ready: handoffReady,
     require_secrets: requireSecrets,
+    require_production: requireProduction,
     invalid_providers: invalidProviders,
     missing_non_secret_settings: missingNonSecretSettings,
+    invalid_return_urls: invalidReturnUrls,
+    missing_return_url_template_tokens: missingReturnUrlTemplateTokens,
     missing_secret_settings: missingSecretSettings
   };
 }
@@ -103,8 +135,11 @@ async function main() {
   assert(envFile, "--env-file requires a path");
   const fileEnv = parseEnvFile(envFile);
   const env = { ...fileEnv, ...process.env };
-  const requireSecrets = args.includes("--require-secrets") || getFlag(env, "PAYMENT_REQUIRE_PROVIDER_SECRETS");
-  const result = evaluatePaymentReadiness(env, { requireSecrets });
+  const requireSecrets =
+    args.includes("--require-secrets") || getFlag(env, "PAYMENT_REQUIRE_PROVIDER_SECRETS");
+  const requireProduction =
+    args.includes("--require-production") || getFlag(env, "PAYMENT_REQUIRE_PRODUCTION_CONFIG");
+  const result = evaluatePaymentReadiness(env, { requireSecrets, requireProduction });
 
   console.log(`Payment readiness source: ${envFile}`);
   console.log(`Checkout provider: ${result.checkout_provider}`);
@@ -118,14 +153,23 @@ async function main() {
       result.credential_configuration_ready ? "PASS" : result.require_secrets ? "FAIL" : "PENDING"
     }`
   );
+  console.log(
+    `Production return configuration: ${
+      result.production_configuration_ready ? "PASS" : result.require_production ? "FAIL" : "PENDING"
+    }`
+  );
   printList("Invalid providers", result.invalid_providers);
   printList("Missing non-secret settings", result.missing_non_secret_settings);
+  printList("Invalid production return URLs", result.invalid_return_urls);
+  printList("Missing return URL template tokens", result.missing_return_url_template_tokens);
   printList("Missing secret settings", result.missing_secret_settings);
 
   if (!result.handoff_ready) {
     throw new Error(
       result.require_secrets
         ? "Payment readiness failed with required provider credentials missing or invalid"
+        : result.require_production
+          ? "Payment readiness failed with required production return configuration missing or invalid"
         : "Payment readiness failed before provider credential handoff"
     );
   }

@@ -77,3 +77,45 @@ test("payment handoff rejects unsupported provider names", () => {
   assert.equal(result.handoff_ready, false);
   assert.deepEqual(result.invalid_providers, ["UNSUPPORTED"]);
 });
+
+test("payment handoff requires HTTPS callback URLs for a production release", () => {
+  const result = evaluatePaymentReadiness(
+    {
+      ...baseEnv(),
+      STRIPE_CHECKOUT_SUCCESS_URL:
+        "http://member.example.com/contributions/{campaign_id}?payment_intent_id={payment_intent_id}&status=success"
+    },
+    { requireProduction: true }
+  );
+
+  assert.equal(result.production_configuration_ready, false);
+  assert.equal(result.handoff_ready, false);
+  assert.deepEqual(result.invalid_return_urls, ["STRIPE_CHECKOUT_SUCCESS_URL"]);
+});
+
+test("payment handoff requires reconciliation identifiers in production return URLs", () => {
+  const result = evaluatePaymentReadiness(
+    {
+      ...baseEnv(),
+      FLUTTERWAVE_CHECKOUT_REDIRECT_URL:
+        "https://member.example.com/contributions/{campaign_id}?status=return"
+    },
+    { requireProduction: true }
+  );
+
+  assert.equal(result.production_configuration_ready, false);
+  assert.equal(result.handoff_ready, false);
+  assert.deepEqual(result.missing_return_url_template_tokens, [
+    "FLUTTERWAVE_CHECKOUT_REDIRECT_URL:{payment_intent_id}"
+  ]);
+});
+
+test("payment handoff rejects non-finite provider request timeouts", () => {
+  const result = evaluatePaymentReadiness({
+    ...baseEnv(),
+    CONTRIBUTION_PROVIDER_REQUEST_TIMEOUT_SECONDS: "not-a-number"
+  });
+
+  assert.equal(result.implementation_ready, false);
+  assert.equal(result.handoff_ready, false);
+});
