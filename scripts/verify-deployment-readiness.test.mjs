@@ -102,3 +102,25 @@ test("deployment readiness reports missing frontend origins", () => {
     "http://localhost:3012"
   ]);
 });
+
+test("deployment readiness strict mode rejects malformed release SHAs", () => {
+  const result = evaluateDeploymentReadiness(
+    { ...stagingEnv(), YALUMNI_RELEASE_SHA: "not-a-git-sha" },
+    { requireStrict: true }
+  );
+
+  assert.equal(result.release_sha_valid, false);
+  assert.equal(result.release_ready, false);
+  assert.equal(result.deployment_ready, false);
+});
+
+test("deployment readiness strict mode rejects placeholder release versions", () => {
+  const result = evaluateDeploymentReadiness(
+    { ...stagingEnv(), YALUMNI_RELEASE_VERSION: "<release-version>" },
+    { requireStrict: true }
+  );
+
+  assert.equal(result.release_version_valid, false);
+  assert.equal(result.release_ready, false);
+  assert.equal(result.deployment_ready, false);
+});

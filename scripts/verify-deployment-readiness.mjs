@@ -11,6 +11,7 @@ const BASE_URL_SETTINGS = [
 
 const RELEASE_SETTINGS = ["YALUMNI_RELEASE_SHA", "YALUMNI_RELEASE_VERSION"];
 const PRODUCTION_ENVS = new Set(["staging", "production"]);
+const GIT_SHA_PATTERN = /^[0-9a-f]{7,64}$/i;
 
 function parseEnvFile(path) {
   if (!path || !existsSync(path)) return {};
@@ -72,6 +73,11 @@ function isSecureCookieEnabled(value) {
   return ["1", "true", "yes"].includes(String(value ?? "").trim().toLowerCase());
 }
 
+function validReleaseVersion(value) {
+  const normalized = String(value ?? "").trim();
+  return Boolean(normalized && !/[\s<>]/.test(normalized));
+}
+
 export function evaluateDeploymentReadiness(env, options = {}) {
   const requireStrict = Boolean(options.requireStrict);
   const appEnv = String(env.APP_ENV || "local").trim().toLowerCase();
@@ -97,6 +103,8 @@ export function evaluateDeploymentReadiness(env, options = {}) {
     Boolean(nextPublicApiBaseUrl && baseUrls.API_BASE_URL) &&
     nextPublicApiBaseUrl.origin === baseUrls.API_BASE_URL.origin;
   const releaseMissing = missing(env, RELEASE_SETTINGS);
+  const releaseShaValid = GIT_SHA_PATTERN.test(String(env.YALUMNI_RELEASE_SHA ?? "").trim());
+  const releaseVersionValid = validReleaseVersion(env.YALUMNI_RELEASE_VERSION);
   const cookieSameSite = String(env.YALUMNI_COOKIE_SAME_SITE || "lax").trim().toLowerCase();
   const cookieSameSiteReady = ["lax", "strict", "none"].includes(cookieSameSite);
   const cookieSecureReady = isSecureCookieEnabled(env.YALUMNI_COOKIE_SECURE);
@@ -115,7 +123,9 @@ export function evaluateDeploymentReadiness(env, options = {}) {
     cookieSameSiteReady &&
     refreshCookieReady &&
     (!requireStrict || (cookieSecureReady && proxyHeaderTrustReady && PRODUCTION_ENVS.has(appEnv)));
-  const releaseReady = !requireStrict || releaseMissing.length === 0;
+  const releaseReady =
+    !requireStrict ||
+    (releaseMissing.length === 0 && releaseShaValid && releaseVersionValid);
 
   return {
     require_strict: requireStrict,
@@ -137,6 +147,8 @@ export function evaluateDeploymentReadiness(env, options = {}) {
     missing_cors_origins: missingCorsOrigins,
     missing_trusted_origins: missingTrustedOrigins,
     missing_release_settings: releaseMissing,
+    release_sha_valid: releaseShaValid,
+    release_version_valid: releaseVersionValid,
     cookie_same_site: cookieSameSite,
     cookie_secure_ready: cookieSecureReady,
     proxy_header_trust_ready: proxyHeaderTrustReady,
@@ -174,6 +186,8 @@ async function main() {
   console.log(`Runtime policy: ${result.runtime_policy_ready ? "PASS" : "FAIL"}`);
   console.log(`Proxy header trust: ${result.proxy_header_trust_ready ? "PASS" : "PENDING"}`);
   console.log(`Release metadata: ${result.release_ready ? "PASS" : "PENDING"}`);
+  console.log(`Release SHA format: ${result.release_sha_valid ? "PASS" : "FAIL"}`);
+  console.log(`Release version format: ${result.release_version_valid ? "PASS" : "FAIL"}`);
   console.log(`Next public API URL: ${result.next_public_api_matches ? "PASS" : "FAIL"}`);
   printList("Missing base URL settings", result.missing_base_url_settings);
   printList("Invalid base URL settings", result.invalid_base_url_settings);

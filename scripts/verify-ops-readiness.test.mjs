@@ -118,3 +118,46 @@ test("ops readiness rejects non-positive cadence settings", () => {
   assert.equal(result.worker_intervals_ready, false);
   assert.equal(result.worker_ready, false);
 });
+
+test("ops readiness requires TLS Redis for a production worker lock", () => {
+  const result = evaluateOpsReadiness(
+    {
+      ...baseEnv(),
+      UPLOAD_STORAGE_PROVIDER: "S3",
+      S3_ENDPOINT_URL: "https://s3.example.com",
+      S3_ACCESS_KEY_ID: "access-key",
+      S3_SECRET_ACCESS_KEY: "secret-key",
+      S3_BUCKET_NAME: "yalumni-private",
+      S3_REGION: "us-east-1",
+      CONTRIBUTION_EXPENSE_EVIDENCE_RETENTION_WORKER_LOCK_PROVIDER: "REDIS",
+      REDIS_URL: "redis://redis.example.com:6379/0"
+    },
+    { requireProduction: true }
+  );
+
+  assert.equal(result.redis_configured, true);
+  assert.equal(result.redis_transport_ready, false);
+  assert.equal(result.lock_ready, false);
+  assert.equal(result.worker_ready, false);
+});
+
+test("ops readiness rejects non-finite malware scanner timeouts", () => {
+  const result = evaluateOpsReadiness({
+    ...baseEnv(),
+    CONTRIBUTION_EXPENSE_EVIDENCE_MALWARE_SCANNER_TIMEOUT_SECONDS: "not-a-number"
+  });
+
+  assert.equal(result.scanner_ready, false);
+  assert.equal(result.ops_ready, false);
+});
+
+test("ops readiness rejects non-HTTP scanner transports", () => {
+  const result = evaluateOpsReadiness({
+    ...baseEnv(),
+    CONTRIBUTION_EXPENSE_EVIDENCE_MALWARE_SCANNER_PROVIDER: "HTTP",
+    CONTRIBUTION_EXPENSE_EVIDENCE_MALWARE_SCANNER_URL: "ftp://scanner.example.com/scan"
+  });
+
+  assert.equal(result.scanner_transport_ready, false);
+  assert.equal(result.scanner_ready, false);
+});

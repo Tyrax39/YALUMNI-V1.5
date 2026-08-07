@@ -58,18 +58,25 @@ function normalize(value, fallback) {
   return String(value || fallback).trim().toUpperCase();
 }
 
-function validUrl(value) {
+function validHttpUrl(value) {
   if (!value) return false;
   try {
-    new URL(value);
-    return true;
+    return ["http:", "https:"].includes(new URL(value).protocol);
   } catch {
     return false;
   }
 }
 
 function secureUrl(value) {
-  return validUrl(value) && new URL(value).protocol === "https:";
+  return validHttpUrl(value) && new URL(value).protocol === "https:";
+}
+
+function secureRedisUrl(value) {
+  try {
+    return new URL(String(value)).protocol === "rediss:";
+  } catch {
+    return false;
+  }
 }
 
 export function evaluateOpsReadiness(env, options = {}) {
@@ -86,18 +93,23 @@ export function evaluateOpsReadiness(env, options = {}) {
   const missingUploadDirs = missing(env, UPLOAD_DIR_SETTINGS);
   const missingS3Settings = missing(env, S3_SETTINGS);
   const redisConfigured = configured(env, "REDIS_URL");
+  const redisTransportReady = !requireProduction || secureRedisUrl(env.REDIS_URL);
   const storageTimeoutsReady = [
     numberValue(env, "S3_CONNECT_TIMEOUT_SECONDS", 3),
     numberValue(env, "S3_READ_TIMEOUT_SECONDS", 10),
     numberValue(env, "S3_MAX_ATTEMPTS", 3)
   ].every((value) => Number.isFinite(value) && value > 0);
-  const scannerTimeoutReady =
-    numberValue(env, "CONTRIBUTION_EXPENSE_EVIDENCE_MALWARE_SCANNER_TIMEOUT_SECONDS", 5) > 0;
+  const scannerTimeout = numberValue(
+    env,
+    "CONTRIBUTION_EXPENSE_EVIDENCE_MALWARE_SCANNER_TIMEOUT_SECONDS",
+    5
+  );
+  const scannerTimeoutReady = Number.isFinite(scannerTimeout) && scannerTimeout > 0;
   const scannerTransportReady =
     scannerProvider === "SIGNATURE_ONLY" ||
     (requireProduction
       ? secureUrl(env.CONTRIBUTION_EXPENSE_EVIDENCE_MALWARE_SCANNER_URL)
-      : validUrl(env.CONTRIBUTION_EXPENSE_EVIDENCE_MALWARE_SCANNER_URL));
+      : validHttpUrl(env.CONTRIBUTION_EXPENSE_EVIDENCE_MALWARE_SCANNER_URL));
   const storageReady = Boolean(
     SUPPORTED_STORAGE_PROVIDERS.has(storageProvider) &&
       missingUploadDirs.length === 0 &&
@@ -126,7 +138,7 @@ export function evaluateOpsReadiness(env, options = {}) {
   ].every((name) => configured(env, name));
   const lockReady = Boolean(
     SUPPORTED_LOCK_PROVIDERS.has(lockProvider) &&
-      (!requireProduction || (lockProvider === "REDIS" && redisConfigured))
+      (!requireProduction || (lockProvider === "REDIS" && redisConfigured && redisTransportReady))
   );
   const workerReady = Boolean(workerIntervalsReady && workerSourcesReady && lockReady);
   const scannerReady = Boolean(
@@ -142,6 +154,7 @@ export function evaluateOpsReadiness(env, options = {}) {
     ops_ready: storageReady && workerReady && scannerReady,
     lock_provider: lockProvider,
     redis_configured: redisConfigured,
+    redis_transport_ready: redisTransportReady,
     scanner_provider: scannerProvider,
     missing_upload_dir_settings: missingUploadDirs,
     missing_s3_settings: missingS3Settings,
