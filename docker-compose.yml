@@ -35,6 +35,8 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/yali_alumni
       REDIS_URL: redis://redis:6379/0
+      YALUMNI_RELEASE_SHA: ${YALUMNI_RELEASE_SHA:-local}
+      YALUMNI_RELEASE_VERSION: ${YALUMNI_RELEASE_VERSION:-local-dev}
     ports:
       - "8000:8000"
     depends_on:
@@ -111,6 +113,8 @@ services:
     environment:
       API_BASE_URL: http://api:8000
       NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+      YALUMNI_RELEASE_SHA: ${YALUMNI_RELEASE_SHA:-local}
+      YALUMNI_RELEASE_VERSION: ${YALUMNI_RELEASE_VERSION:-local-dev}
     ports:
       - "3000:3000"
     depends_on:
@@ -135,6 +139,8 @@ services:
     environment:
       API_BASE_URL: http://api:8000
       NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+      YALUMNI_RELEASE_SHA: ${YALUMNI_RELEASE_SHA:-local}
+      YALUMNI_RELEASE_VERSION: ${YALUMNI_RELEASE_VERSION:-local-dev}
     ports:
       - "3011:3000"
     depends_on:
@@ -155,6 +161,8 @@ services:
     environment:
       API_BASE_URL: http://api:8000
       NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+      YALUMNI_RELEASE_SHA: ${YALUMNI_RELEASE_SHA:-local}
+      YALUMNI_RELEASE_VERSION: ${YALUMNI_RELEASE_VERSION:-local-dev}
     ports:
       - "3012:3000"
     depends_on:
