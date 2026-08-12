@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
 from app.core.database import SessionLocal
-from app.core.logging import RequestIdMiddleware, configure_logging
+from app.core.logging import RequestIdMiddleware, SecurityHeadersMiddleware, configure_logging
 from app.modules.alumni.router import router as alumni_router
 from app.modules.auth.platform_owner import ensure_platform_owner
 from app.modules.auth.router import router as auth_router
@@ -60,6 +60,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_middleware(RequestIdMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
 
 
 @app.get("/health", tags=["system"])

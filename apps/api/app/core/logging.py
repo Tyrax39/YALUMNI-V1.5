@@ -25,3 +25,17 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
         response.headers["x-request-id"] = request_id
         return response
 
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(
+        self,
+        request: Request,
+        call_next: Callable[[Request], Awaitable[Response]],
+    ) -> Response:
+        response = await call_next(request)
+        response.headers["x-content-type-options"] = "nosniff"
+        response.headers["x-frame-options"] = "DENY"
+        response.headers["referrer-policy"] = "strict-origin-when-cross-origin"
+        response.headers["permissions-policy"] = "camera=(), geolocation=(), microphone=()"
+        return response
+
