@@ -1,4 +1,5 @@
 import os
+import re
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
@@ -38,6 +39,7 @@ from app.workers.mwf_alumni_sync import MWF_SYNC_WORKER_CYCLE_EVENT
 
 router = APIRouter()
 super_admin_dependency = require_roles(GlobalRole.SUPER_ADMIN.value)
+GIT_SHA_PATTERN = re.compile(r"^[0-9a-f]{7,64}$", re.IGNORECASE)
 
 
 def _configured_env_value(*names: str) -> str | None:
@@ -169,6 +171,18 @@ def _release_metadata_complete(
         and deployment_target
         and source_control_ref
     )
+
+
+def _release_version_valid(value: str | None) -> bool:
+    return bool(value and not re.search(r"[\s<>]", value))
+
+
+def _https_url_configured(value: str | None) -> bool:
+    return bool(value and value.strip().lower().startswith("https://"))
+
+
+def _redis_tls_configured(value: str | None) -> bool:
+    return bool(value and value.strip().lower().startswith("rediss://"))
 
 
 def _aware_utc(value: datetime) -> datetime:
@@ -425,6 +439,8 @@ def system_diagnostics(
         release=ReleaseDiagnostics(
             commit_sha=commit_sha,
             release_version=release_version,
+            commit_sha_valid=bool(commit_sha and GIT_SHA_PATTERN.fullmatch(commit_sha)),
+            release_version_valid=_release_version_valid(release_version),
             deployed_at=deployed_at,
             deployment_target=deployment_target,
             source_control_ref=source_control_ref,
@@ -513,6 +529,7 @@ def system_diagnostics(
             storage_target_ready=_storage_target_ready(settings),
             s3_bucket_configured=bool(settings.s3_bucket_name),
             s3_endpoint_configured=bool(settings.s3_endpoint_url),
+            s3_endpoint_secure=_https_url_configured(settings.s3_endpoint_url),
             s3_region_configured=bool(settings.s3_region),
             s3_access_key_configured=bool(settings.s3_access_key_id),
             s3_secret_key_configured=bool(settings.s3_secret_access_key),
@@ -589,6 +606,7 @@ def system_diagnostics(
                 settings.contribution_expense_evidence_retention_worker_lock_provider.strip().upper()
             ),
             expense_retention_lock_ready=_expense_retention_lock_ready(settings),
+            expense_retention_lock_transport_secure=_redis_tls_configured(settings.redis_url),
             expense_retention_lock_ttl_seconds=(
                 settings.contribution_expense_evidence_retention_worker_lock_ttl_seconds
             ),

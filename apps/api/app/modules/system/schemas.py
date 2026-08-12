@@ -35,6 +35,8 @@ class RuntimeReadinessDiagnostics(BaseModel):
 class ReleaseDiagnostics(BaseModel):
     commit_sha: str | None
     release_version: str | None
+    commit_sha_valid: bool
+    release_version_valid: bool
     deployed_at: str | None
     deployment_target: str | None
     source_control_ref: str | None
@@ -107,6 +109,7 @@ class StorageDiagnostics(BaseModel):
     storage_target_ready: bool
     s3_bucket_configured: bool
     s3_endpoint_configured: bool
+    s3_endpoint_secure: bool
     s3_region_configured: bool
     s3_access_key_configured: bool
     s3_secret_key_configured: bool
@@ -161,6 +164,7 @@ class WorkerDiagnostics(BaseModel):
     expense_retention_limit: int
     expense_retention_lock_provider: str
     expense_retention_lock_ready: bool
+    expense_retention_lock_transport_secure: bool
     expense_retention_lock_ttl_seconds: int
     expense_category_taxonomy_configured: bool
     expense_category_budget_policy_configured: bool

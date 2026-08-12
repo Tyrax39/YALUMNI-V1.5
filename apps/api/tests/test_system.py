@@ -229,7 +229,7 @@ def test_system_diagnostics_reports_release_and_provider_readiness(
     monkeypatch.setenv("CONTRIBUTION_EXPENSE_EVIDENCE_RETENTION_WORKER_LIMIT", "250")
     monkeypatch.setenv("CONTRIBUTION_EXPENSE_EVIDENCE_RETENTION_WORKER_LOCK_PROVIDER", "redis")
     monkeypatch.setenv("CONTRIBUTION_EXPENSE_EVIDENCE_RETENTION_WORKER_LOCK_TTL_SECONDS", "1800")
-    monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
+    monkeypatch.setenv("REDIS_URL", "rediss://redis.example.com:6380/0")
     monkeypatch.setenv("MWF_DIRECTORY_CACHE_TTL_HOURS", "36")
     monkeypatch.setenv("MWF_DIRECTORY_SYNC_WORKER_INTERVAL_SECONDS", "7200")
     monkeypatch.setenv(
@@ -288,6 +288,8 @@ def test_system_diagnostics_reports_release_and_provider_readiness(
     assert payload["environment"] == "staging"
     assert payload["release"]["commit_sha"] == "527fa4f"
     assert payload["release"]["release_version"] == "v1.5.0-staging"
+    assert payload["release"]["commit_sha_valid"] is True
+    assert payload["release"]["release_version_valid"] is True
     assert payload["release"]["deployment_target"] == "yalumni-v15-api-954095"
     assert payload["release"]["instance_id_present"] is True
     assert payload["release"]["source_control_ref"] == "refs/heads/Tyrax0/yalumni-v1.5-foundation"
@@ -365,6 +367,7 @@ def test_system_diagnostics_reports_release_and_provider_readiness(
     assert payload["storage"]["storage_target_ready"] is True
     assert payload["storage"]["s3_bucket_configured"] is True
     assert payload["storage"]["s3_endpoint_configured"] is True
+    assert payload["storage"]["s3_endpoint_secure"] is True
     assert payload["storage"]["s3_region_configured"] is True
     assert payload["storage"]["s3_access_key_configured"] is True
     assert payload["storage"]["s3_secret_key_configured"] is True
@@ -400,6 +403,7 @@ def test_system_diagnostics_reports_release_and_provider_readiness(
     assert payload["workers"]["expense_retention_limit"] == 250
     assert payload["workers"]["expense_retention_lock_provider"] == "REDIS"
     assert payload["workers"]["expense_retention_lock_ready"] is True
+    assert payload["workers"]["expense_retention_lock_transport_secure"] is True
     assert payload["workers"]["expense_retention_lock_ttl_seconds"] == 1800
     assert payload["workers"]["expense_category_taxonomy_configured"] is True
     assert payload["workers"]["expense_category_budget_policy_configured"] is True
@@ -472,6 +476,39 @@ def test_system_diagnostics_reports_payment_implementation_ready_without_credent
         "FLUTTERWAVE_WEBHOOK_SECRET_HASH",
         "FLUTTERWAVE_CHECKOUT_REDIRECT_URL",
     }
+
+
+def test_system_diagnostics_distinguishes_invalid_production_transports(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    registered = register_user(client, "diagnostics.owner@example.com")
+    bootstrap_response = client.post(
+        "/api/v1/auth/dev/bootstrap-admin",
+        headers=auth_headers(registered["access_token"]),
+    )
+    assert bootstrap_response.status_code == 200
+
+    monkeypatch.setenv("YALUMNI_RELEASE_SHA", "not-a-sha")
+    monkeypatch.setenv("YALUMNI_RELEASE_VERSION", "<release-version>")
+    monkeypatch.setenv("S3_ENDPOINT_URL", "http://s3.example.com")
+    monkeypatch.setenv("REDIS_URL", "redis://redis.example.com:6379/0")
+    get_settings.cache_clear()
+
+    try:
+        response = client.get(
+            "/api/v1/system/diagnostics",
+            headers=auth_headers(registered["access_token"]),
+        )
+    finally:
+        get_settings.cache_clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["release"]["commit_sha_valid"] is False
+    assert payload["release"]["release_version_valid"] is False
+    assert payload["storage"]["s3_endpoint_secure"] is False
+    assert payload["workers"]["expense_retention_lock_transport_secure"] is False
 
 
 def test_system_diagnostics_reports_worker_execution_recency() -> None:
