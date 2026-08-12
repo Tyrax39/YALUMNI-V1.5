@@ -23,17 +23,20 @@ def clear_rate_limits() -> None:
         _attempts.clear()
 
 
-def enforce_rate_limit(key: str, rule: RateLimitRule) -> None:
+def _prune_attempts(bucket: deque[float], rule: RateLimitRule, now: float) -> None:
+    window_start = now - rule.window_seconds
+    while bucket and bucket[0] <= window_start:
+        bucket.popleft()
+
+
+def check_rate_limit(key: str, rule: RateLimitRule) -> None:
     if rule.attempts <= 0 or rule.window_seconds <= 0:
         return
 
     now = time.monotonic()
-    window_start = now - rule.window_seconds
-
     with _lock:
         bucket = _attempts[key]
-        while bucket and bucket[0] <= window_start:
-            bucket.popleft()
+        _prune_attempts(bucket, rule, now)
 
         if len(bucket) >= rule.attempts:
             retry_after = max(1, int(rule.window_seconds - (now - bucket[0])))
@@ -43,4 +46,24 @@ def enforce_rate_limit(key: str, rule: RateLimitRule) -> None:
                 headers={"Retry-After": str(retry_after)},
             )
 
+
+
+def record_rate_limit_attempt(key: str, rule: RateLimitRule) -> None:
+    if rule.attempts <= 0 or rule.window_seconds <= 0:
+        return
+
+    now = time.monotonic()
+    with _lock:
+        bucket = _attempts[key]
+        _prune_attempts(bucket, rule, now)
         bucket.append(now)
+
+
+def clear_rate_limit(key: str) -> None:
+    with _lock:
+        _attempts.pop(key, None)
+
+
+def enforce_rate_limit(key: str, rule: RateLimitRule) -> None:
+    check_rate_limit(key, rule)
+    record_rate_limit_attempt(key, rule)

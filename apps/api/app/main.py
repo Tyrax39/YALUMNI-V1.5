@@ -4,6 +4,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy.exc import OperationalError
 
 from app.core.config import get_settings
 from app.core.database import SessionLocal
@@ -61,6 +63,14 @@ app.add_middleware(
 )
 app.add_middleware(RequestIdMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
+
+
+@app.exception_handler(OperationalError)
+async def database_operational_error_handler(_, __: OperationalError) -> JSONResponse:
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "Database temporarily unavailable. Please try again shortly."},
+    )
 
 
 @app.get("/health", tags=["system"])

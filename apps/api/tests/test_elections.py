@@ -1,4 +1,5 @@
 from collections.abc import Generator
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -97,17 +98,18 @@ def create_admin(client: TestClient, email: str = "elections.admin@example.com")
 
 
 def election_payload(title: str = "YALUMNI Council 2026") -> dict:
+    now = datetime.now(UTC)
     return {
         "description": (
             "A verified alumni vote to select the next council representative for the "
             "platform governance pilot and chapter operations roadmap."
         ),
-        "ends_at": "2026-06-15T12:00:00Z",
+        "ends_at": (now + timedelta(days=7)).isoformat(),
         "quorum_count": 1,
         "results_visibility": "AFTER_CLOSE",
         "scope_label": "Platform pilot",
         "scope_type": "platform",
-        "starts_at": "2026-05-01T12:00:00Z",
+        "starts_at": (now - timedelta(days=1)).isoformat(),
         "summary": "Select one representative for the YALUMNI council governance pilot.",
         "title": title,
     }

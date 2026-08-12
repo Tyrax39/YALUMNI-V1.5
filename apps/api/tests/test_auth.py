@@ -1,10 +1,14 @@
+import asyncio
+import json
 from collections.abc import Generator
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, delete, func, select
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
+from starlette.requests import Request
 
 from app.core.config import get_settings
 from app.core.database import Base, get_db_session
@@ -394,6 +398,18 @@ def test_invalid_login_and_missing_bearer_token_are_rejected(client: TestClient)
     assert me_response.status_code == 401
 
 
+def test_database_operational_errors_are_exposed_as_retryable_service_errors() -> None:
+    request = Request({"type": "http", "method": "POST", "path": "/api/v1/auth/login"})
+    handler = app.exception_handlers[OperationalError]
+
+    response = asyncio.run(handler(request, OperationalError("select 1", {}, Exception("offline"))))
+
+    assert response.status_code == 503
+    assert json.loads(response.body) == {
+        "detail": "Database temporarily unavailable. Please try again shortly."
+    }
+
+
 def test_login_rate_limit_returns_429_after_repeated_attempts(client: TestClient) -> None:
     for _ in range(5):
         response = client.post(
@@ -408,6 +424,36 @@ def test_login_rate_limit_returns_429_after_repeated_attempts(client: TestClient
     )
     assert limited_response.status_code == 429
     assert limited_response.headers["Retry-After"]
+
+
+def test_successful_logins_do_not_consume_or_retain_login_rate_limit(client: TestClient) -> None:
+    register_user(client, email="login-success@example.com")
+
+    for _ in range(6):
+        response = client.post(
+            "/api/v1/auth/login",
+            json={"email": "login-success@example.com", "password": "SecurePass123!"},
+        )
+        assert response.status_code == 200
+
+    for _ in range(4):
+        response = client.post(
+            "/api/v1/auth/login",
+            json={"email": "login-success@example.com", "password": "wrong-password"},
+        )
+        assert response.status_code == 401
+
+    successful_login = client.post(
+        "/api/v1/auth/login",
+        json={"email": "login-success@example.com", "password": "SecurePass123!"},
+    )
+    assert successful_login.status_code == 200
+
+    another_failed_login = client.post(
+        "/api/v1/auth/login",
+        json={"email": "login-success@example.com", "password": "wrong-password"},
+    )
+    assert another_failed_login.status_code == 401
 
 
 def test_email_verification_marks_user_verified_and_rejects_reuse(client: TestClient) -> None:

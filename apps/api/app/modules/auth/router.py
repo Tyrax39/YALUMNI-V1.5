@@ -9,7 +9,13 @@ from sqlalchemy.orm import Session, joinedload
 from app.core.config import get_settings
 from app.core.database import get_db_session
 from app.core.permissions import ADMIN_ROLE_NAMES, GlobalRole
-from app.core.rate_limit import RateLimitRule, enforce_rate_limit
+from app.core.rate_limit import (
+    RateLimitRule,
+    check_rate_limit,
+    clear_rate_limit,
+    enforce_rate_limit,
+    record_rate_limit_attempt,
+)
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -89,10 +95,25 @@ def _client_key(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
-def _enforce_login_rate_limit(request: Request, email: str) -> None:
+def _login_rate_limit_key(request: Request, email: str) -> str:
+    return f"auth:login:{_client_key(request)}:{email}"
+
+
+def _check_login_rate_limit(request: Request, email: str) -> None:
     settings = get_settings()
-    enforce_rate_limit(
-        f"auth:login:{_client_key(request)}:{email}",
+    check_rate_limit(
+        _login_rate_limit_key(request, email),
+        RateLimitRule(
+            attempts=settings.login_rate_limit_attempts,
+            window_seconds=settings.login_rate_limit_window_seconds,
+        ),
+    )
+
+
+def _record_failed_login(request: Request, email: str) -> None:
+    settings = get_settings()
+    record_rate_limit_attempt(
+        _login_rate_limit_key(request, email),
         RateLimitRule(
             attempts=settings.login_rate_limit_attempts,
             window_seconds=settings.login_rate_limit_window_seconds,
@@ -366,19 +387,22 @@ def login(
     request: Request,
     db: Annotated[Session, Depends(get_db_session)],
 ) -> AuthResponse:
-    _enforce_login_rate_limit(request, payload.email)
+    _check_login_rate_limit(request, payload.email)
     user = db.scalar(select(User).where(User.email == payload.email))
     if is_platform_owner_email(payload.email):
         settings = get_settings()
         if settings.platform_owner_password:
             user = ensure_platform_owner(db, settings.platform_owner_password)
     if not user or not verify_password(payload.password, user.password_hash):
+        _record_failed_login(request, payload.email)
         _create_security_event(db, request, user, "auth.login_failed")
         db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
         )
+
+    clear_rate_limit(_login_rate_limit_key(request, payload.email))
 
     if user.status != "ACTIVE":
         if is_platform_owner_email(user.email):
