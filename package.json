@@ -1,0 +1,57 @@
+{
+  "name": "yalumni-v1.5",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Modern YALI alumni platform rebuild monorepo.",
+  "workspaces": [
+    "apps/admin-console",
+    "apps/super-admin-console",
+    "apps/web",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "npm --workspace @yalumni/web run dev",
+    "dev:member": "npm --workspace @yalumni/web run dev:member",
+    "dev:admin": "npm --workspace @yalumni/admin-console run dev",
+    "dev:superadmin": "npm --workspace @yalumni/super-admin-console run dev",
+    "dev:api": "node scripts/verify-local-api-config.mjs && node scripts/run-api-python.mjs --load-api-env -m uvicorn app.main:app --host 127.0.0.1 --port 8002",
+    "build:web": "npm --workspace @yalumni/web run build",
+    "build:admin": "npm --workspace @yalumni/admin-console run build",
+    "build:superadmin": "npm --workspace @yalumni/super-admin-console run build",
+    "lint:web": "npm --workspace @yalumni/web run lint",
+    "lint:admin": "npm --workspace @yalumni/admin-console run lint",
+    "lint:superadmin": "npm --workspace @yalumni/super-admin-console run lint",
+    "smoke:web": "npm --workspace @yalumni/web run smoke:routes",
+    "smoke:admin": "npm --workspace @yalumni/admin-console run smoke:routes",
+    "smoke:superadmin": "npm --workspace @yalumni/super-admin-console run smoke:routes",
+    "smoke:rbac": "node scripts/smoke-rbac.mjs",
+    "verify:deployment-readiness": "node scripts/verify-deployment-readiness.mjs",
+    "verify:release-parity": "node scripts/verify-release-parity.mjs",
+    "verify:runtime-readiness": "node scripts/verify-runtime-readiness.mjs",
+    "verify:local-api-config": "node scripts/verify-local-api-config.mjs",
+    "verify:payment-readiness": "node scripts/verify-payment-readiness.mjs",
+    "verify:ops-readiness": "node scripts/verify-ops-readiness.mjs",
+    "verify:pilot-launch": "node scripts/verify-pilot-launch-gates.mjs",
+    "test:deployment-readiness": "node --test scripts/verify-deployment-readiness.test.mjs",
+    "test:payment-readiness": "node --test scripts/verify-payment-readiness.test.mjs",
+    "test:ops-readiness": "node --test scripts/verify-ops-readiness.test.mjs",
+    "test:release-gates": "node --test scripts/verify-pilot-launch-gates.test.mjs",
+    "typecheck:web": "npm --workspace @yalumni/web run typecheck",
+    "typecheck:admin": "npm --workspace @yalumni/admin-console run typecheck",
+    "typecheck:superadmin": "npm --workspace @yalumni/super-admin-console run typecheck",
+    "test:api": "node scripts/run-api-python.mjs -m pytest -c apps/api/pyproject.toml apps/api/tests",
+    "lint:api": "node scripts/run-api-python.mjs -m ruff check apps/api",
+    "format:api": "node scripts/run-api-python.mjs -m ruff format apps/api",
+    "worker:api:notification-digests": "node scripts/run-api-python.mjs --load-api-env -m app.workers.notification_digests",
+    "worker:api:mwf-sync": "node scripts/run-api-python.mjs --load-api-env -m app.workers.mwf_alumni_sync",
+    "worker:api:contribution-expense-retention": "node scripts/run-api-python.mjs --load-api-env -m app.workers.contribution_expense_retention",
+    "verify": "npm run lint:web && npm run typecheck:web && npm run build:web && npm run lint:admin && npm run typecheck:admin && npm run build:admin && npm run lint:superadmin && npm run typecheck:superadmin && npm run build:superadmin && npm run lint:api && npm run test:api"
+  },
+  "engines": {
+    "node": ">=20.11.0",
+    "npm": ">=10.0.0"
+  },
+  "overrides": {
+    "postcss": "^8.5.13"
+  }
+}

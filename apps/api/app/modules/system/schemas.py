@@ -1,0 +1,234 @@
+from datetime import datetime
+
+from pydantic import BaseModel
+
+
+class SystemStatusResponse(BaseModel):
+    status: str
+    service: str
+    environment: str
+
+
+class SystemReadinessResponse(BaseModel):
+    status: str
+    service: str
+    environment: str
+    database_reachable: bool
+    migrations_current: bool
+    migration_current_revisions: list[str]
+    migration_expected_heads: list[str]
+    redis_required: bool
+    redis_reachable: bool
+
+
+class RuntimeReadinessDiagnostics(BaseModel):
+    ready: bool
+    database_reachable: bool
+    migrations_current: bool
+    migration_current_revisions: list[str]
+    migration_expected_heads: list[str]
+    redis_configured: bool
+    redis_required: bool
+    redis_reachable: bool
+
+
+class ReleaseDiagnostics(BaseModel):
+    commit_sha: str | None
+    release_version: str | None
+    commit_sha_valid: bool
+    release_version_valid: bool
+    deployed_at: str | None
+    deployment_target: str | None
+    source_control_ref: str | None
+    instance_id_present: bool
+    metadata_complete: bool
+    source_control_reported: bool
+    azure_app_service_target: bool
+
+
+class RuntimeDiagnostics(BaseModel):
+    api_base_url: str
+    web_base_url: str
+    admin_console_base_url: str
+    super_admin_console_base_url: str
+    cors_origin_count: int
+    trusted_origin_count: int
+    redis_configured: bool
+    sentry_configured: bool
+    upload_storage_provider: str
+    email_provider: str
+    email_ready: bool
+    email_from_address_configured: bool
+    smtp_host_configured: bool
+    smtp_user_configured: bool
+    smtp_password_configured: bool
+    smtp_use_tls: bool
+    csrf_same_origin_enforced: bool
+
+
+class AuthDiagnostics(BaseModel):
+    platform_owner_email: str
+    platform_owner_alias_count: int
+    platform_owner_password_configured: bool
+    admin_two_factor_required: bool
+    current_user_two_factor_enabled: bool
+    login_two_factor_challenge_enforced: bool
+    seed_test_accounts_enabled: bool
+    test_accounts_password_configured: bool
+    two_factor_recovery_supported: bool
+    two_factor_recovery_code_count: int
+    two_factor_totp_digits: int
+    two_factor_totp_period_seconds: int
+
+
+class SessionDiagnostics(BaseModel):
+    access_token_minutes: int
+    refresh_token_days: int
+    refresh_cookie_days: int
+    cookie_same_site: str
+    cookie_secure: bool
+    trusted_member_origin_configured: bool
+    trusted_admin_origin_configured: bool
+    trusted_super_admin_origin_configured: bool
+    refresh_rotation_enabled: bool
+
+
+class RateLimitDiagnostics(BaseModel):
+    login_attempts: int
+    login_window_seconds: int
+    password_reset_attempts: int
+    password_reset_window_seconds: int
+    admin_action_attempts: int
+    admin_action_window_seconds: int
+
+
+class StorageDiagnostics(BaseModel):
+    provider: str
+    uses_local_disk: bool
+    local_upload_paths_configured: bool
+    storage_target_ready: bool
+    s3_bucket_configured: bool
+    s3_endpoint_configured: bool
+    s3_endpoint_secure: bool
+    s3_region_configured: bool
+    s3_access_key_configured: bool
+    s3_secret_key_configured: bool
+    s3_credentials_ready: bool
+    s3_connect_timeout_seconds: float
+    s3_read_timeout_seconds: float
+    s3_max_attempts: int
+    s3_resilience_policy_ready: bool
+    malware_scanner_provider: str
+    malware_scanner_ready: bool
+    malware_scanner_transport_ready: bool
+    malware_scanner_url_configured: bool
+    malware_scanner_timeout_seconds: float
+    retention_days: int
+    verification_upload_max_bytes: int
+    verification_upload_allowed_type_count: int
+    profile_photo_upload_max_bytes: int
+    profile_photo_upload_allowed_type_count: int
+    community_post_media_upload_max_bytes: int
+    community_post_media_allowed_type_count: int
+    contribution_expense_evidence_upload_max_bytes: int
+    contribution_expense_evidence_allowed_type_count: int
+    contribution_expense_evidence_blocked_signature_count: int
+
+
+class StorageProbeResponse(BaseModel):
+    provider: str
+    reachable: bool
+    checked_at: datetime
+    detail: str
+
+
+class WorkerRuntimeDiagnostics(BaseModel):
+    last_run_at: datetime | None
+    last_run_status: str
+    overdue: bool
+
+
+class WorkerDiagnostics(BaseModel):
+    mwf_sync_interval_seconds: int
+    mwf_cache_ttl_hours: int
+    mwf_user_agent_configured: bool
+    mwf_fellows_source_configured: bool
+    mwf_filters_source_configured: bool
+    notification_digest_interval_seconds: int
+    notification_digest_frequency_count: int
+    notification_digest_frequencies_configured: bool
+    notification_digest_limit: int
+    notification_digest_max_items_per_email: int
+    notification_digest_include_read: bool
+    expense_retention_interval_seconds: int
+    expense_retention_limit: int
+    expense_retention_lock_provider: str
+    expense_retention_lock_ready: bool
+    expense_retention_lock_transport_secure: bool
+    expense_retention_lock_ttl_seconds: int
+    expense_category_taxonomy_configured: bool
+    expense_category_budget_policy_configured: bool
+    expense_category_enforcement_mode: str
+    expense_category_default_currency: str
+    worker_pipeline_ready: bool
+    mwf_runtime: WorkerRuntimeDiagnostics
+    notification_digest_runtime: WorkerRuntimeDiagnostics
+    expense_retention_runtime: WorkerRuntimeDiagnostics
+
+
+class StripeDiagnostics(BaseModel):
+    adapter_ready: bool
+    secret_key_configured: bool
+    webhook_secret_configured: bool
+    success_url_configured: bool
+    cancel_url_configured: bool
+    checkout_ready: bool
+    refund_ready: bool
+    return_urls_ready: bool
+    webhook_url: str
+    missing_settings: list[str]
+
+
+class FlutterwaveDiagnostics(BaseModel):
+    adapter_ready: bool
+    secret_key_configured: bool
+    webhook_secret_configured: bool
+    redirect_url_configured: bool
+    checkout_ready: bool
+    refund_ready: bool
+    return_url_ready: bool
+    webhook_url: str
+    missing_settings: list[str]
+
+
+class PaymentDiagnostics(BaseModel):
+    checkout_provider: str
+    refund_provider: str
+    provider_mode: str
+    provider_request_timeout_seconds: float
+    webhook_base_url: str
+    webhook_signing_ready: bool
+    checkout_return_url_ready: bool
+    refund_provider_ready: bool
+    implementation_ready: bool
+    credential_configuration_ready: bool
+    live_provider_validation_required: bool
+    staging_candidate_ready: bool
+    missing_settings: list[str]
+    stripe: StripeDiagnostics
+    flutterwave: FlutterwaveDiagnostics
+
+
+class SystemDiagnosticsResponse(BaseModel):
+    status: str
+    service: str
+    environment: str
+    release: ReleaseDiagnostics
+    readiness: RuntimeReadinessDiagnostics
+    runtime: RuntimeDiagnostics
+    auth: AuthDiagnostics
+    session: SessionDiagnostics
+    rate_limits: RateLimitDiagnostics
+    storage: StorageDiagnostics
+    workers: WorkerDiagnostics
+    payments: PaymentDiagnostics
