@@ -19,4 +19,8 @@ if (!envDatabaseUrl && !envFileDatabaseUrl) {
   );
 }
 
-console.log("Local API configuration includes an explicit database URL.");
+console.log(
+  `Local API configuration includes an explicit database URL from ${
+    envDatabaseUrl ? "the environment" : "apps/api/.env"
+  }.`
+);

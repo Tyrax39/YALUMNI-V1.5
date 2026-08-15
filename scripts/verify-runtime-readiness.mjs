@@ -1,13 +1,29 @@
 const apiBaseUrl = (process.env.RELEASE_API_URL ?? "http://127.0.0.1:8002").replace(/\/$/, "");
 const expectedEnvironment = process.env.RELEASE_EXPECTED_ENVIRONMENT;
-const response = await fetch(`${apiBaseUrl}/api/v1/system/readiness`, {
-  signal: AbortSignal.timeout(15_000)
-});
-const payload = await response.json().catch(() => ({}));
+const readinessUrl = `${apiBaseUrl}/api/v1/system/readiness`;
+let response;
+
+try {
+  response = await fetch(readinessUrl, { signal: AbortSignal.timeout(15_000) });
+} catch (error) {
+  const detail = error instanceof Error ? error.message : String(error);
+  throw new Error(`Runtime readiness could not reach ${readinessUrl}: ${detail}`);
+}
+
+const responseBody = await response.text();
+const payload = (() => {
+  try {
+    return JSON.parse(responseBody);
+  } catch {
+    return {};
+  }
+})();
 
 if (!response.ok) {
   throw new Error(
-    `Runtime readiness failed with ${response.status}: ${JSON.stringify(payload)}`
+    `Runtime readiness failed with ${response.status}: ${
+      Object.keys(payload).length ? JSON.stringify(payload) : responseBody || "empty response"
+    }`
   );
 }
 if (payload.status !== "ready") {
