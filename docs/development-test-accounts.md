@@ -25,10 +25,17 @@ The shared local test password defaults to `YalumniTest@12345!` and can be chang
 Seed them manually:
 
 ```powershell
-cd D:\YALUMNI-V1.5\apps\api
-$env:DATABASE_URL="sqlite+pysqlite:///D:/YALUMNI-V1.5/.local/yalumni.sqlite3"
-python scripts/seed_test_accounts.py
+cd D:\YALUMNI-V1.5
+npm run migrate:api
+node scripts/run-api-python.mjs --load-api-env apps/api/scripts/seed_test_accounts.py
+npm run verify:local-postgres
 ```
+
+The local API reads `DATABASE_URL` from the ignored `apps/api/.env` file. For
+persistent local QA, it must point to a loopback PostgreSQL database; the
+verification command confirms database connectivity and the current Alembic
+head without printing credentials. Docker Compose remains optional for an
+isolated container stack and is not required for the normal local workflow.
 
 Seed the same managed QA accounts into staging intentionally:
 

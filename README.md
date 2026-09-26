@@ -24,13 +24,25 @@ python -m pip install -e ".[dev]"
 
 Copy `.env.example` to `.env` when you are ready to use local secrets.
 
+For the normal persistent local runtime, set `DATABASE_URL` in the ignored
+`apps/api/.env` to a loopback PostgreSQL database, then apply migrations and
+verify it before starting the API:
+
+```powershell
+npm run migrate:api
+npm run verify:local-postgres
+```
+
+Docker Compose remains available for an isolated container stack, but it is not
+required to use the local PostgreSQL workflow.
+
 ## Run Locally
 
 API:
 
 ```bash
-cd apps/api
-python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+cd D:\YALUMNI-V1.5
+npm run dev:api
 ```
 
 Web:
@@ -80,11 +92,11 @@ docker compose up --build
 
 ## URLs
 
-- Member/public app: http://localhost:3000
+- Member/public app: http://localhost:3010
 - Admin RBAC console: http://localhost:3011
 - Super-admin console: http://localhost:3012
-- API health: http://localhost:8000/health
-- API docs: http://localhost:8000/docs
+- API health: http://localhost:8002/health
+- API docs: http://localhost:8002/docs
 
 ## Current Milestone
 

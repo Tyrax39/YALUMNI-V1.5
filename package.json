@@ -30,6 +30,7 @@
     "verify:release-parity": "node scripts/verify-release-parity.mjs",
     "verify:runtime-readiness": "node scripts/verify-runtime-readiness.mjs",
     "verify:local-api-config": "node scripts/verify-local-api-config.mjs",
+    "verify:local-postgres": "node scripts/run-api-python.mjs --load-api-env apps/api/scripts/verify_local_postgres.py",
     "verify:payment-readiness": "node scripts/verify-payment-readiness.mjs",
     "verify:ops-readiness": "node scripts/verify-ops-readiness.mjs",
     "verify:pilot-launch": "node scripts/verify-pilot-launch-gates.mjs",

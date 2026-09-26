@@ -4,6 +4,24 @@ Use this runbook for staging and pilot operations. All administrative API action
 require an authenticated role with the documented permission; system probes are
 restricted to `SUPER_ADMIN`.
 
+## Local PostgreSQL Runtime
+
+The normal local API workflow uses the persistent PostgreSQL URL in the ignored
+`apps/api/.env` file. Docker Compose is optional and is not required to start
+the API against that local database. Before starting local app servers or
+investigating login/data issues, run:
+
+```powershell
+cd D:\YALUMNI-V1.5
+npm run migrate:api
+npm run verify:local-postgres
+```
+
+The check accepts only a loopback PostgreSQL URL and verifies connectivity plus
+the current Alembic head. It does not print database credentials. If it fails,
+restore the local database service first; do not fall back to a new SQLite file
+because that silently creates an unrelated empty runtime.
+
 ## Runtime Readiness Gate
 
 Use the readiness endpoint to distinguish process liveness from deployable

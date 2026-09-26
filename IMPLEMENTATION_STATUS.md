@@ -21,6 +21,9 @@ the documents disagree.
 - Current deployment/session posture: non-secret URL, origin, cookie, explicit
   proxy-header trust, migration-revision, and release-metadata handoff checks
   are available before live Azure parity tests.
+- Local persistence posture: the normal local runtime is verified against a
+  loopback PostgreSQL database with current Alembic migrations; Docker Compose
+  remains optional rather than required for everyday local development.
 - Confidence: `medium-high`
 - Current branch at audit: `Tyrax0/yalumni-v1.5-foundation`
 - Current state: late-stage staging build with strong module coverage, pilot
@@ -152,6 +155,7 @@ Common verification commands already present in the repo:
 - `npm run smoke:admin`
 - `npm run smoke:superadmin`
 - `npm run smoke:rbac`
+- `npm run verify:local-postgres`
 
 Common local runtime commands:
 
