@@ -159,7 +159,7 @@ Common verification commands already present in the repo:
 
 Common local runtime commands:
 
-- Member/public app: `npm run dev:web`
+- Member/public app: `npm run dev:member`
 - Admin console: `npm run dev:admin`
 - Super-admin console: `npm run dev:superadmin`
 - API: `npm run dev:api`

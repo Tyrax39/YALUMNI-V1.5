@@ -48,7 +48,7 @@ npm run dev:api
 Web:
 
 ```bash
-npm run dev:web
+npm run dev:member
 ```
 
 Notification digest worker:
