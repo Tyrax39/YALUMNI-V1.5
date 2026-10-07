@@ -8,14 +8,17 @@ restricted to `SUPER_ADMIN`.
 
 The normal local API workflow uses the persistent PostgreSQL URL in the ignored
 `apps/api/.env` file. Docker Compose is optional and is not required to start
-the API against that local database. Before starting local app servers or
-investigating login/data issues, run:
+the API against that local database. Before investigating login or data issues,
+run:
 
 ```powershell
 cd D:\YALUMNI-V1.5
-npm run migrate:api
 npm run verify:local-postgres
 ```
+
+`npm run dev:api` applies Alembic migrations before it starts Uvicorn. Run
+`npm run migrate:api` directly only when applying migrations without starting
+the API.
 
 The check accepts only a loopback PostgreSQL URL and verifies connectivity plus
 the current Alembic head. It does not print database credentials. If it fails,

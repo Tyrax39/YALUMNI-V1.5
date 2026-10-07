@@ -25,11 +25,10 @@ python -m pip install -e ".[dev]"
 Copy `.env.example` to `.env` when you are ready to use local secrets.
 
 For the normal persistent local runtime, set `DATABASE_URL` in the ignored
-`apps/api/.env` to a loopback PostgreSQL database, then apply migrations and
-verify it before starting the API:
+`apps/api/.env` to a loopback PostgreSQL database, then verify it before
+starting the API:
 
 ```powershell
-npm run migrate:api
 npm run verify:local-postgres
 ```
 
@@ -44,6 +43,10 @@ API:
 cd D:\YALUMNI-V1.5
 npm run dev:api
 ```
+
+`npm run dev:api` applies Alembic migrations before starting Uvicorn, matching
+the API container startup behavior. Run `npm run migrate:api` directly when a
+migration needs to be applied without starting the API.
 
 Web:
 

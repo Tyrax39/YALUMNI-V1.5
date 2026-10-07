@@ -14,7 +14,7 @@
     "dev:member": "npm --workspace @yalumni/web run dev:member",
     "dev:admin": "npm --workspace @yalumni/admin-console run dev",
     "dev:superadmin": "npm --workspace @yalumni/super-admin-console run dev",
-    "dev:api": "node scripts/verify-local-api-config.mjs && node scripts/run-api-python.mjs --load-api-env -m uvicorn app.main:app --host 127.0.0.1 --port 8002",
+    "dev:api": "npm run migrate:api && node scripts/run-api-python.mjs --load-api-env -m uvicorn app.main:app --host 127.0.0.1 --port 8002",
     "migrate:api": "node scripts/verify-local-api-config.mjs && node scripts/run-api-python.mjs --load-api-env --api-working-directory -m alembic upgrade head",
     "build:web": "npm --workspace @yalumni/web run build",
     "build:admin": "npm --workspace @yalumni/admin-console run build",
