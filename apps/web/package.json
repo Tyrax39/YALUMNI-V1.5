@@ -9,6 +9,7 @@
     "start": "next start --hostname 0.0.0.0",
     "lint": "eslint . --max-warnings=0",
     "smoke:routes": "node scripts/smoke-routes.mjs",
+    "test:screen-parity": "node --test scripts/screen-parity.test.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

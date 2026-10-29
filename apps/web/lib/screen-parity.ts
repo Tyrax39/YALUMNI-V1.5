@@ -74,12 +74,12 @@ export const screenParityRecords: ScreenParityRecord[] = [
     status: "live route"
   },
   {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     exportFolder: "agenda_speaker_planner",
-    notes: "Agenda and speaker planner surface until event APIs land.",
+    notes: "Agenda route uses the live event agenda API.",
     route: "/events/[eventId]/agenda",
-    status: "route-complete prototype"
+    status: "live route"
   },
   {
     backendDependencyStatus: "implemented",
@@ -106,12 +106,12 @@ export const screenParityRecords: ScreenParityRecord[] = [
     status: "live route"
   },
   {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     exportFolder: "annual_gathering_hub",
-    notes: "Event detail shell with RSVP, agenda, speaker, and attendee links.",
+    notes: "Event detail reads live event records and links to RSVP, agenda, and attendee workflows.",
     route: "/events/[eventId]",
-    status: "route-complete prototype"
+    status: "live route"
   },
   {
     backendDependencyStatus: "implemented",
@@ -186,12 +186,12 @@ export const screenParityRecords: ScreenParityRecord[] = [
     status: "live route"
   },
   {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     exportFolder: "create_gathering_wizard",
-    notes: "Event creation wizard is visually available with disabled submit.",
+    notes: "Event creation form submits through the live event API.",
     route: "/events/new",
-    status: "route-complete prototype"
+    status: "live route"
   },
   {
     backendDependencyStatus: "implemented",
@@ -266,20 +266,20 @@ export const screenParityRecords: ScreenParityRecord[] = [
     status: "live route"
   },
   {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     exportFolder: "initiative_details",
-    notes: "Initiative detail page with fixture milestones and collaborator data.",
+    notes: "Initiative detail reads live initiative and milestone records.",
     route: "/initiatives/[initiativeId]",
-    status: "route-complete prototype"
+    status: "live route"
   },
   {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     exportFolder: "initiative_hub",
-    notes: "Initiatives hub with fixture status lanes.",
+    notes: "Initiatives hub uses the live initiatives API.",
     route: "/initiatives",
-    status: "route-complete prototype"
+    status: "live route"
   },
   {
     backendDependencyStatus: "partially implemented",
@@ -394,12 +394,12 @@ export const screenParityRecords: ScreenParityRecord[] = [
     status: "live route"
   },
   {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     exportFolder: "propose_new_initiative",
-    notes: "Initiative proposal form is present with disabled submit.",
+    notes: "Initiative proposal form submits through the live initiatives API.",
     route: "/initiatives/new",
-    status: "route-complete prototype"
+    status: "live route"
   },
   {
     backendDependencyStatus: "implemented",
@@ -450,12 +450,12 @@ export const screenParityRecords: ScreenParityRecord[] = [
     status: "live redirect"
   },
   {
-    backendDependencyStatus: "not implemented",
-    dataSource: "fixture",
+    backendDependencyStatus: "implemented",
+    dataSource: "live API",
     exportFolder: "rsvp_attendee_management",
-    notes: "RSVP and attendee management shell until event APIs land.",
+    notes: "Attendee route uses the live RSVP and attendee APIs.",
     route: "/events/[eventId]/attendees",
-    status: "route-complete prototype"
+    status: "live route"
   },
   {
     backendDependencyStatus: "implemented",

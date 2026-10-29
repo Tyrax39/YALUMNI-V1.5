@@ -1,6 +1,6 @@
 # YALUMNI V1.5 Implementation Status
 
-Last updated: 2026-08-01
+Last updated: 2026-10-29
 Canonical scope target: pilot alumni core launch
 Canonical runtime: `apps/web` (`3010`), `apps/admin-console` (`3011`), `apps/super-admin-console` (`3012`), `apps/api` (`8002`)
 
@@ -24,6 +24,9 @@ the documents disagree.
 - Local persistence posture: the normal local runtime is verified against a
   loopback PostgreSQL database with current Alembic migrations; Docker Compose
   remains optional rather than required for everyday local development.
+- Parity inventory posture: the 2026-10-29 audit reconciled Events and
+  Initiatives records to their existing live APIs; Opportunities, Resources,
+  and Success Stories records were already aligned.
 - Confidence: `medium-high`
 - Current branch at audit: `Tyrax0/yalumni-v1.5-foundation`
 - Current state: late-stage staging build with strong module coverage, pilot
