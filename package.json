@@ -26,6 +26,7 @@
     "smoke:admin": "npm --workspace @yalumni/admin-console run smoke:routes",
     "smoke:superadmin": "npm --workspace @yalumni/super-admin-console run smoke:routes",
     "smoke:rbac": "node scripts/smoke-rbac.mjs",
+    "smoke:auth-sessions": "node scripts/smoke-auth-sessions.mjs",
     "verify:deployment-readiness": "node scripts/verify-deployment-readiness.mjs",
     "verify:release-parity": "node scripts/verify-release-parity.mjs",
     "verify:runtime-readiness": "node scripts/verify-runtime-readiness.mjs",
