@@ -1,0 +1,178 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: yali_alumni
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d yali_alumni"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    image: yalumni-api-local
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    env_file:
+      - .env.example
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/yali_alumni
+      REDIS_URL: redis://redis:6379/0
+      YALUMNI_RELEASE_SHA: ${YALUMNI_RELEASE_SHA:-local}
+      YALUMNI_RELEASE_VERSION: ${YALUMNI_RELEASE_VERSION:-local-dev}
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./apps/api:/app/apps/api
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/system/readiness', timeout=2)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  worker-mwf-sync:
+    image: yalumni-api-local
+    env_file:
+      - .env.example
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/yali_alumni
+      REDIS_URL: redis://redis:6379/0
+    command: python -m app.workers.mwf_alumni_sync
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes:
+      - ./apps/api:/app/apps/api
+
+  worker-notification-digests:
+    image: yalumni-api-local
+    env_file:
+      - .env.example
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/yali_alumni
+      REDIS_URL: redis://redis:6379/0
+    command: python -m app.workers.notification_digests
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes:
+      - ./apps/api:/app/apps/api
+
+  worker-expense-retention:
+    image: yalumni-api-local
+    env_file:
+      - .env.example
+    environment:
+      CONTRIBUTION_EXPENSE_EVIDENCE_RETENTION_WORKER_LOCK_PROVIDER: REDIS
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/yali_alumni
+      REDIS_URL: redis://redis:6379/0
+    command: python -m app.workers.contribution_expense_retention
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes:
+      - ./apps/api:/app/apps/api
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    env_file:
+      - .env.example
+    environment:
+      API_BASE_URL: http://api:8000
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+      YALUMNI_RELEASE_SHA: ${YALUMNI_RELEASE_SHA:-local}
+      YALUMNI_RELEASE_VERSION: ${YALUMNI_RELEASE_VERSION:-local-dev}
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    volumes:
+      - ./apps/web:/app/apps/web
+      - /app/node_modules
+      - /app/apps/web/.next
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/release').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  admin-console:
+    build:
+      context: .
+      dockerfile: apps/admin-console/Dockerfile
+    env_file:
+      - .env.example
+    environment:
+      API_BASE_URL: http://api:8000
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+      YALUMNI_RELEASE_SHA: ${YALUMNI_RELEASE_SHA:-local}
+      YALUMNI_RELEASE_VERSION: ${YALUMNI_RELEASE_VERSION:-local-dev}
+    ports:
+      - "3011:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/release').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  super-admin-console:
+    build:
+      context: .
+      dockerfile: apps/super-admin-console/Dockerfile
+    env_file:
+      - .env.example
+    environment:
+      API_BASE_URL: http://api:8000
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+      YALUMNI_RELEASE_SHA: ${YALUMNI_RELEASE_SHA:-local}
+      YALUMNI_RELEASE_VERSION: ${YALUMNI_RELEASE_VERSION:-local-dev}
+    ports:
+      - "3012:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/release').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:

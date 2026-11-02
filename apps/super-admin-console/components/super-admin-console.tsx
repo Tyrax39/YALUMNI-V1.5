@@ -1,0 +1,1565 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+
+import {
+  ADMIN_SURFACES,
+  ApiClientError,
+  SUPER_ADMIN_NAV,
+  type AdminAuditEvent,
+  type AdminOverview,
+  type AuthUser,
+  type MwfAlumniSyncRun,
+  type MwfAlumniSyncStatus,
+  type SystemDiagnostics,
+  fetchAdminAuditEvents,
+  fetchAdminOverview,
+  fetchMwfSyncRuns,
+  fetchMwfSyncStatus,
+  fetchSessionUser,
+  fetchSystemDiagnostics,
+  probeStorageBackend,
+  refreshMwfSync,
+  resetAdminUserTwoFactor,
+  isSuperAdmin
+} from "@yalumni/frontend-shared";
+import {
+  Activity,
+  BadgeCheck,
+  ClipboardList,
+  DatabaseZap,
+  LogOut,
+  RefreshCw,
+  ShieldAlert,
+  ShieldCheck,
+  UsersRound
+} from "lucide-react";
+
+type SuperPageId = "audit" | "diagnostics" | "home" | "roles" | "system";
+
+type SuperAdminConsoleProps = {
+  pageId: SuperPageId;
+};
+
+type ConsoleState =
+  | { status: "loading" }
+  | {
+      auditEvents: AdminAuditEvent[];
+      overview: AdminOverview | null;
+      status: "ready";
+      systemDiagnostics: SystemDiagnostics | null;
+      user: AuthUser;
+    }
+  | { message: string; status: "error" };
+
+const pageCopy = {
+  audit: {
+    description: "Security event visibility, session risk indicators, and recent administrative audit entries.",
+    eyebrow: "Audit and security",
+    title: "Audit & Security"
+  },
+  diagnostics: {
+    description: "Read-only owner diagnostics for route isolation, backend reachability, and protected account health.",
+    eyebrow: "Owner diagnostics",
+    title: "Platform Diagnostics"
+  },
+  home: {
+    description: "Super-admin-only platform ownership console with health, role, and security signals.",
+    eyebrow: "Super admin console",
+    title: "Owner Dashboard"
+  },
+  roles: {
+    description: "Role visibility matrix across administrative surfaces and member access scopes.",
+    eyebrow: "Role visibility",
+    title: "Role Matrix"
+  },
+  system: {
+    description: "System checks for the separated runtimes, backend service, CORS, and auth session plumbing.",
+    eyebrow: "System checks",
+    title: "System Health"
+  }
+} satisfies Record<SuperPageId, { description: string; eyebrow: string; title: string }>;
+
+export function SuperAdminConsole({ pageId }: SuperAdminConsoleProps) {
+  const pathname = usePathname();
+  const [state, setState] = useState<ConsoleState>({ status: "loading" });
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function load() {
+      try {
+        const user = await fetchSessionUser();
+        const [overviewResult, auditResult, systemResult] = await Promise.allSettled([
+          fetchAdminOverview(),
+          fetchAdminAuditEvents(8),
+          fetchSystemDiagnostics()
+        ]);
+
+        if (!isMounted) {
+          return;
+        }
+
+        setState({
+          auditEvents: auditResult.status === "fulfilled" ? auditResult.value.events : [],
+          overview: overviewResult.status === "fulfilled" ? overviewResult.value : null,
+          status: "ready",
+          systemDiagnostics: systemResult.status === "fulfilled" ? systemResult.value : null,
+          user
+        });
+      } catch (caught) {
+        if (!isMounted) {
+          return;
+        }
+        if (caught instanceof ApiClientError && caught.status === 401) {
+          window.location.replace(`/login?next=${encodeURIComponent(pathname)}`);
+          return;
+        }
+        setState({
+          message: caught instanceof Error ? caught.message : "The super-admin session could not be loaded.",
+          status: "error"
+        });
+      }
+    }
+
+    load();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [pathname]);
+
+  async function handleLogout() {
+    const csrfResponse = await fetch("/api/session/csrf", {
+      cache: "no-store",
+      credentials: "include"
+    });
+    const csrf = (await csrfResponse.json()) as { csrf_token: string };
+    await fetch("/api/session/logout", {
+      cache: "no-store",
+      credentials: "include",
+      headers: { "x-csrf-token": csrf.csrf_token },
+      method: "POST"
+    });
+    window.location.assign("/login");
+  }
+
+  if (state.status === "loading") {
+    return <GuardPanel description="Checking the platform owner session." title="Loading super-admin console" />;
+  }
+
+  if (state.status === "error") {
+    return <GuardPanel description={state.message} title="Super-admin console unavailable" />;
+  }
+
+  if (!isSuperAdmin(state.user.roles)) {
+    return (
+      <GuardPanel
+        description="This app is restricted to SUPER_ADMIN only. Use the RBAC admin console on port 3011 for other administrative roles."
+        eyebrow={`Current roles: ${state.user.roles.join(", ")}`}
+        title="Super-admin role required"
+      />
+    );
+  }
+
+  return (
+    <Shell onLogout={handleLogout} pathname={pathname} user={state.user}>
+      <div className="grid gap-6">
+        <section className="grid gap-4 xl:grid-cols-[1fr_auto] xl:items-end">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-secondary">{pageCopy[pageId].eyebrow}</p>
+            <h1 className="mt-3 font-display text-3xl font-bold leading-tight text-ink sm:text-4xl">
+              {pageCopy[pageId].title}
+            </h1>
+            <p className="mt-3 max-w-3xl text-base leading-7 text-muted">{pageCopy[pageId].description}</p>
+          </div>
+          <StatusBadge label="SUPER_ADMIN only" />
+        </section>
+
+        {pageId === "roles" ? <RoleMatrix /> : null}
+        {pageId === "diagnostics" ? (
+          <Diagnostics diagnostics={state.systemDiagnostics} overview={state.overview} user={state.user} />
+        ) : null}
+        {pageId === "audit" ? <AuditPanel events={state.auditEvents} overview={state.overview} /> : null}
+        {pageId === "system" ? (
+          <div className="grid gap-5">
+            <SystemChecks diagnostics={state.systemDiagnostics} overview={state.overview} />
+            <ReleaseReadinessPanel diagnostics={state.systemDiagnostics} />
+            <ReleaseChecklistPanel diagnostics={state.systemDiagnostics} />
+            <SecurityHardeningPanel diagnostics={state.systemDiagnostics} />
+            <TwoFactorRecoveryPanel />
+            <OperationsHardeningPanel diagnostics={state.systemDiagnostics} />
+            <MwfCachePanel />
+          </div>
+        ) : null}
+        {pageId === "home" ? (
+          <>
+            <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <MetricCard
+                detail="From the live admin overview endpoint when available."
+                label="Total users"
+                value={formatNumber(state.overview?.total_users)}
+              />
+              <MetricCard
+                detail="Administrators across all non-owner roles."
+                label="Admin users"
+                value={formatNumber(state.overview?.admin_users)}
+              />
+              <MetricCard
+                detail="Current auth session footprint."
+                label="Active sessions"
+                value={formatNumber(state.overview?.active_sessions)}
+              />
+              <MetricCard
+                detail="Pending alumni verification requests."
+                label="Verification queue"
+                value={formatNumber(state.overview?.pending_verification_users)}
+              />
+            </section>
+            <section className="grid gap-5 xl:grid-cols-[1fr_1fr]">
+              <Diagnostics
+                compact
+                diagnostics={state.systemDiagnostics}
+                overview={state.overview}
+                user={state.user}
+              />
+              <AuditPanel events={state.auditEvents} overview={state.overview} compact />
+            </section>
+          </>
+        ) : null}
+      </div>
+    </Shell>
+  );
+}
+
+function Shell({
+  children,
+  onLogout,
+  pathname,
+  user
+}: {
+  children: React.ReactNode;
+  onLogout: () => void;
+  pathname: string;
+  user: AuthUser;
+}) {
+  const initials = useMemo(() => {
+    return user.display_name
+      .split(" ")
+      .map((part) => part.charAt(0))
+      .join("")
+      .slice(0, 2)
+      .toUpperCase();
+  }, [user.display_name]);
+
+  return (
+    <main className="min-h-screen bg-surface text-ink">
+      <header className="sticky top-0 z-40 border-b border-border bg-white/95 backdrop-blur">
+        <div className="flex h-16 w-full items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+          <Link className="focus-ring rounded-lg text-sm font-black text-primary" href="/">
+            YALUMNI Super Admin
+          </Link>
+          <div className="flex items-center gap-3">
+            <Link className="hidden text-sm font-bold text-muted transition hover:text-primary sm:inline" href="http://127.0.0.1:3011/">
+              Admin app
+            </Link>
+            <Link className="hidden text-sm font-bold text-muted transition hover:text-primary sm:inline" href="http://127.0.0.1:3010/dashboard">
+              Member app
+            </Link>
+            <div className="hidden items-center gap-3 rounded-full border border-border bg-white py-1 pl-1 pr-3 sm:flex">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-bold text-white">
+                {initials || "SA"}
+              </div>
+              <div className="max-w-40 truncate text-xs font-semibold text-muted">{user.email}</div>
+            </div>
+            <button
+              aria-label="Sign out"
+              className="focus-ring inline-flex h-10 w-10 items-center justify-center rounded-full text-muted transition hover:bg-surface hover:text-primary"
+              onClick={onLogout}
+              type="button"
+            >
+              <LogOut aria-hidden="true" className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <div className="grid w-full lg:grid-cols-[272px_1fr]">
+        <aside className="sticky top-16 hidden h-[calc(100vh-64px)] overflow-y-auto border-r border-border bg-[#f3f3fa] px-4 py-5 lg:block">
+          <div className="mb-6 rounded-lg border border-border bg-white p-4">
+            <p className="text-sm font-bold text-ink">Protected owner account</p>
+            <p className="mt-1 text-xs font-semibold leading-5 text-muted">
+              This console is intentionally isolated from normal administrative surfaces.
+            </p>
+          </div>
+          <nav aria-label="Super-admin routes" className="grid gap-1">
+            {SUPER_ADMIN_NAV.map((item) => (
+              <SideNavLink href={item.href} isActive={isActivePath(pathname, item.href)} key={item.href} label={item.label} />
+            ))}
+          </nav>
+        </aside>
+
+        <section className="min-w-0 px-4 py-6 pb-24 sm:px-6 lg:px-8 lg:py-8">{children}</section>
+      </div>
+
+      <nav
+        aria-label="Mobile super-admin routes"
+        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 gap-1 border-t border-border bg-white/95 px-2 py-2 backdrop-blur lg:hidden"
+      >
+        {SUPER_ADMIN_NAV.map((item) => (
+          <Link
+            className={`focus-ring flex min-h-12 flex-col items-center justify-center rounded-lg text-[10px] font-bold ${
+              isActivePath(pathname, item.href) ? "bg-primary text-white" : "text-muted"
+            }`}
+            href={item.href}
+            key={item.href}
+          >
+            {item.label}
+          </Link>
+        ))}
+      </nav>
+    </main>
+  );
+}
+
+function Diagnostics({
+  compact = false,
+  diagnostics,
+  overview,
+  user
+}: {
+  compact?: boolean;
+  diagnostics: SystemDiagnostics | null;
+  overview: AdminOverview | null;
+  user: AuthUser;
+}) {
+  return (
+    <section className="rounded-lg border border-border bg-white p-5 shadow-soft sm:p-6">
+      <div className="flex items-start gap-4">
+        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary text-white">
+          <DatabaseZap aria-hidden="true" className="h-5 w-5" />
+        </div>
+        <div>
+          <h2 className="font-display text-2xl font-semibold text-ink">Owner diagnostics</h2>
+          <p className="mt-2 text-sm leading-6 text-muted">
+            Read-only platform owner signals; destructive account operations are intentionally absent.
+          </p>
+        </div>
+      </div>
+      <div className={`mt-6 grid gap-3 ${compact ? "" : "md:grid-cols-2"}`}>
+        <CheckRow label="SUPER_ADMIN role" status={isSuperAdmin(user.roles) ? "healthy" : "blocked"} />
+        <CheckRow label="Owner demotion/removal" status="blocked by policy" />
+        <CheckRow label="Backend admin overview" status={overview ? "reachable" : "not reachable"} />
+        <CheckRow label="Runtime isolation" status="3010 / 3011 / 3012 split" />
+        <CheckRow
+          label="Release commit"
+          status={diagnostics?.release.commit_sha ? diagnostics.release.commit_sha.slice(0, 12) : "not reported"}
+        />
+        <CheckRow
+          label="Checkout provider readiness"
+          status={
+            diagnostics
+              ? diagnostics.payments.checkout_provider === "STRIPE"
+                ? diagnostics.payments.stripe.checkout_ready
+                  ? "stripe ready"
+                  : "stripe incomplete"
+                : diagnostics.payments.checkout_provider === "FLUTTERWAVE"
+                  ? diagnostics.payments.flutterwave.checkout_ready
+                    ? "flutterwave ready"
+                    : "flutterwave incomplete"
+                  : diagnostics.payments.checkout_provider.toLowerCase()
+              : "loading"
+          }
+        />
+      </div>
+    </section>
+  );
+}
+
+function AuditPanel({
+  compact = false,
+  events,
+  overview
+}: {
+  compact?: boolean;
+  events: AdminAuditEvent[];
+  overview: AdminOverview | null;
+}) {
+  return (
+    <section className="rounded-lg border border-border bg-white p-5 shadow-soft sm:p-6">
+      <div className="flex items-start gap-4">
+        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary text-white">
+          <ShieldAlert aria-hidden="true" className="h-5 w-5" />
+        </div>
+        <div>
+          <h2 className="font-display text-2xl font-semibold text-ink">Security overview</h2>
+          <p className="mt-2 text-sm leading-6 text-muted">
+            Active sessions: {formatNumber(overview?.active_sessions)}. Latest events are shown when permitted by backend RBAC.
+          </p>
+        </div>
+      </div>
+      <div className={`mt-6 grid gap-3 ${compact ? "" : "md:grid-cols-2"}`}>
+        {events.length ? (
+          events.map((event) => (
+            <div className="rounded-lg border border-border bg-surface p-4" key={event.id}>
+              <p className="text-sm font-bold text-ink">{event.event_type ?? "Audit event"}</p>
+              <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-muted">
+                {event.user_email ?? "system"} · {formatDate(event.created_at)}
+              </p>
+            </div>
+          ))
+        ) : (
+          <p className="rounded-lg border border-border bg-surface p-4 text-sm leading-6 text-muted">
+            Audit records will appear here when the endpoint returns events.
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function RoleMatrix() {
+  return (
+    <section className="rounded-lg border border-border bg-white p-5 shadow-soft sm:p-6">
+      <div className="flex items-start gap-4">
+        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary text-white">
+          <UsersRound aria-hidden="true" className="h-5 w-5" />
+        </div>
+        <div>
+          <h2 className="font-display text-2xl font-semibold text-ink">Administrative access matrix</h2>
+          <p className="mt-2 text-sm leading-6 text-muted">
+            SUPER_ADMIN can see every operational surface; non-owner admins are restricted by the RBAC map.
+          </p>
+        </div>
+      </div>
+      <div className="mt-6 overflow-hidden rounded-lg border border-border">
+        <div className="hidden bg-surface px-4 py-3 text-xs font-bold uppercase tracking-[0.12em] text-muted md:grid md:grid-cols-3">
+          <span>Surface</span>
+          <span>Allowed roles</span>
+          <span>State</span>
+        </div>
+        <div className="divide-y divide-border">
+          {ADMIN_SURFACES.map((surface) => (
+            <div className="grid gap-2 px-4 py-4 text-sm md:grid-cols-3" key={surface.id}>
+              <p className="font-semibold text-ink">{surface.label}</p>
+              <p className="font-semibold text-muted">{surface.allowedRoles.join(", ")}</p>
+              <p className="font-semibold text-primary">{surface.status}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function SystemChecks({
+  diagnostics,
+  overview
+}: {
+  diagnostics: SystemDiagnostics | null;
+  overview: AdminOverview | null;
+}) {
+  return (
+    <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <SystemCard
+        icon={<Activity className="h-5 w-5" />}
+        label="Member app"
+        value={diagnostics ? shortRuntimeUrl(diagnostics.runtime.web_base_url) : "3010"}
+      />
+      <SystemCard
+        icon={<ClipboardList className="h-5 w-5" />}
+        label="Admin console"
+        value={diagnostics ? shortRuntimeUrl(diagnostics.runtime.admin_console_base_url) : "3011"}
+      />
+      <SystemCard
+        icon={<ShieldCheck className="h-5 w-5" />}
+        label="Super admin"
+        value={diagnostics ? shortRuntimeUrl(diagnostics.runtime.super_admin_console_base_url) : "3012"}
+      />
+      <SystemCard
+        icon={<DatabaseZap className="h-5 w-5" />}
+        label="Database schema"
+        value={diagnostics ? (diagnostics.readiness.migrations_current ? "current" : "migration pending") : "checking"}
+      />
+      <SystemCard icon={<BadgeCheck className="h-5 w-5" />} label="Backend API" value={overview ? "reachable" : "check 8002"} />
+    </section>
+  );
+}
+
+function ReleaseReadinessPanel({ diagnostics }: { diagnostics: SystemDiagnostics | null }) {
+  if (!diagnostics) {
+    return (
+      <section className="rounded-lg border border-border bg-white p-5 shadow-soft">
+        <p className="text-sm font-semibold text-muted">
+          Release diagnostics will appear here when the backend system diagnostics endpoint is reachable.
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="rounded-lg border border-border bg-white p-5 shadow-soft sm:p-6">
+      <div className="grid gap-5 xl:grid-cols-[1.1fr_1fr]">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.12em] text-muted">Release parity</p>
+          <h2 className="mt-2 font-display text-2xl font-semibold text-ink">Deployment and provider readiness</h2>
+          <p className="mt-3 text-sm leading-6 text-muted">
+            This surface summarizes the active API runtime, reported release metadata, and whether
+            the configured Stripe or Flutterwave checkout path has the minimum settings required for staging.
+          </p>
+          <div className="mt-5 grid gap-3 md:grid-cols-2">
+            <SystemMetric
+              label="Environment"
+              value={diagnostics.environment}
+            />
+            <SystemMetric
+              label="Release SHA"
+              value={diagnostics.release.commit_sha?.slice(0, 12) ?? "not set"}
+            />
+            <SystemMetric
+              label="Release version"
+              value={diagnostics.release.release_version ?? "not set"}
+            />
+            <SystemMetric
+              label="Deployment target"
+              value={diagnostics.release.deployment_target ?? "local/dev"}
+            />
+            <SystemMetric
+              label="Source control ref"
+              value={diagnostics.release.source_control_ref ?? "not set"}
+            />
+            <SystemMetric
+              label="Deployed at"
+              value={diagnostics.release.deployed_at ?? "not set"}
+            />
+          </div>
+        </div>
+        <div className="grid gap-3">
+          <CheckRow
+            label={`Checkout provider: ${diagnostics.payments.checkout_provider}`}
+            status={
+              diagnostics.payments.checkout_provider === "STRIPE"
+                ? diagnostics.payments.stripe.checkout_ready
+                  ? "ready"
+                  : "incomplete"
+                : diagnostics.payments.checkout_provider === "FLUTTERWAVE"
+                  ? diagnostics.payments.flutterwave.checkout_ready
+                    ? "ready"
+                    : "incomplete"
+                  : diagnostics.payments.checkout_provider.toLowerCase()
+            }
+          />
+          <CheckRow
+            label="Stripe staging config"
+            status={diagnostics.payments.stripe.checkout_ready ? "ready" : "missing settings"}
+          />
+          <CheckRow
+            label="Flutterwave staging config"
+            status={diagnostics.payments.flutterwave.checkout_ready ? "ready" : "missing settings"}
+          />
+          <CheckRow
+            label="Payment implementation"
+            status={diagnostics.payments.implementation_ready ? "ready" : "incomplete"}
+          />
+          <CheckRow
+            label="Live payment credentials"
+            status={
+              diagnostics.payments.credential_configuration_ready
+                ? "configured"
+                : `${diagnostics.payments.missing_settings.length} missing`
+            }
+          />
+          <CheckRow
+            label="Release metadata completeness"
+            status={diagnostics.release.metadata_complete ? "complete" : "incomplete"}
+          />
+          <CheckRow
+            label="Database reachability"
+            status={diagnostics.readiness.database_reachable ? "reachable" : "unreachable"}
+          />
+          <CheckRow
+            label="Schema migration"
+            status={diagnostics.readiness.migrations_current ? "current" : "migration pending"}
+          />
+          <CheckRow
+            label="Redis runtime"
+            status={
+              diagnostics.readiness.redis_required
+                ? diagnostics.readiness.redis_reachable
+                  ? "reachable"
+                  : "unreachable"
+                : diagnostics.readiness.redis_configured
+                  ? "configured (optional)"
+                  : "not required"
+            }
+          />
+          <CheckRow
+            label="Azure App Service target"
+            status={diagnostics.release.azure_app_service_target ? "detected" : "not detected"}
+          />
+          <CheckRow
+            label="Email delivery"
+            status={diagnostics.runtime.email_ready ? diagnostics.runtime.email_provider : "not ready"}
+          />
+          <CheckRow
+            label="Redis configured"
+            status={diagnostics.runtime.redis_configured ? "yes" : "no"}
+          />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ReleaseChecklistPanel({ diagnostics }: { diagnostics: SystemDiagnostics | null }) {
+  if (!diagnostics) {
+    return (
+      <section className="rounded-lg border border-border bg-white p-5 shadow-soft">
+        <p className="text-sm font-semibold text-muted">
+          Release checklist signals will appear here when the system endpoint is reachable.
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="rounded-lg border border-border bg-white p-5 shadow-soft sm:p-6">
+      <p className="text-xs font-bold uppercase tracking-[0.12em] text-muted">Release checklist</p>
+      <h2 className="mt-2 font-display text-2xl font-semibold text-ink">Staging parity gate</h2>
+      <p className="mt-3 text-sm leading-6 text-muted">
+        A compact release gate view for the staging deployment: runtime identity, payment readiness,
+        email transport completeness, session policy completeness, storage target completeness, and worker lock viability.
+      </p>
+      <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <CheckRow
+          label="Release metadata reported"
+          status={diagnostics.release.commit_sha ? "reported" : "missing"}
+        />
+        <CheckRow
+          label="Checkout provider ready"
+          status={
+            diagnostics.payments.checkout_provider === "STRIPE"
+              ? diagnostics.payments.stripe.checkout_ready
+                ? "ready"
+                : "incomplete"
+              : diagnostics.payments.checkout_provider === "FLUTTERWAVE"
+                ? diagnostics.payments.flutterwave.checkout_ready
+                  ? "ready"
+                  : "incomplete"
+                : diagnostics.payments.checkout_provider.toLowerCase()
+          }
+        />
+        <CheckRow
+          label="Refund provider ready"
+          status={
+            diagnostics.payments.refund_provider === "STRIPE"
+              ? diagnostics.payments.stripe.refund_ready
+                ? "ready"
+                : "incomplete"
+              : diagnostics.payments.refund_provider === "FLUTTERWAVE"
+                ? diagnostics.payments.flutterwave.refund_ready
+                  ? "ready"
+                  : "incomplete"
+                : diagnostics.payments.refund_provider.toLowerCase()
+          }
+        />
+        <CheckRow
+          label="Email transport"
+          status={diagnostics.runtime.email_ready ? "ready" : "incomplete"}
+        />
+        <CheckRow
+          label="Webhook signing"
+          status={diagnostics.payments.webhook_signing_ready ? "ready" : "incomplete"}
+        />
+        <CheckRow
+          label="Checkout return URLs"
+          status={diagnostics.payments.checkout_return_url_ready ? "ready" : "incomplete"}
+        />
+        <CheckRow
+          label="Payment implementation"
+          status={diagnostics.payments.implementation_ready ? "ready" : "incomplete"}
+        />
+        <CheckRow
+          label="Payment credential handoff"
+          status={
+            diagnostics.payments.credential_configuration_ready
+              ? "configured"
+              : formatMissingSettings(diagnostics.payments.missing_settings)
+          }
+        />
+        <CheckRow
+          label="Secure auth cookies"
+          status={diagnostics.session.cookie_secure ? "enabled" : "disabled"}
+        />
+        <CheckRow
+          label="Trusted origin allowlist"
+          status={
+            diagnostics.session.trusted_member_origin_configured &&
+            diagnostics.session.trusted_admin_origin_configured &&
+            diagnostics.session.trusted_super_admin_origin_configured
+              ? "ready"
+              : "incomplete"
+          }
+        />
+        <CheckRow
+          label="Storage target details"
+          status={
+            diagnostics.storage.provider === "S3"
+              ? diagnostics.storage.s3_bucket_configured &&
+                diagnostics.storage.s3_endpoint_configured &&
+                diagnostics.storage.s3_region_configured
+                ? "ready"
+                : "incomplete"
+              : diagnostics.storage.provider.toLowerCase()
+          }
+        />
+        <CheckRow
+          label="Retention worker lock"
+          status={diagnostics.workers.expense_retention_lock_ready ? "ready" : "incomplete"}
+        />
+        <CheckRow
+          label="Staging candidate"
+          status={diagnostics.payments.staging_candidate_ready ? "ready" : "incomplete"}
+        />
+      </div>
+    </section>
+  );
+}
+
+function SecurityHardeningPanel({ diagnostics }: { diagnostics: SystemDiagnostics | null }) {
+  if (!diagnostics) {
+    return (
+      <section className="rounded-lg border border-border bg-white p-5 shadow-soft">
+        <p className="text-sm font-semibold text-muted">
+          Security hardening diagnostics will appear here when the system endpoint is reachable.
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="rounded-lg border border-border bg-white p-5 shadow-soft sm:p-6">
+      <div className="grid gap-5 xl:grid-cols-[1fr_1fr]">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.12em] text-muted">Security hardening</p>
+          <h2 className="mt-2 font-display text-2xl font-semibold text-ink">Auth, policy, and guardrails</h2>
+          <p className="mt-3 text-sm leading-6 text-muted">
+            Read-only visibility into owner bootstrap protection, admin 2FA policy, and auth rate-limit
+            settings that still need staging validation before pilot release.
+          </p>
+          <div className="mt-5 grid gap-3 md:grid-cols-2">
+            <SystemMetric label="Owner email" value={diagnostics.auth.platform_owner_email} />
+            <SystemMetric label="Owner aliases" value={String(diagnostics.auth.platform_owner_alias_count)} />
+            <SystemMetric
+              label="Owner password seed"
+              value={diagnostics.auth.platform_owner_password_configured ? "configured" : "missing"}
+            />
+            <SystemMetric
+              label="Admin 2FA policy"
+              value={diagnostics.auth.admin_two_factor_required ? "required" : "not required"}
+            />
+            <SystemMetric
+              label="Recovery codes"
+              value={
+                diagnostics.auth.two_factor_recovery_supported
+                  ? `${diagnostics.auth.two_factor_recovery_code_count} issued per reset`
+                  : "not supported"
+              }
+            />
+            <SystemMetric
+              label="TOTP policy"
+              value={`${diagnostics.auth.two_factor_totp_digits} digits / ${diagnostics.auth.two_factor_totp_period_seconds}s`}
+            />
+          </div>
+        </div>
+        <div className="grid gap-3">
+          <CheckRow
+            label="Protected owner bootstrap secret"
+            status={diagnostics.auth.platform_owner_password_configured ? "configured" : "missing"}
+          />
+          <CheckRow
+            label="Admin two-factor enforcement"
+            status={diagnostics.auth.admin_two_factor_required ? "required" : "optional"}
+          />
+          <CheckRow
+            label="Seeded test accounts"
+            status={
+              diagnostics.auth.seed_test_accounts_enabled
+                ? diagnostics.auth.test_accounts_password_configured
+                  ? "enabled"
+                  : "enabled without password"
+                : "disabled"
+            }
+          />
+          <CheckRow
+            label="Cross-app CORS origin count"
+            status={`${diagnostics.runtime.cors_origin_count} configured`}
+          />
+          <CheckRow
+            label="CSRF same-origin enforcement"
+            status={diagnostics.runtime.csrf_same_origin_enforced ? "enabled" : "disabled"}
+          />
+          <CheckRow
+            label="Refresh-token rotation"
+            status={diagnostics.session.refresh_rotation_enabled ? "enabled" : "disabled"}
+          />
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-3 md:grid-cols-3">
+        <SystemMetric
+          label="Login rate limit"
+          value={`${diagnostics.rate_limits.login_attempts} / ${formatDuration(diagnostics.rate_limits.login_window_seconds)}`}
+        />
+        <SystemMetric
+          label="Password reset limit"
+          value={`${diagnostics.rate_limits.password_reset_attempts} / ${formatDuration(diagnostics.rate_limits.password_reset_window_seconds)}`}
+        />
+        <SystemMetric
+          label="Admin action limit"
+          value={`${diagnostics.rate_limits.admin_action_attempts} / ${formatDuration(diagnostics.rate_limits.admin_action_window_seconds)}`}
+        />
+      </div>
+
+      <div className="mt-3 grid gap-3 md:grid-cols-3 xl:grid-cols-5">
+        <SystemMetric
+          label="Email provider"
+          value={`${diagnostics.runtime.email_provider} · ${diagnostics.runtime.email_ready ? "ready" : "incomplete"}`}
+        />
+        <SystemMetric
+          label="From address"
+          value={diagnostics.runtime.email_from_address_configured ? "configured" : "missing"}
+        />
+        <SystemMetric
+          label="SMTP host"
+          value={diagnostics.runtime.smtp_host_configured ? "configured" : "missing"}
+        />
+        <SystemMetric
+          label="SMTP user"
+          value={diagnostics.runtime.smtp_user_configured ? "configured" : "missing"}
+        />
+        <SystemMetric
+          label="SMTP auth"
+          value={
+            diagnostics.runtime.smtp_password_configured
+              ? diagnostics.runtime.smtp_use_tls
+                ? "password + tls"
+                : "password only"
+              : "missing password"
+          }
+        />
+      </div>
+
+      <div className="mt-3 grid gap-3 md:grid-cols-3 xl:grid-cols-5">
+        <SystemMetric
+          label="Access token TTL"
+          value={`${diagnostics.session.access_token_minutes}m`}
+        />
+        <SystemMetric
+          label="Refresh token TTL"
+          value={`${diagnostics.session.refresh_token_days}d`}
+        />
+        <SystemMetric
+          label="Refresh cookie TTL"
+          value={`${diagnostics.session.refresh_cookie_days}d`}
+        />
+        <SystemMetric
+          label="Cookie policy"
+          value={`${diagnostics.session.cookie_same_site} / ${diagnostics.session.cookie_secure ? "secure" : "not secure"}`}
+        />
+        <SystemMetric
+          label="Trusted origins"
+          value={`${diagnostics.runtime.trusted_origin_count} configured`}
+        />
+      </div>
+    </section>
+  );
+}
+
+function TwoFactorRecoveryPanel() {
+  const [email, setEmail] = useState("");
+  const [message, setMessage] = useState<string | null>(null);
+  const [resetting, setResetting] = useState(false);
+
+  async function handleReset(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail) {
+      setMessage("Enter the account email to reset two-factor authentication.");
+      return;
+    }
+
+    setResetting(true);
+    setMessage(null);
+    try {
+      const response = await resetAdminUserTwoFactor(normalizedEmail);
+      setMessage(`${response.user.email}: ${response.message}`);
+      setEmail("");
+    } catch (caught) {
+      setMessage(caught instanceof ApiClientError ? caught.message : "Two-factor recovery could not be completed.");
+    } finally {
+      setResetting(false);
+    }
+  }
+
+  return (
+    <section className="rounded-lg border border-border bg-white p-5 shadow-soft">
+      <div className="flex items-start gap-3">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary text-white">
+          <ShieldAlert aria-hidden="true" className="h-5 w-5" />
+        </div>
+        <div>
+          <p className="text-sm font-bold uppercase tracking-[0.12em] text-muted">Operator recovery</p>
+          <h2 className="mt-1 font-display text-2xl font-bold text-ink">Reset another user&apos;s 2FA</h2>
+          <p className="mt-3 max-w-3xl text-sm leading-6 text-muted">
+            Use only after confirming the account owner&apos;s identity. This clears their TOTP and recovery codes,
+            then revokes every active refresh session so they can enroll again safely.
+          </p>
+        </div>
+      </div>
+
+      <form className="mt-5 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]" onSubmit={handleReset}>
+        <label className="grid gap-2 text-sm font-bold text-ink">
+          Account email
+          <input
+            autoComplete="off"
+            className="focus-ring min-h-11 rounded-lg border border-border bg-surface px-3 text-sm font-medium text-ink outline-none"
+            disabled={resetting}
+            onChange={(event) => setEmail(event.target.value)}
+            placeholder="member@yalumni.org"
+            type="email"
+            value={email}
+          />
+        </label>
+        <button
+          className="focus-ring min-h-11 self-end rounded-lg border border-red-200 bg-red-50 px-5 text-sm font-bold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={resetting}
+          type="submit"
+        >
+          {resetting ? "Resetting" : "Reset 2FA"}
+        </button>
+      </form>
+
+      {message ? (
+        <p className="mt-4 rounded-lg border border-border bg-surface px-4 py-3 text-sm font-semibold text-muted">
+          {message}
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+function OperationsHardeningPanel({ diagnostics }: { diagnostics: SystemDiagnostics | null }) {
+  const [probeMessage, setProbeMessage] = useState<string | null>(null);
+  const [probeRunning, setProbeRunning] = useState(false);
+  const [probeReachable, setProbeReachable] = useState<boolean | null>(null);
+
+  async function handleStorageProbe() {
+    setProbeRunning(true);
+    setProbeMessage(null);
+    try {
+      const response = await probeStorageBackend();
+      setProbeReachable(response.reachable);
+      setProbeMessage(`${response.detail} · ${formatDate(response.checked_at)}`);
+    } catch (caught) {
+      setProbeReachable(false);
+      setProbeMessage(
+        caught instanceof ApiClientError ? caught.message : "Storage connectivity check failed."
+      );
+    } finally {
+      setProbeRunning(false);
+    }
+  }
+
+  if (!diagnostics) {
+    return (
+      <section className="rounded-lg border border-border bg-white p-5 shadow-soft">
+        <p className="text-sm font-semibold text-muted">
+          Storage and worker diagnostics will appear here when the system endpoint is reachable.
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="rounded-lg border border-border bg-white p-5 shadow-soft sm:p-6">
+      <div className="grid gap-5 xl:grid-cols-[1fr_1fr]">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.12em] text-muted">Operations hardening</p>
+          <h2 className="mt-2 font-display text-2xl font-semibold text-ink">Storage, scanning, and workers</h2>
+          <p className="mt-3 text-sm leading-6 text-muted">
+            Read-only readiness checks for upload storage, evidence scanning, and scheduled worker cadence.
+          </p>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <button
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={probeRunning}
+              onClick={handleStorageProbe}
+              type="button"
+            >
+              <RefreshCw aria-hidden="true" className={`h-4 w-4 ${probeRunning ? "animate-spin" : ""}`} />
+              {probeRunning ? "Checking storage" : "Check storage connectivity"}
+            </button>
+            {probeMessage ? (
+              <p className={`text-sm font-semibold ${probeReachable ? "text-secondary" : "text-danger"}`}>
+                {probeMessage}
+              </p>
+            ) : null}
+          </div>
+          <div className="mt-5 grid gap-3 md:grid-cols-2">
+            <SystemMetric label="Storage provider" value={diagnostics.storage.provider} />
+            <SystemMetric
+              label="Storage target"
+              value={diagnostics.storage.storage_target_ready ? "ready" : "incomplete"}
+            />
+            <SystemMetric
+              label="S3 bucket"
+              value={diagnostics.storage.provider === "S3" ? (diagnostics.storage.s3_bucket_configured ? "configured" : "missing") : "not required"}
+            />
+            <SystemMetric
+              label="S3 endpoint"
+              value={diagnostics.storage.provider === "S3" ? (diagnostics.storage.s3_endpoint_configured ? "configured" : "missing") : "not required"}
+            />
+            <SystemMetric
+              label="S3 region"
+              value={diagnostics.storage.provider === "S3" ? (diagnostics.storage.s3_region_configured ? "configured" : "missing") : "not required"}
+            />
+            <SystemMetric
+              label="S3 credentials"
+              value={
+                diagnostics.storage.provider === "S3"
+                  ? diagnostics.storage.s3_credentials_ready
+                    ? "configured"
+                    : "incomplete"
+                  : "not required"
+              }
+            />
+            <SystemMetric
+              label="Malware scanner"
+              value={`${diagnostics.storage.malware_scanner_provider} · ${diagnostics.storage.malware_scanner_ready ? "ready" : "incomplete"}`}
+            />
+            <SystemMetric
+              label="Evidence retention"
+              value={`${diagnostics.storage.retention_days} days`}
+            />
+          </div>
+        </div>
+        <div className="grid gap-3">
+          <CheckRow
+            label="Upload storage target"
+            status={
+              diagnostics.storage.provider === "S3"
+                ? diagnostics.storage.storage_target_ready
+                  ? "s3 configured"
+                  : "s3 incomplete"
+                : diagnostics.storage.provider.toLowerCase()
+            }
+          />
+          <CheckRow
+            label="Local upload paths"
+            status={diagnostics.storage.local_upload_paths_configured ? "configured" : "incomplete"}
+          />
+          <CheckRow
+            label="Evidence malware scanning"
+            status={diagnostics.storage.malware_scanner_ready ? "ready" : "incomplete"}
+          />
+          <CheckRow
+            label="Scanner transport"
+            status={
+              diagnostics.storage.malware_scanner_provider === "SIGNATURE_ONLY"
+                ? "signature only"
+                : diagnostics.storage.malware_scanner_transport_ready
+                  ? "ready"
+                  : diagnostics.storage.malware_scanner_url_configured
+                    ? "timeout invalid"
+                    : "missing url"
+            }
+          />
+          <CheckRow
+            label="Expense evidence signatures"
+            status={
+              diagnostics.storage.contribution_expense_evidence_blocked_signature_count > 0
+                ? `${diagnostics.storage.contribution_expense_evidence_blocked_signature_count} blocked`
+                : "none configured"
+            }
+          />
+          <CheckRow
+            label="MWF source endpoints"
+            status={
+              diagnostics.workers.mwf_fellows_source_configured &&
+              diagnostics.workers.mwf_filters_source_configured
+                ? "official endpoints"
+                : "review sources"
+            }
+          />
+          <CheckRow
+            label="Expense category policy"
+            status={
+              diagnostics.workers.expense_category_taxonomy_configured
+                ? diagnostics.workers.expense_category_budget_policy_configured
+                  ? "taxonomy + budget policy"
+                  : "taxonomy only"
+                : "not configured"
+            }
+          />
+          <CheckRow
+            label="Expense retention worker lock"
+            status={
+              diagnostics.workers.expense_retention_lock_ready
+                ? diagnostics.workers.expense_retention_lock_provider.toLowerCase()
+                : `${diagnostics.workers.expense_retention_lock_provider.toLowerCase()} incomplete`
+            }
+          />
+          <CheckRow
+            label="Redis dependency"
+            status={diagnostics.runtime.redis_configured ? "configured" : "not configured"}
+          />
+          <CheckRow
+            label="Worker pipeline"
+            status={diagnostics.workers.worker_pipeline_ready ? "ready" : "incomplete"}
+          />
+          <CheckRow
+            label="S3 timeout and retry policy"
+            status={diagnostics.storage.s3_resilience_policy_ready ? "ready" : "incomplete"}
+          />
+          <CheckRow
+            label="MWF worker execution"
+            status={
+              diagnostics.workers.mwf_runtime.overdue
+                ? `${diagnostics.workers.mwf_runtime.last_run_status} · overdue`
+                : diagnostics.workers.mwf_runtime.last_run_status
+            }
+          />
+          <CheckRow
+            label="Digest worker execution"
+            status={
+              diagnostics.workers.notification_digest_runtime.overdue
+                ? `${diagnostics.workers.notification_digest_runtime.last_run_status} · overdue`
+                : diagnostics.workers.notification_digest_runtime.last_run_status
+            }
+          />
+          <CheckRow
+            label="Retention worker execution"
+            status={
+              diagnostics.workers.expense_retention_runtime.overdue
+                ? `${diagnostics.workers.expense_retention_runtime.last_run_status} · overdue`
+                : diagnostics.workers.expense_retention_runtime.last_run_status
+            }
+          />
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-3 md:grid-cols-3 xl:grid-cols-5">
+        <SystemMetric
+          label="Verification uploads"
+          value={formatBytes(diagnostics.storage.verification_upload_max_bytes)}
+        />
+        <SystemMetric
+          label="Profile photo uploads"
+          value={formatBytes(diagnostics.storage.profile_photo_upload_max_bytes)}
+        />
+        <SystemMetric
+          label="Expense evidence uploads"
+          value={formatBytes(diagnostics.storage.contribution_expense_evidence_upload_max_bytes)}
+        />
+        <SystemMetric
+          label="Community media uploads"
+          value={formatBytes(diagnostics.storage.community_post_media_upload_max_bytes)}
+        />
+        <SystemMetric
+          label="MWF sync cadence"
+          value={formatDuration(diagnostics.workers.mwf_sync_interval_seconds)}
+        />
+        <SystemMetric
+          label="Digest cadence"
+          value={formatDuration(diagnostics.workers.notification_digest_interval_seconds)}
+        />
+        <SystemMetric
+          label="Digest frequencies"
+          value={
+            diagnostics.workers.notification_digest_frequencies_configured
+              ? String(diagnostics.workers.notification_digest_frequency_count)
+              : "missing"
+          }
+        />
+      </div>
+
+      <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <SystemMetric
+          label="Expense retention cadence"
+          value={formatDuration(diagnostics.workers.expense_retention_interval_seconds)}
+        />
+        <SystemMetric
+          label="Retention batch limit"
+          value={String(diagnostics.workers.expense_retention_limit)}
+        />
+        <SystemMetric
+          label="Lock TTL"
+          value={formatDuration(diagnostics.workers.expense_retention_lock_ttl_seconds)}
+        />
+        <SystemMetric
+          label="MWF cache TTL"
+          value={`${diagnostics.workers.mwf_cache_ttl_hours}h`}
+        />
+        <SystemMetric
+          label="Digest payload"
+          value={`${diagnostics.workers.notification_digest_limit} runs / ${diagnostics.workers.notification_digest_max_items_per_email} items`}
+        />
+        <SystemMetric
+          label="Expense policy mode"
+          value={`${diagnostics.workers.expense_category_enforcement_mode} · ${diagnostics.workers.expense_category_default_currency}`}
+        />
+        <SystemMetric
+          label="S3 connect/read timeout"
+          value={`${diagnostics.storage.s3_connect_timeout_seconds}s / ${diagnostics.storage.s3_read_timeout_seconds}s`}
+        />
+        <SystemMetric
+          label="S3 max attempts"
+          value={String(diagnostics.storage.s3_max_attempts)}
+        />
+        <SystemMetric
+          label="Last MWF worker run"
+          value={
+            diagnostics.workers.mwf_runtime.last_run_at
+              ? formatDate(diagnostics.workers.mwf_runtime.last_run_at)
+              : "not observed"
+          }
+        />
+        <SystemMetric
+          label="Last digest worker run"
+          value={
+            diagnostics.workers.notification_digest_runtime.last_run_at
+              ? formatDate(diagnostics.workers.notification_digest_runtime.last_run_at)
+              : "not observed"
+          }
+        />
+        <SystemMetric
+          label="Last retention worker run"
+          value={
+            diagnostics.workers.expense_retention_runtime.last_run_at
+              ? formatDate(diagnostics.workers.expense_retention_runtime.last_run_at)
+              : "not observed"
+          }
+        />
+      </div>
+
+      <div className="mt-3 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+        <SystemMetric
+          label="MWF user agent"
+          value={diagnostics.workers.mwf_user_agent_configured ? "configured" : "missing"}
+        />
+        <SystemMetric
+          label="MWF fellows source"
+          value={diagnostics.workers.mwf_fellows_source_configured ? "official" : "review"}
+        />
+        <SystemMetric
+          label="MWF filters source"
+          value={diagnostics.workers.mwf_filters_source_configured ? "official" : "review"}
+        />
+        <SystemMetric
+          label="Digest include read"
+          value={diagnostics.workers.notification_digest_include_read ? "enabled" : "disabled"}
+        />
+        <SystemMetric
+          label="Allowed upload types"
+          value={`${diagnostics.storage.verification_upload_allowed_type_count}/${diagnostics.storage.profile_photo_upload_allowed_type_count}/${diagnostics.storage.community_post_media_allowed_type_count}/${diagnostics.storage.contribution_expense_evidence_allowed_type_count}`}
+        />
+        <SystemMetric
+          label="Local disk mode"
+          value={diagnostics.storage.uses_local_disk ? "enabled" : "disabled"}
+        />
+      </div>
+    </section>
+  );
+}
+
+function MwfCachePanel() {
+  const [runs, setRuns] = useState<MwfAlumniSyncRun[]>([]);
+  const [status, setStatus] = useState<MwfAlumniSyncStatus | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    Promise.all([fetchMwfSyncStatus(), fetchMwfSyncRuns(6)])
+      .then(([statusResponse, runsResponse]) => {
+        if (isMounted) {
+          setStatus(statusResponse);
+          setRuns(runsResponse.runs);
+          setMessage(null);
+        }
+      })
+      .catch((caught) => {
+        if (isMounted) {
+          setMessage(
+            caught instanceof ApiClientError ? caught.message : "MWF cache status unavailable."
+          );
+        }
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    setMessage(null);
+    try {
+      const response = await refreshMwfSync();
+      const runHistory = await fetchMwfSyncRuns(6);
+      setStatus(response);
+      setRuns(runHistory.runs);
+    } catch (caught) {
+      setMessage(caught instanceof ApiClientError ? caught.message : "MWF cache refresh failed.");
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
+  const headline = status
+    ? `${status.active_profile_count.toLocaleString()} profiles cached`
+    : "Status loading";
+  const stateLabel = status?.sync_in_progress
+    ? "Refresh running"
+    : status?.cache_empty
+      ? "Empty cache"
+      : status?.cache_stale
+        ? "Stale cache"
+        : "Current cache";
+
+  return (
+    <section className="rounded-lg border border-border bg-white p-5 shadow-soft">
+      <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-start">
+        <div>
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-primary text-white">
+              <DatabaseZap aria-hidden="true" className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-sm font-bold uppercase tracking-[0.12em] text-muted">
+                MWF alumni cache
+              </p>
+              <h3 className="mt-1 font-display text-2xl font-bold text-ink">{headline}</h3>
+            </div>
+          </div>
+          <p className="mt-4 max-w-3xl text-sm leading-6 text-muted">
+            Super-admin-only controls for the Mandela Washington Fellowship public alumni cache.
+            Member searches use this local cache instead of calling the official source live.
+          </p>
+        </div>
+        <button
+          className="focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-primary px-5 text-sm font-semibold text-white transition hover:bg-[#003d7d] disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={refreshing}
+          onClick={handleRefresh}
+          type="button"
+        >
+          <RefreshCw aria-hidden="true" className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+          {refreshing ? "Refreshing" : "Refresh cache"}
+        </button>
+      </div>
+
+      {message ? (
+        <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+          {message}
+        </p>
+      ) : null}
+
+      {status ? (
+        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          <SystemMetric label="State" value={stateLabel} />
+          <SystemMetric label="TTL" value={`${status.cache_ttl_hours}h`} />
+          <SystemMetric label="Worker cadence" value={formatDuration(status.worker_interval_seconds)} />
+          <SystemMetric
+            label="Last synced"
+            value={status.last_synced_at ? formatDate(status.last_synced_at) : "pending"}
+          />
+          <SystemMetric label="Last run" value={status.latest_run?.status ?? "none"} />
+        </div>
+      ) : null}
+
+      {status?.latest_run?.error_message ? (
+        <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+          {status.latest_run.error_message}
+        </p>
+      ) : null}
+
+      <div className="mt-5 overflow-hidden rounded-lg border border-border">
+        <div className="bg-surface px-4 py-3">
+          <p className="text-xs font-bold uppercase tracking-[0.12em] text-muted">Recent sync runs</p>
+        </div>
+        <div className="divide-y divide-border">
+          {runs.length ? (
+            runs.map((run) => <SyncRunRow key={run.id} run={run} />)
+          ) : (
+            <p className="px-4 py-5 text-sm font-semibold text-muted">
+              Sync history will appear after the first cache refresh.
+            </p>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function SyncRunRow({ run }: { run: MwfAlumniSyncRun }) {
+  const changedCount = run.imported_count + run.updated_count + run.deactivated_count;
+  return (
+    <div className="grid gap-3 px-4 py-4 text-sm md:grid-cols-[1fr_1fr_auto] md:items-center">
+      <div>
+        <p className="font-bold text-ink">{run.status}</p>
+        <p className="mt-1 text-xs font-semibold uppercase tracking-[0.1em] text-muted">
+          {formatDate(run.started_at)}
+        </p>
+      </div>
+      <p className="text-sm font-semibold text-muted">
+        {run.fetched_count.toLocaleString()} fetched · {changedCount.toLocaleString()} changed
+      </p>
+      <span className="rounded-md border border-border bg-white px-3 py-1 text-xs font-bold uppercase tracking-[0.1em] text-muted">
+        {run.finished_at ? "finished" : "running"}
+      </span>
+    </div>
+  );
+}
+
+function SystemMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-border bg-surface p-4">
+      <p className="text-xs font-bold uppercase tracking-[0.12em] text-muted">{label}</p>
+      <p className="mt-2 text-sm font-bold text-ink">{value}</p>
+    </div>
+  );
+}
+
+function SystemCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+  return (
+    <article className="rounded-lg border border-border bg-white p-5 shadow-soft">
+      <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-primary text-white">{icon}</div>
+      <p className="mt-4 text-sm font-bold text-muted">{label}</p>
+      <p className="mt-2 font-display text-2xl font-bold text-primary">{value}</p>
+    </article>
+  );
+}
+
+function MetricCard({ detail, label, value }: { detail: string; label: string; value: string }) {
+  return (
+    <article className="rounded-lg border border-border bg-white p-5 shadow-soft">
+      <p className="text-sm font-bold text-muted">{label}</p>
+      <p className="mt-3 font-display text-3xl font-bold text-primary">{value}</p>
+      <p className="mt-2 text-sm leading-6 text-muted">{detail}</p>
+    </article>
+  );
+}
+
+function CheckRow({ label, status }: { label: string; status: string }) {
+  return (
+    <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-surface px-4 py-3">
+      <p className="text-sm font-bold text-ink">{label}</p>
+      <span className="rounded-md border border-border bg-white px-3 py-1 text-xs font-bold uppercase tracking-[0.1em] text-muted">
+        {status}
+      </span>
+    </div>
+  );
+}
+
+function GuardPanel({
+  description,
+  eyebrow,
+  title
+}: {
+  description: string;
+  eyebrow?: string;
+  title: string;
+}) {
+  return (
+    <main className="min-h-screen bg-surface px-5 py-12 text-ink">
+      <section className="mx-auto flex min-h-[calc(100vh-96px)] max-w-5xl items-center">
+        <div className="w-full rounded-lg border border-border bg-white p-6 shadow-soft sm:p-8">
+          {eyebrow ? (
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-secondary">{eyebrow}</p>
+          ) : null}
+          <h1 className="mt-3 font-display text-3xl font-bold text-ink sm:text-4xl">{title}</h1>
+          <p className="mt-4 max-w-2xl text-base leading-7 text-muted">{description}</p>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function SideNavLink({ href, isActive, label }: { href: string; isActive: boolean; label: string }) {
+  return (
+    <Link
+      className={`focus-ring flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-bold transition ${
+        isActive
+          ? "bg-white text-primary shadow-[inset_4px_0_0_#004A99]"
+          : "text-muted hover:bg-white hover:text-primary"
+      }`}
+      href={href}
+    >
+      <ShieldCheck aria-hidden="true" className="h-4 w-4" />
+      <span>{label}</span>
+    </Link>
+  );
+}
+
+function StatusBadge({ label }: { label: string }) {
+  return (
+    <span className="rounded-md border border-border bg-white px-3 py-1 text-xs font-bold uppercase tracking-[0.1em] text-muted">
+      {label}
+    </span>
+  );
+}
+
+function formatNumber(value: number | undefined) {
+  return typeof value === "number" ? value.toLocaleString() : "n/a";
+}
+
+function formatDate(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+}
+
+function formatDuration(seconds: number) {
+  if (seconds % 3600 === 0) {
+    return `${seconds / 3600}h`;
+  }
+  if (seconds % 60 === 0) {
+    return `${seconds / 60}m`;
+  }
+  return `${seconds}s`;
+}
+
+function formatBytes(value: number) {
+  if (value < 1024) {
+    return `${value} B`;
+  }
+  if (value < 1024 * 1024) {
+    return `${(value / 1024).toFixed(1)} KB`;
+  }
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatMissingSettings(settings: string[]) {
+  if (!settings.length) {
+    return "configured";
+  }
+  return settings.length > 2 ? `${settings.length} settings` : settings.join(", ");
+}
+
+function shortRuntimeUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return `${url.hostname}:${url.port}`;
+  } catch {
+    return value;
+  }
+}
+
+function isActivePath(pathname: string, href: string) {
+  if (href === "/") {
+    return pathname === "/";
+  }
+
+  return pathname === href || pathname.startsWith(`${href}/`);
+}

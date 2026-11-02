@@ -1,0 +1,1 @@
+"""Success story publishing module."""

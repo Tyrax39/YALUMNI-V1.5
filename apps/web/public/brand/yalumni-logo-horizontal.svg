@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="220" viewBox="0 0 1000 220" role="img" aria-label="YALUMNI horizontal logo">
+<title>YALUMNI Horizontal Logo Concept</title>
+<rect width="1000" height="220" fill="transparent"/>
+<g transform="translate(24,24) scale(0.42)">
+  <title>YALUMNI Logo Icon</title>
+  <desc>Original circular network mark for a YALI alumni platform concept, using a connected Y shape, alumni nodes, and impact star.</desc>
+  <rect width="360" height="360" fill="none" opacity="0"/>
+  <circle cx="180" cy="180" r="158" fill="#24AEE4"/>
+  <circle cx="180" cy="180" r="158" fill="none" stroke="#16286A" stroke-width="13"/>
+  <circle cx="180" cy="180" r="139" fill="none" stroke="#FFFFFF" stroke-width="6" opacity="0.92"/>
+
+  <!-- abstract continent/network field -->
+  <path d="M95 115 C112 85 158 71 197 81 C228 89 250 111 263 144 C276 177 269 218 245 246 C220 275 182 288 146 278 C110 267 82 239 74 203 C68 173 77 139 95 115 Z" fill="#FFFFFF" opacity="0.11"/>
+  <path d="M111 125 C124 104 148 95 171 101 C187 105 197 120 192 136 C187 153 170 161 167 181 C164 203 187 211 183 232 C180 250 158 259 138 251 C108 239 91 207 94 177 C96 156 101 141 111 125 Z" fill="#FFFFFF" opacity="0.18"/>
+
+  <!-- connected alumni Y mark -->
+  <path d="M178 176 L104 106" fill="none" stroke="#FFFFFF" stroke-width="24" stroke-linecap="round"/>
+  <path d="M178 176 L259 95" fill="none" stroke="#FFFFFF" stroke-width="24" stroke-linecap="round"/>
+  <path d="M178 176 L178 272" fill="none" stroke="#FFFFFF" stroke-width="24" stroke-linecap="round"/>
+  <path d="M178 176 L236 230" fill="none" stroke="#FFFFFF" stroke-width="11" stroke-linecap="round" opacity="0.82"/>
+  <path d="M178 176 L121 232" fill="none" stroke="#FFFFFF" stroke-width="11" stroke-linecap="round" opacity="0.82"/>
+
+  <!-- nodes -->
+  <circle cx="104" cy="106" r="17" fill="#16286A" stroke="#FFFFFF" stroke-width="7"/>
+  <circle cx="259" cy="95" r="17" fill="#16286A" stroke="#FFFFFF" stroke-width="7"/>
+  <circle cx="178" cy="272" r="17" fill="#16286A" stroke="#FFFFFF" stroke-width="7"/>
+  <circle cx="121" cy="232" r="10" fill="#16286A" stroke="#FFFFFF" stroke-width="5" opacity="0.95"/>
+  <circle cx="236" cy="230" r="10" fill="#16286A" stroke="#FFFFFF" stroke-width="5" opacity="0.95"/>
+
+  <!-- impact star / compass -->
+  <polygon points="178.00,132.00 189.17,160.63 219.85,162.40 196.07,181.87 203.86,211.60 178.00,195.00 152.14,211.60 159.93,181.87 136.15,162.40 166.83,160.63" fill="#E9324F" stroke="#FFFFFF" stroke-width="6"/>
+  <polygon points="203.08,157.78 190.00,176.00 203.08,194.22 181.71,187.41 168.42,205.48 168.29,183.05 147.00,176.00 168.29,168.95 168.42,146.52 181.71,164.59" fill="#61718F" opacity="0.92"/>
+  <path d="M201 171 C221 177 237 187 249 202" fill="none" stroke="#E9324F" stroke-width="8" stroke-linecap="round"/>
+  <path d="M204 190 C221 197 235 206 244 218" fill="none" stroke="#E9324F" stroke-width="6" stroke-linecap="round" opacity="0.85"/>
+</g>
+<g transform="translate(190,58)">
+  <text x="0" y="65" font-family="Montserrat, Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="72" font-weight="800" letter-spacing="3" fill="#16286A">YAL</text>
+  <text x="167" y="65" font-family="Montserrat, Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="72" font-weight="800" letter-spacing="3" fill="#24AEE4">UMNI</text>
+  <text x="0" y="111" font-family="Inter, Helvetica Neue, Arial, sans-serif" font-size="24" font-weight="700" letter-spacing="5" fill="#16286A">YALI ALUMNI NETWORK</text>
+  <path d="M0 128 H520" stroke="#24AEE4" stroke-width="5" stroke-linecap="round"/>
+</g>
+</svg>
